@@ -1,0 +1,480 @@
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+:root {
+  --background-deep: #0c1018;
+  --background-dark: rgba(15, 19, 30, 0.96);
+  --background-medium: rgba(23, 30, 46, 0.9);
+  --background-light: rgba(30, 39, 60, 0.85);
+  --foreground: #f3f7ff;
+  --foreground-muted: #9fb4ce;
+  --accent-blue: #54d8ff;
+  --accent-cyan: #5be9ff;
+  --accent-gold: #f5c16c;
+  --accent-green: #35f4c2;
+  --accent-red: #ff6f6f;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --button-bg: rgba(45, 91, 149, 0.9);
+  --button-hover: rgba(86, 179, 255, 0.95);
+  --glow-strong: 0 0 35px rgba(91, 224, 255, 0.25);
+  --glow-soft: 0 0 25px rgba(12, 18, 33, 0.9);
+}
+
+body {
+  margin: 0;
+  width: 100%;
+  background-color: #07090f;
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(84, 216, 255, 0.08), transparent 45%),
+    radial-gradient(circle at 90% 10%, rgba(91, 233, 255, 0.12), transparent 50%),
+    linear-gradient(120deg, #07090f 0%, #0d111b 40%, #05070c 100%);
+  color: var(--foreground);
+  font-family: 'Inter', 'JetBrains Mono', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(53, 208, 255, 0.15), transparent 55%),
+    radial-gradient(circle at 80% 10%, rgba(111, 247, 255, 0.12), transparent 50%),
+    linear-gradient(120deg, rgba(2, 12, 29, 0.95) 0%, rgba(10, 20, 50, 0.95) 40%, rgba(2, 20, 44, 0.95) 100%);
+  color: var(--foreground);
+  border-radius: 0;
+  margin: 0;
+  max-width: none;
+}
+
+.app::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("/cover.png");
+  background-size: cover;
+  background-position: center;
+  opacity: 0.18;
+  filter: blur(8px) saturate(1.12);
+  z-index: 0;
+}
+
+.app::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 180px 180px, 180px 180px;
+  mix-blend-mode: soft-light;
+  opacity: 0.35;
+  z-index: 1;
+}
+
+.app * {
+  position: relative;
+  z-index: 2;
+}
+
+/* 封面页样式 */
+.home-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  padding: 0;
+  background: transparent;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.home-content {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  gap: clamp(20px, 2.5vw, 40px);
+  background: rgba(4, 11, 26, 0.65);
+  border-radius: 0;
+  overflow: hidden;
+  border: 1px solid rgba(53, 208, 255, 0.25);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.65), var(--glow-strong);
+  backdrop-filter: blur(20px);
+}
+
+.left-panel {
+  flex: 1;
+  display: flex;
+  border-radius: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  background: linear-gradient(145deg, rgba(5, 17, 42, 0.95), rgba(3, 10, 24, 0.95));
+}
+
+.hero-frame {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.control-panel {
+  flex: 0.8;
+  border-radius: 1.5rem;
+  padding: 2rem;
+  background: linear-gradient(145deg, rgba(5, 17, 42, 0.95), rgba(3, 10, 24, 0.95));
+  backdrop-filter: blur(30px);
+  box-shadow: 0 20px 45px rgba(2, 6, 23, 0.85);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.brand-card {
+  display: flex;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 1rem;
+  background: rgba(6, 12, 26, 0.85);
+  border: 1px solid rgba(91, 233, 255, 0.3);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5), inset 0 0 25px rgba(91, 233, 255, 0.12);
+  backdrop-filter: blur(12px);
+}
+
+.brand-logo {
+  width: 100px;
+  height: 100px;
+  filter: drop-shadow(0 0 10px rgba(91, 233, 255, 0.4));
+}
+
+.brand-eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.7rem;
+  color: var(--accent-cyan);
+}
+
+.brand-card h1 {
+  margin: 0.15rem 0;
+  font-size: 1.5rem;
+  color: #fff;
+}
+
+.brand-tagline {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--foreground-muted);
+}
+
+.cover-frame {
+  flex: 1;
+  min-height: 0;            /* 避免 flex 产生超高 */
+  border-radius: 1.25rem;
+  overflow: hidden;
+  border: 1px solid rgba(91,233,255,0.3);
+  box-shadow: 0 20px 50px rgba(0,0,0,.5);
+  background-image: url('/cover.png');
+  background-size: contain; /* 或 cover，根据需求 */
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.panel-header h1,
+.panel-header h2 {
+  margin: 0.25rem 0 0.5rem;
+  font-weight: 600;
+}
+
+.panel-header p {
+  margin: 0;
+}
+
+.panel-header.compact {
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.75rem;
+  color: var(--accent-cyan);
+}
+
+.muted {
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.upload-card {
+  border: 1px dashed rgba(148, 163, 184, 0.4);
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border: 1px solid rgba(91,233,255,0.3);
+}
+
+.upload-dropzone {
+  border: 1px dashed rgba(148, 163, 184, 0.4);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  background: rgba(15, 23, 42, 0.85);
+  cursor: pointer;
+  transition: border 0.3s ease, transform 0.3s ease;
+  position: relative;
+}
+
+.upload-dropzone.drag-active {
+  border-color: #38bdf8;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(56, 189, 248, 0.15);
+}
+
+.upload-dropzone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+
+.upload-button {
+  width: 100%;
+  padding: 12px;
+  background: radial-gradient(circle at 20% 20%, rgba(111, 247, 255, 0.4), rgba(53, 208, 255, 0.2));
+  color: var(--foreground);
+  border: 1px solid rgba(53, 208, 255, 0.6);
+  border-radius: 10px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  margin-bottom: 15px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4), 0 0 15px rgba(53, 208, 255, 0.4);
+}
+
+.upload-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5), 0 0 25px rgba(53, 208, 255, 0.6);
+}
+
+.upload-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.upload-button.primary {
+  margin-bottom: 0;
+}
+
+.status-message {
+  padding: 12px 14px;
+  border-radius: 10px;
+  text-align: center;
+  margin-top: 10px;
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--foreground);
+}
+
+.status-message.success {
+  background-color: rgba(110, 250, 202, 0.12);
+  border: 1px solid rgba(110, 250, 202, 0.4);
+  color: var(--accent-green);
+}
+
+.status-message.error {
+  background-color: rgba(255, 111, 111, 0.12);
+  border: 1px solid rgba(255, 111, 111, 0.45);
+  color: #ffb4b4;
+}
+
+.status-message.loading {
+  background-color: rgba(84, 216, 255, 0.1);
+  border: 1px solid rgba(84, 216, 255, 0.45);
+  color: var(--accent-cyan);
+}
+
+.dropzone-visual {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.arrow {
+  font-size: 2.25rem;
+  color: #38bdf8;
+  animation: float 2s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.ghost-button {
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 999px;
+  background: transparent;
+  color: #e2e8f0;
+  padding: 0.5rem 1.25rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border 0.3s ease, color 0.3s ease, background 0.3s ease;
+}
+
+.ghost-button:hover:not(:disabled) {
+  border-color: #38bdf8;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.ghost-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ghost-button.subtle {
+  padding: 0.35rem 1rem;
+}
+
+.file-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: center;
+}
+
+.file-summary strong {
+  font-size: 1.15rem;
+}
+
+.file-list {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.35);
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border: 1px solid rgba(91,233,255,0.3);
+}
+
+.file-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.file-row.sample-file {
+  transition: all 0.25s ease;
+  background: rgba(15, 23, 42, 0.85);
+}
+
+.sample-upload-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(91, 233, 255, 0.5);
+  border-radius: 50%;
+  background: rgba(91, 233, 255, 0.15);
+  color: var(--accent-cyan);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+}
+
+.sample-upload-button:hover:not(:disabled) {
+  background: rgba(91, 233, 255, 0.25);
+  border-color: rgba(91, 233, 255, 0.8);
+  transform: scale(1.1);
+  box-shadow: 0 0 12px rgba(91, 233, 255, 0.4);
+}
+
+.sample-upload-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.sample-upload-button svg {
+  margin-left: 2px; /* 视觉居中调整 */
+}
+
+.file-name {
+  margin: 0;
+  font-weight: 600;
+}
+
+.badge {
+  padding: 0.1rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.15);
+  color: #c4b5fd;
+  font-size: 0.8rem;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+}
+
+/* 响应式设计 */
+@media (max-width: 1100px) {
+  .home-content {
+    flex-direction: column;
+  }
+
+  .left-panel, .control-panel {
+    width: 100%;
+  }
+  
+  .hero-frame {
+    min-height: 360px;
+  }
+
+  .file-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -1,0 +1,240 @@
+.file-parse-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--background-deep, #0c1018);
+  color: var(--foreground, #f3f7ff);
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.parse-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(91, 233, 255, 0.2);
+  flex-shrink: 0;
+}
+
+.back-button {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid rgba(91, 233, 255, 0.4);
+  border-radius: 8px;
+  color: var(--accent-cyan, #5be9ff);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-size: 0.9rem;
+}
+
+.back-button:hover {
+  background: rgba(91, 233, 255, 0.1);
+  border-color: rgba(91, 233, 255, 0.6);
+  transform: translateX(-2px);
+}
+
+.parse-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--accent-cyan, #5be9ff);
+}
+
+.parse-content {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 第一部分：功能面板 */
+.function-panel {
+  width: calc(100% / 6);
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex-shrink: 0;
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(20, 30, 50, 0.95) 0%, rgba(15, 25, 45, 0.95) 100%);
+  border: 1px solid rgba(91, 233, 255, 0.25);
+  border-radius: 0.75rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 
+    inset 0 1px 0 rgba(91, 233, 255, 0.1),
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(91, 233, 255, 0.05);
+}
+
+/* 第二部分：文件信息卡片面板 */
+.info-panel {
+  width: calc(100% / 4);
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  padding-right: 0.5rem;
+}
+
+.file-info-card {
+  width: 100%;
+  /* 长宽比 2:1 (宽度是高度的2倍) */
+  aspect-ratio: 2 / 1;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(91, 233, 255, 0.3);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 20px 45px rgba(2, 6, 23, 0.85);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.function-button {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: rgba(91, 233, 255, 0.1);
+  border: 1px solid rgba(91, 233, 255, 0.4);
+  border-radius: 0.5rem;
+  color: var(--accent-cyan, #5be9ff);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+}
+
+.function-button:hover {
+  background: rgba(91, 233, 255, 0.2);
+  border-color: rgba(91, 233, 255, 0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(91, 233, 255, 0.3);
+}
+
+.function-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(91, 233, 255, 0.2);
+}
+
+/* 第三部分：文件内容展示区 */
+.content-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.file-info-card h2 {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.95rem;
+  color: var(--accent-cyan, #5be9ff);
+  border-bottom: 1px solid rgba(91, 233, 255, 0.2);
+  padding-bottom: 0.5rem;
+}
+
+.file-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.file-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.file-info-item .label {
+  font-size: 0.7rem;
+  color: var(--foreground-muted, #9fb4ce);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.file-info-item .value {
+  font-size: 0.85rem;
+  color: var(--foreground, #f3f7ff);
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.content-display {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  /* A4 比例: 210mm × 297mm ≈ 1:1.414 */
+  aspect-ratio: 210 / 297;
+  max-width: 100%;
+  max-height: 100%;
+  background: rgba(3, 10, 24, 0.8);
+  border: 1px solid rgba(91, 233, 255, 0.2);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  overflow-y: auto;
+  overflow-x: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.content-display pre {
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--foreground, #f3f7ff);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.loading-state,
+.error-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  gap: 1rem;
+  min-height: 0;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(91, 233, 255, 0.2);
+  border-top-color: var(--accent-cyan, #5be9ff);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-state {
+  color: var(--accent-red, #ff6f6f);
+}
+
+/* 滚动条样式 */
+.content-display::-webkit-scrollbar {
+  width: 8px;
+}
+
+.content-display::-webkit-scrollbar-track {
+  background: rgba(4, 11, 26, 0.6);
+  border-radius: 4px;
+}
+
+.content-display::-webkit-scrollbar-thumb {
+  background: rgba(91, 233, 255, 0.35);
+  border-radius: 4px;
+}
+
+.content-display::-webkit-scrollbar-thumb:hover {
+  background: rgba(91, 233, 255, 0.6);
+}
+

@@ -1,0 +1,10 @@
+fastAPI==0.121.3
+uvicorn==0.38.0
+PyPDF2>=3.0.1
+python-multipart==0.0.20
+pydantic-settings>=2.0.0
+
+# 测试依赖
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+httpx>=0.24.0

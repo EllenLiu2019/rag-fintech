@@ -1,5 +1,6 @@
 from .base import BaseParser
-from typing import Optional
+from typing import Optional, List
+from llama_index.core.schema import Document
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,24 +15,49 @@ class PDFParser(BaseParser):
         return filename.lower().endswith('.pdf') or \
                (content_type and 'pdf' in content_type.lower())
     
-    def extract_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> str:
+    def extract_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> List[Document]:
+        extra_info = {"file_name": filename, "content_type": content_type, "size": len(contents)}
+        logger.info(f"extract document info: {extra_info}")
+        
         try:
-            import PyPDF2
-            from io import BytesIO
+            import os
+            from llama_parse import LlamaParse
+
+            llm_parser = LlamaParse(api_key=os.getenv("LLAMA_CLOUD_API_KEY"),
+                                    parse_mode="parse_document_with_agent",
+                                    model="anthropic-haiku-4.5", # anthropic-sonnet-4.5
+                                    high_res_ocr=True,  
+                                    adaptive_long_table=True,
+                                    outlined_table_extraction=True, 
+                                    output_tables_as_HTML=True,
+                                    preset="forms",
+                                    language='ch_sim',
+                                    preserve_layout_alignment_across_pages=True,
+                                    merge_tables_across_pages_in_markdown=True,
+                                    ignore_document_elements_for_layout_detection=False,
+                                    do_not_cache=True,
+                                    strict_mode_reconstruction=True,
+                                    strict_mode_buggy_font=True,
+                                    user_prompt=None,
+                                    hide_footers=True
+                                    )
             
-            pdf_reader = PyPDF2.PdfReader(BytesIO(contents))
-            text = ""
-            for page in pdf_reader.pages:
-                text += page.extract_text() + "\n"
-            return text
-        except ImportError:
-            import sys
-            error_msg = (
-                f"PDF parsing failed: PyPDF2 not installed in current Python environment ({sys.executable})\n"
-                f"Please activate virtual environment and install: pip install PyPDF2>=3.0.1"
-            )
-            logger.error(error_msg)
-            raise ImportError(error_msg)
+            logger.info(f"LlamaParse parse job starting...")
+            result = llm_parser.parse(contents, extra_info=extra_info)
+            logger.info(f"LlamaParse parse job completed")
+            
+            # 获取 Document 对象列表（包含元数据）
+            markdown_documents = result.get_markdown_documents(split_by_page=True)
+            
+            if markdown_documents:
+                first_doc_text = markdown_documents[0].text if markdown_documents[0].text else ""
+                result_preview = first_doc_text[:100] if first_doc_text else ""
+                logger.info(f"return doc count: {len(markdown_documents)} documents; "
+                           f"first doc preview (first 100 chars): {result_preview}")
+            else:
+                logger.warning("no documents returned from LlamaParse")
+            
+            return markdown_documents
         except Exception as e:
             logger.error(f"PDF parsing failed: {str(e)}")
             raise ValueError(f"PDF parsing failed: {str(e)}")

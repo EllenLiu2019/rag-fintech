@@ -26,9 +26,10 @@ class ParserRegistry:
     def get_parser(self, filename: str, content_type: Optional[str] = None) -> Optional[BaseParser]:
         """根据文件名和类型获取解析器"""
         # 优先按扩展名匹配
-        ext = filename.split('.')[-1].lower() if '.' in filename else ''
-        if ext and ext in self._extension_map:
-            return self._extension_map[ext]()
+        if '.' in filename:
+            ext = '.' + filename.split('.')[-1].lower()  # 添加点号以匹配注册时的格式
+            if ext in self._extension_map:
+                return self._extension_map[ext]()
         
         # 按 MIME 类型匹配
         if content_type:

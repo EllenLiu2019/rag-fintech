@@ -126,14 +126,6 @@ export const useFileUpload = ({
       
       // 🔍 检查常见错误原因
       if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
-        console.error('🔴 网络请求失败，可能的原因:')
-        console.error('  1. 后端服务未启动 - 检查后端是否在运行')
-        console.error('  2. CORS 跨域问题 - 检查后端 CORS 配置')
-        console.error('  3. URL 错误 - 当前 URL:', fullUrl)
-        console.error('  4. 网络连接问题 - 检查网络连接')
-        console.error('  5. 防火墙/代理阻止 - 检查代理设置')
-        
-        // 尝试诊断
         console.group('🔧 诊断信息')
         console.log('当前环境:', import.meta.env.MODE)
         console.log('API Base URL:', apiBaseUrl)
@@ -146,9 +138,6 @@ export const useFileUpload = ({
         console.groupEnd()
       }
       
-      // 🔍 设置断点：在这里暂停执行以检查错误
-      debugger
-
       if (error.name === 'AbortError') {
         console.log('⚠️ 上传已取消')
         setStatus('idle')

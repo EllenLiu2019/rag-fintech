@@ -10,10 +10,10 @@ export const FILE_UPLOAD_CONFIG = {
 }
 
 export const SAMPLE_FILE = {
-  name: 'policy_lite.pdf',
+  name: 'policy_mini.pdf',
   size: 1.9 * 1024 * 1024,
   type: 'application/pdf',
-  path: '/data/policy_lite.pdf',
+  path: '/data/policy_mini.pdf',
 }
 
 export const ROUTES = {

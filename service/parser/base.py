@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Optional, List
 
+from llama_index.core.schema import Document
+
 class BaseParser(ABC):
     """文件解析器抽象基类"""
     
@@ -16,7 +18,7 @@ class BaseParser(ABC):
         pass
     
     @abstractmethod
-    def extract_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> str:
+    def extract_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> List[Document]:
         """提取文本内容"""
         pass
     

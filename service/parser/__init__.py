@@ -1,4 +1,6 @@
 """文件解析器模块"""
+from typing import List
+from llama_index.core.schema import Document
 from .extractor import ContentExtractor
 from .base import BaseParser
 from .registry import ParserRegistry
@@ -13,7 +15,7 @@ def get_extractor() -> ContentExtractor:
         _extractor = ContentExtractor()
     return _extractor
 
-def extract_content(contents: bytes, filename: str, content_type: str = None) -> str:
+def extract_content(contents: bytes, filename: str, content_type: str = None) -> List[Document]:
     """便捷函数：提取文件文本"""
     return get_extractor().extract(contents, filename, content_type)
 

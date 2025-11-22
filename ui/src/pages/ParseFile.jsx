@@ -1,11 +1,15 @@
 import { useEffect, useState, useRef } from 'react'
 import { apiBaseUrl } from '../../config/config'
+import BackIcon from '../components/icons/BackIcon'
+import ReactMarkdown from 'react-markdown'
+import rehypeRaw from 'rehype-raw'
 import './ParseFile.css'
 
 function ParseFile({ fileInfo, onBack }) {
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [pdfLoadError, setPdfLoadError] = useState(false)
   const hasFetchedRef = useRef(false) // 防止重复请求
   const filenameRef = useRef(null) // 跟踪已请求的文件名
 
@@ -29,15 +33,24 @@ function ParseFile({ fileInfo, onBack }) {
         hasFetchedRef.current = true
         filenameRef.current = fileInfo.filename
 
-        // 调用后端 API 获取文件内容
-        const response = await fetch(`${apiBaseUrl}/api/file-content?filename=${encodeURIComponent(fileInfo.filename)}`)
+        // 调用后端 API 获取文件解析后的内容
+        const response = await fetch(`${apiBaseUrl}/api/file-parsed?filename=${encodeURIComponent(fileInfo.filename)}`)
         
         if (!response.ok) {
           throw new Error('获取文件内容失败')
         }
 
         const data = await response.json()
-        setContent(data.content || data.text || '文件内容为空')
+        // 处理返回的数据：可能是 documents 数组或 content/text 字符串
+        if (data.documents && Array.isArray(data.documents)) {
+          // 如果是 Document 对象数组，提取文本内容
+          const textContent = data.documents
+            .map(doc => (typeof doc === 'string' ? doc : doc.text || doc.content || ''))
+            .join('\n\n')
+          setContent(textContent || '文件内容为空')
+        } else {
+          setContent(data.content || data.text || data.documents || '文件内容为空')
+        }
       } catch (err) {
         console.error('获取文件内容失败:', err)
         setError(err.message || '获取文件内容失败')
@@ -53,51 +66,48 @@ function ParseFile({ fileInfo, onBack }) {
   return (
     <div className="file-parse-container">
       <header className="parse-header">
-        <button onClick={onBack} className="back-button">
-          ← 返回上传
+        <button onClick={onBack} className="back-button" title="返回上传">
+          <BackIcon size={18} color="var(--accent-cyan, #5be9ff)" />
         </button>
-        <h2>文件解析</h2>
       </header>
 
       <div className="parse-content">
-        {/* 第一部分：功能面板 */}
-        <div className="function-panel">
-          <button className="function-button">
-            Chunk File
-          </button>
-          <button className="function-button">
-            Embedding File
-          </button>
-          <button className="function-button">
-            Indexing with Vector Database
-          </button>
-          <button className="function-button">
-            Similarity Search
-          </button>
-        </div>
-
-        {/* 第二部分：文件信息卡片 */}
-        <div className="info-panel">
-          <div className="file-info-card">
-            <h2>文件信息</h2>
-            <div className="file-info-list">
-              <div className="file-info-item">
-                <span className="label">文件名:</span>
-                <span className="value">{fileInfo?.filename || '未知'}</span>
-              </div>
-              <div className="file-info-item">
-                <span className="label">文件类型:</span>
-                <span className="value">{fileInfo?.content_type || '未知'}</span>
-              </div>
-              <div className="file-info-item">
-                <span className="label">文件大小:</span>
-                <span className="value">{fileInfo?.size ? `${(fileInfo.size / 1024).toFixed(2)} KB` : '未知'}</span>
+        {/* 左侧面板：包含文件信息和功能面板 */}
+        <div className="left-panel">
+          {/* 文件信息卡片 */}
+          <div className="info-panel">
+            <div className="file-info-card">
+              <h2>File Info</h2>
+              <div className="file-info-list">
+                <div className="file-info-item">
+                  <span className="label">file name:</span>
+                  <span className="value">{fileInfo?.filename || '未知'}</span>
+                </div>
+                <div className="file-info-item">
+                  <span className="label">size:</span>
+                  <span className="value">{fileInfo?.size ? `${(fileInfo.size / 1024).toFixed(2)} KB` : '未知'}</span>
+                </div>
               </div>
             </div>
           </div>
+          {/* 功能面板 */}
+          <div className="function-panel">
+            <button className="function-button">
+              Chunk File
+            </button>
+            <button className="function-button">
+              Embedding File
+            </button>
+            <button className="function-button">
+              Indexing with Vector Database
+            </button>
+            <button className="function-button">
+              Similarity Search
+            </button>
+          </div>
         </div>
 
-        {/* 第三部分：文件内容展示区 */}
+        {/* 文件内容展示区：分为左右两部分 */}
         <div className="content-panel">
           {loading ? (
             <div className="loading-state">
@@ -109,9 +119,58 @@ function ParseFile({ fileInfo, onBack }) {
               <p>❌ {error}</p>
             </div>
           ) : (
-            <div className="content-display">
-              <pre>{content}</pre>
-            </div>
+            <>
+              {/* 左侧：PDF 原始内容 */}
+              <div className="pdf-original-panel">
+                <div className="panel-header">
+                  <h3>original file</h3>
+                </div>
+                <div className="pdf-display">
+                  {fileInfo?.content_type === 'application/pdf' ? (
+                    pdfLoadError ? (
+                      <div className="pdf-placeholder">
+                        <p>⚠️ PDF 加载失败</p>
+                        <p style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                          请检查文件是否存在或网络连接是否正常
+                        </p>
+                      </div>
+                    ) : (
+                      <iframe
+                        src={`${apiBaseUrl}/api/file-original?filename=${encodeURIComponent(fileInfo.filename)}`}
+                        title="PDF Viewer"
+                        className="pdf-iframe"
+                        onError={() => {
+                          setPdfLoadError(true)
+                          console.error('PDF 加载失败')
+                        }}
+                        onLoad={() => {
+                          setPdfLoadError(false)
+                        }}
+                      />
+                    )
+                  ) : (
+                    <div className="pdf-placeholder">
+                      <p>非 PDF 文件，无法显示原始内容</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 右侧：解析后的内容 */}
+              <div className="parsed-content-panel">
+                <div className="panel-header">
+                  <h3>parsed file</h3>
+                </div>
+                <div className="content-display">
+                  <ReactMarkdown
+                    rehypePlugins={[rehypeRaw]}
+                    className="markdown-content"
+                  >
+                    {content}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>

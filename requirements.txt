@@ -1,6 +1,5 @@
 fastAPI==0.121.3
 uvicorn==0.38.0
-PyPDF2>=3.0.1
 python-multipart==0.0.20
 pydantic-settings>=2.0.0
 
@@ -8,3 +7,12 @@ pydantic-settings>=2.0.0
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
 httpx>=0.24.0
+
+# debug
+ipdb==0.13.13
+debugpy>=1.8.0
+
+# parser
+PyPDF2>=3.0.1
+llama-parse==0.6.81
+llama-index-core>=0.10.0

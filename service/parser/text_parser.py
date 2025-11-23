@@ -25,7 +25,7 @@ class TextParser(BaseParser):
         
         return ext_match or mime_match
     
-    def extract_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> List[Document]:
+    def parse_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> List[Document]:
         """提取文本内容"""
         try:
             text_content = contents.decode('utf-8', errors='ignore')

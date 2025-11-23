@@ -26,7 +26,7 @@ class MockParser(BaseParser):
     def can_parse(self, filename: str, content_type: Optional[str]) -> bool:
         return filename.endswith('.mock') or (content_type and 'mock' in content_type.lower())
     
-    def extract_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> List[Document]:
+    def parse_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> List[Document]:
         return [Document(text="mock content", metadata={"file_name": filename})]
 
 
@@ -39,7 +39,7 @@ class MockParserMultipleExts(BaseParser):
     def can_parse(self, filename: str, content_type: Optional[str]) -> bool:
         return any(filename.lower().endswith(ext.lower()) for ext in self.supported_extensions)
     
-    def extract_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> List[Document]:
+    def parse_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> List[Document]:
         return [Document(text="mock content", metadata={"file_name": filename})]
 
 

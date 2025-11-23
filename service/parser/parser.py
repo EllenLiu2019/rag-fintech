@@ -7,8 +7,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class ContentExtractor:
-    """文本提取器 - 工厂类"""
+class ContentParser:
+    """文本解析器 - 工厂类"""
     
     def __init__(self):
         self.registry = ParserRegistry()
@@ -33,7 +33,7 @@ class ContentExtractor:
             raise ValueError(f"unsupported file type: {filename} (content_type: {content_type})")
         
         try:
-            documents = parser.extract_content(contents, filename, content_type)
+            documents = parser.parse_content(contents, filename, content_type)
             logger.info(f"length: {len(documents)} pages")
             return documents
         except Exception as e:

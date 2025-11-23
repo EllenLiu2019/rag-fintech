@@ -15,7 +15,7 @@ class PDFParser(BaseParser):
         return filename.lower().endswith('.pdf') or \
                (content_type and 'pdf' in content_type.lower())
     
-    def extract_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> List[Document]:
+    def parse_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> List[Document]:
         extra_info = {"file_name": filename, "content_type": content_type, "size": len(contents)}
         logger.info(f"extract document info: {extra_info}")
         

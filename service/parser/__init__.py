@@ -1,28 +1,28 @@
 """文件解析器模块"""
 from typing import List
 from llama_index.core.schema import Document
-from .extractor import ContentExtractor
+from .parser import ContentParser
 from .base import BaseParser
 from .registry import ParserRegistry
 
 # 创建全局实例
-_extractor = None
+_parser = None
 
-def get_extractor() -> ContentExtractor:
-    """获取文本提取器单例"""
-    global _extractor
-    if _extractor is None:
-        _extractor = ContentExtractor()
-    return _extractor
+def get_parser() -> ContentParser:
+    """获取文本解析器单例"""
+    global _parser
+    if _parser is None:
+        _parser = ContentParser()
+    return _parser
 
-def extract_content(contents: bytes, filename: str, content_type: str = None) -> List[Document]:
-    """便捷函数：提取文件文本"""
-    return get_extractor().extract(contents, filename, content_type)
+def parse_content(contents: bytes, filename: str, content_type: str = None) -> List[Document]:
+    """便捷函数：解析文件文本"""
+    return get_parser().extract(contents, filename, content_type)
 
 __all__ = [
-    'ContentExtractor',
+    'ContentParser',
     'BaseParser',
     'ParserRegistry',
-    'get_extractor',
-    'extract_content',
+    'get_parser',
+    'parse_content',
 ]

@@ -18,8 +18,8 @@ class BaseParser(ABC):
         pass
     
     @abstractmethod
-    def extract_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> List[Document]:
-        """提取文本内容"""
+    def parse_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> List[Document]:
+        """解析文本内容"""
         pass
     
     def get_metadata(self, contents: bytes, filename: str) -> dict:

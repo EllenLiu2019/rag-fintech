@@ -20,7 +20,7 @@ from common.log_utils import (
 from common.log_middleware import setup_request_logging_middleware
 
 # 导入文件解析器
-from service.parser import extract_content
+from service.parser import parse_content
 from service.parser.serializer_deserializer import serialize_documents
 
 # 导入文件持久化模块
@@ -75,7 +75,7 @@ async def upload_file(file: UploadFile = File(...)):
         
         # 提取文件文本内容
         try:
-            documents = extract_content(contents, file.filename, file.content_type)
+            documents = parse_content(contents, file.filename, file.content_type)
         except ValueError as e:
             # 处理不支持的文件类型或解析错误
             logger.error(f"file parsing failed: {str(e)}")

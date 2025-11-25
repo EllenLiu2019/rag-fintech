@@ -11,8 +11,12 @@ httpx>=0.24.0
 # debug
 ipdb==0.13.13
 debugpy>=1.8.0
+ipykernel>=6.25.0
 
 # parser
 PyPDF2>=3.0.1
 llama-parse==0.6.81
 llama-index-core>=0.10.0
+
+# extractor
+beautifulsoup4>=4.12.2

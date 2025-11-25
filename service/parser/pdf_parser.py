@@ -42,9 +42,8 @@ class PDFParser(BaseParser):
                                     hide_footers=True
                                     )
             
-            logger.info(f"LlamaParse parse job starting...")
+            logger.info("LlamaParse parse job starting...")
             result = llm_parser.parse(contents, extra_info=extra_info)
-            logger.info(f"LlamaParse parse job completed")
             
             # 获取 Document 对象列表（包含元数据）
             markdown_documents = result.get_markdown_documents(split_by_page=True)

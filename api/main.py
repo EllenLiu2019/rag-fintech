@@ -73,7 +73,7 @@ async def upload_file(file: UploadFile = File(...)):
         if not save_original_file(file.filename, contents):
             logger.warning(f"failed to save original file to disk for '{file.filename}'")
         
-        # 提取文件文本内容
+        # 解析文件文本内容
         try:
             documents = parse_content(contents, file.filename, file.content_type)
         except ValueError as e:

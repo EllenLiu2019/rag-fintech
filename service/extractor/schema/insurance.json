@@ -1,0 +1,189 @@
+{
+    "name": "insurance",
+    "version": "0.1",
+    "fields": {
+        "policy_number": {
+            "type": "string",
+            "position": "content",
+            "match": {
+                "strategy": "regex",
+                "regex": "保险单号：([A-Z0-9]+)",
+                "group": 1
+            }
+        },
+        "policy_holder": {
+            "type": "object",
+            "position": "table",
+            "match": {
+                "strategy": "exact",   
+                "values": ["投保人"],
+                "target": "first_cell"
+            },
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["投保人"]
+                    }
+                },
+                "gender": {
+                    "type": "string",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["性别"]
+                    }
+                },
+                "birth_date": {
+                    "type": "string",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["出生日期"]
+                    }
+                },
+                "id_number": {
+                    "type": "string",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["证件号码"]
+                    }
+                }
+            }
+        },
+        "insured": {
+            "type": "object",
+            "position": "table",
+            "match": {
+                "strategy": "exact",
+                "values": ["被保险人"],
+                "target": "first_cell"
+            },
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["被保险人"]
+                    }
+                },
+                "gender": {
+                    "type": "string",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["性别"]
+                    }
+                },
+                "birth_date": {
+                    "type": "string",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["出生日期"]
+                    }
+                },
+                "id_number": {
+                    "type": "string",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["证件号码"]
+                    }
+                },
+                "relationship_to_holder": {
+                    "type": "string",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["与投保人关系"]
+                    }
+                }
+            }
+        },
+        "coverage": {
+            "type": "list",
+            "position": "table",
+            "match": {
+                "strategy": "exact",
+                "values": ["保险名称"],
+                "target": "first_cell"
+            },
+            "properties": {
+                "cvg_name": {
+                    "type": "string",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["保险名称"]
+                    }
+                },
+                "cvg_type": {
+                    "type": "string",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["保险责任"]
+                    }
+                },
+                "cvg_amt": {
+                    "type": "number",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["最高保险金额（元）"]
+                    },
+                    "transform": {
+                        "type": ["remove_commas", "remove_currency"]
+                    }
+                },
+                "description": {
+                    "type": "string",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["详细说明"]
+                    }
+                }
+            }
+        },
+        "cvg_prem": {
+            "type": "list",
+            "position": "table",
+            "match": {
+                "strategy": "exact",
+                "values": ["条款名称"],
+                "target": "first_cell"
+            },
+            "properties": {
+                "cvg_name": {
+                    "type": "string",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["条款名称"]
+                    }
+                },
+                "premium": {
+                    "type": "number",
+                    "match": {
+                        "strategy": "exact",
+                        "values": ["保险费（元）"]
+                    },
+                    "transform": {
+                        "type": ["remove_commas"]
+                    }
+                }
+            }
+        },
+        "effective_date": {
+            "type": "string",
+            "position": "content",
+            "match": {
+                "strategy": "regex",
+                "regex": "\\*\\*保险期间\\*\\*：自(\\d{4}年\\d{2}月\\d{2}日).*?起至",
+                "group": 1
+            }
+        },
+        "expiry_date": {
+            "type": "string",
+            "position": "content",
+            "match": {
+                "strategy": "regex",
+                "regex": "\\*\\*保险期间\\*\\*：自.*?起至(\\d{4}年\\d{2}月\\d{2}日).*?止",
+                "group": 1
+            }
+        }
+    }
+    
+}

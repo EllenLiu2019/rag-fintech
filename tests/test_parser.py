@@ -2,16 +2,9 @@
 ContentParser 模块的单元测试
 """
 import pytest
-from unittest.mock import Mock, MagicMock, patch, call
+from unittest.mock import Mock, patch
 from typing import List, Optional
 from llama_index.core.schema import Document
-
-# 添加项目根目录到路径
-import sys
-import os
-project_root = os.path.join(os.path.dirname(__file__), '..')
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
 
 from service.parser.parser import ContentParser
 from service.parser.base import BaseParser
@@ -160,7 +153,6 @@ class TestContentParser:
             # 检查日志调用
             assert mock_logger.info.called
             # 检查是否记录了开始提取的日志
-            info_calls = [str(call) for call in mock_logger.info.call_args_list]
             assert any('extract' in str(call).lower() for call in mock_logger.info.call_args_list)
     
     def test_extract_error_logging(self):
@@ -179,7 +171,6 @@ class TestContentParser:
             
             # 检查错误日志
             assert mock_logger.error.called
-            error_calls = [str(call) for call in mock_logger.error.call_args_list]
             assert any('failed' in str(call).lower() for call in mock_logger.error.call_args_list)
     
     def test_extract_with_empty_content(self):

@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rag-fintech"
+version = "0.1.0"
+description = "RAG FinTech"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Xiaojing Liu", email = "liuxiaojing11@126.com"}
+]
+keywords = ["rag", "fintech", "document-processing", "nlp"]
+
+dependencies = [
+    "fastapi>=0.121.3",
+    "uvicorn>=0.38.0",
+    "python-multipart>=0.0.20",
+    "pydantic-settings>=2.0.0",
+    "PyPDF2>=3.0.1",
+    "llama-parse>=0.6.81",
+    "llama-index-core>=0.10.0",
+    "beautifulsoup4>=4.12.2",
+    "pymilvus==2.6.3",
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ipdb==0.13.13",
+    "debugpy>=1.8.0",
+    "ipykernel>=6.25.0",
+]
+
+[project.scripts]
+rag-api = "api.main:app"
+
+[tool.setuptools]
+packages = ["api", "common", "service", "rag", "repository"]
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.yaml", "*.yml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+

@@ -8,12 +8,6 @@ import re
 from pathlib import Path
 from typing import Optional, Dict, List
 
-# 添加项目根目录到 Python 路径
-import sys
-project_root = os.path.join(os.path.dirname(__file__), '..', '..')
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
 from common.log_utils import get_logger
 
 logger = get_logger(__name__)
@@ -91,7 +85,7 @@ def load_file_info(filename: str) -> Optional[Dict]:
             return json.load(f)
     except json.JSONDecodeError as e:
         logger.error(f"JSON decode error in file {db_path}: {str(e)}")
-        logger.error(f"   File may be corrupted. Consider deleting and re-uploading the file.")
+        logger.error("   File may be corrupted. Consider deleting and re-uploading the file.")
         # 可选：自动删除损坏的文件
         try:
             db_path.unlink()
@@ -183,7 +177,7 @@ def list_stored_files() -> List[str]:
                     data = json.load(f)
                     if 'filename' in data:
                         files.append(data['filename'])
-            except:
+            except Exception:
                 # 如果读取失败，使用文件名（去掉 .json 扩展名）
                 files.append(json_file.stem)
         return files

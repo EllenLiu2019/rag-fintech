@@ -30,3 +30,4 @@ __pycache__
 .Python
 docs/
 api/scripts/
+rag_fintech.egg-info/

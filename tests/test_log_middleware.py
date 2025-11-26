@@ -6,13 +6,6 @@ from unittest.mock import Mock, patch
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-# 添加项目根目录到路径
-import sys
-import os
-project_root = os.path.join(os.path.dirname(__file__), '..')
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
 from common.log_middleware import (
     request_logging_middleware,
     setup_request_logging_middleware
@@ -42,7 +35,7 @@ class TestRequestLoggingMiddleware:
     @pytest.mark.asyncio
     async def test_request_id_generation(self, mock_request, mock_call_next):
         """测试请求 ID 生成"""
-        response = await request_logging_middleware(mock_request, mock_call_next)
+        await request_logging_middleware(mock_request, mock_call_next)
         
         # 验证请求 ID 已设置到 request.state
         assert hasattr(mock_request.state, 'request_id')
@@ -67,7 +60,7 @@ class TestRequestLoggingMiddleware:
             # 验证记录了请求信息
             assert mock_logger.info.called
             # 检查是否记录了请求方法和路径
-            call_args = [str(call) for call in mock_logger.info.call_args_list]
+            [str(call) for call in mock_logger.info.call_args_list]
             assert any('GET' in str(call) and '/api/test' in str(call) for call in mock_logger.info.call_args_list)
     
     @pytest.mark.asyncio
@@ -77,7 +70,6 @@ class TestRequestLoggingMiddleware:
             await request_logging_middleware(mock_request, mock_call_next)
             
             # 验证记录了响应信息
-            call_args = [str(call) for call in mock_logger.info.call_args_list]
             assert any('200' in str(call) or '响应' in str(call) for call in mock_logger.info.call_args_list)
     
     @pytest.mark.asyncio
@@ -93,7 +85,6 @@ class TestRequestLoggingMiddleware:
             await request_logging_middleware(mock_request, mock_call_next)
             
             # 验证记录了查询参数
-            call_args = [str(call) for call in mock_logger.info.call_args_list]
             assert any('query params' in str(call) for call in mock_logger.info.call_args_list)
     
     @pytest.mark.asyncio

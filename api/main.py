@@ -1,29 +1,15 @@
-import os
-import sys
 from fastapi import FastAPI, File, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
-# 添加项目根目录到 Python 路径（必须在导入 common 模块之前）
-project_root = os.path.join(os.path.dirname(__file__), '..')
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# 导入配置
 from api.config import settings
-
-# 导入通用模块
 from common.log_utils import (
     init_root_logger,
     get_logger
 )
 from common.log_middleware import setup_request_logging_middleware
-
-# 导入文件解析器
 from service.parser import parse_content
 from service.parser.serializer_deserializer import serialize_documents
-
-# 导入文件持久化模块
 from api.db.persist_file import (
     save_file_info,
     load_file_info,
@@ -32,11 +18,9 @@ from api.db.persist_file import (
     load_original_file
 )
 
-# 初始化日志系统
 init_root_logger()
 logger = get_logger(__name__)
 
-# 创建 FastAPI 应用（使用配置中的元数据）
 app = FastAPI(
     title=settings.API_TITLE,
     description=settings.API_DESCRIPTION,

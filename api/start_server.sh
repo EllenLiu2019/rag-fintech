@@ -10,5 +10,5 @@ echo "📍 Project root: $PROJECT_ROOT"
 echo "🐍 Python path: $PROJECT_ROOT/.venv/bin/python"
 echo ""
 
-"$PROJECT_ROOT/.venv/bin/python" -m uvicorn api.main:app --reload --port 8001 --host 0.0.0.0
+"$PROJECT_ROOT/.venv/bin/python" api/rag_server.py
 

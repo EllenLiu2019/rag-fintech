@@ -24,9 +24,9 @@ class ContentParser:
         self.registry.register(PDFParser)
         # 未来可以自动发现并注册
     
-    def extract(self, contents: bytes, filename: str, content_type: Optional[str] = None) -> List[Document]:
-        """提取文件文本内容"""
+    def parse(self, contents: bytes, filename: str, content_type: Optional[str] = None) -> List[Document]:
         logger.info("starting to extract file text content...")
+        
         parser = self.registry.get_parser(filename, content_type)
         
         if not parser:

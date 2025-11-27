@@ -7,6 +7,7 @@ import './ParseFile.css'
 
 function ParseFile({ fileInfo, onBack }) {
   const [content, setContent] = useState('')
+  const [summary, setSummary] = useState(null) // 新增 summary 状态
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [pdfLoadError, setPdfLoadError] = useState(false)
@@ -41,15 +42,19 @@ function ParseFile({ fileInfo, onBack }) {
         }
 
         const data = await response.json()
-        // 处理返回的数据：可能是 documents 数组或 content/text 字符串
-        if (data.documents && Array.isArray(data.documents)) {
+        // 处理返回的数据：可能是 pages 数组或 content/text 字符串
+        if (data.summary) {
+          setSummary(data.summary)
+        }
+        
+        if (data.pages && Array.isArray(data.pages)) {
           // 如果是 Document 对象数组，提取文本内容
-          const textContent = data.documents
+          const textContent = data.pages
             .map(doc => (typeof doc === 'string' ? doc : doc.text || doc.content || ''))
             .join('\n\n')
           setContent(textContent || '文件内容为空')
         } else {
-          setContent(data.content || data.text || data.documents || '文件内容为空')
+          setContent(data.content || data.text || data.pages || '文件内容为空')
         }
       } catch (err) {
         console.error('获取文件内容失败:', err)
@@ -89,6 +94,45 @@ function ParseFile({ fileInfo, onBack }) {
                 </div>
               </div>
             </div>
+
+            {/* 新增：解析结果摘要卡片 */}
+            {summary && (
+              <div className="parsing-result-card">
+                <h2>Parsing Result</h2>
+                <div className="file-info-list">
+                   <div className="file-info-item">
+                    <span className="label">Confidence:</span>
+                    <span className="value" style={{ color: '#00ff9d' }}>
+                      {summary.overall_confidence ? `${(summary.overall_confidence * 100).toFixed(1)}%` : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="file-info-item">
+                    <span className="label">Extracted Fields:</span>
+                    <div className="tags-container">
+                      {summary.extracted_fields && summary.extracted_fields.length > 0 ? (
+                        summary.extracted_fields.map((field, index) => (
+                          <span key={index} className="field-tag">{field}</span>
+                        ))
+                      ) : (
+                        <span className="value">-</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="file-info-item">
+                    <span className="label">Metadata Keys:</span>
+                    <div className="tags-container">
+                      {summary.metadata_keys && summary.metadata_keys.length > 0 ? (
+                        summary.metadata_keys.map((key, index) => (
+                          <span key={index} className="meta-tag">{key}</span>
+                        ))
+                      ) : (
+                        <span className="value">-</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           {/* 功能面板 */}
           <div className="function-panel">

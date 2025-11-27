@@ -1,13 +1,13 @@
-import json
 import logging
 from typing import Any, Optional
 from copy import deepcopy
 
-from rule_extractor import RuleExtractor
-from llm_extractor import LLMExtractor
-from converter import FieldConvert
-from schema.metadata_creator import MetadataCreator
-from service.utils import ConfidenceCalculator
+from llama_index.core.schema import Document
+
+from service.extractor.rule_extractor import RuleExtractor
+from service.extractor.llm_extractor import LLMExtractor
+from service.extractor.converter import FieldConvert
+from service.utils.confidence_calculator import ConfidenceCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ class ExtractionPipeline:
         self.field_convert: FieldConvert = FieldConvert()
         self.confidence_calculator: ConfidenceCalculator = ConfidenceCalculator()
 
-    def run(self, document: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    def run(self, documents: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]]:
         """
         执行完整的提取流程
 
@@ -39,25 +39,22 @@ class ExtractionPipeline:
         4. 如果置信度低于阈值，可触发 LLM 提取（当前未启用）
 
         Args:
-            document: 包含文档数据的字典，格式为 {"documents": [...]}
+            documents: 包含文档数据的列表，格式为 [Document, ...]
 
         Returns:
-            tuple[dict[str, Any], dict[str, Any]]:
-                (converted_result, confidence_result)
-                - converted_result: 转换后的提取结果
-                - confidence_result: 置信度分析结果
+            tuple[dict[str, Any], dict[str, Any]]: 转换后的提取结果和置信度结果
 
         Raises:
-            ValueError: 当 document 格式不正确时
+            ValueError: 当 documents 格式不正确时
             Exception: 提取过程中的其他错误
         """
-        if not isinstance(document, dict) or "documents" not in document:
-            raise ValueError("document must be a dict with 'documents' key")
+        if not isinstance(documents, list) or not all(isinstance(doc, dict) for doc in documents):
+            raise ValueError("documents must be a list of dict objects")
 
         try:
             # 步骤 1: 规则提取（快速、准确）
             logger.info("Starting rule-based extraction")
-            self.rule_extractor.extract(document)
+            self.rule_extractor.extract(documents)
 
             # 步骤 2: 字段转换（格式化数字等）
             logger.info("Converting extracted fields")
@@ -80,7 +77,7 @@ class ExtractionPipeline:
                 # TODO: 启用 LLM 提取作为补充
                 # self._fallback_to_llm_extraction(document)
 
-            return (self.rule_extractor.extracted_result, confidence_result)
+            return self.rule_extractor.extracted_result, confidence_result
 
         except Exception as e:
             logger.error(f"Extraction pipeline failed: {e}", exc_info=True)
@@ -92,16 +89,11 @@ class ExtractionPipeline:
         except Exception as e:
             logger.warning(f"Field conversion failed: {e}", exc_info=True)
 
-
-    def _fallback_to_llm_extraction(
-        self, document: dict[str, Any]
-    ) -> Optional[dict[str, Any]]:
+    def _fallback_to_llm_extraction(self, document: dict[str, Any]) -> Optional[dict[str, Any]]:
         try:
             hints = deepcopy(self.rule_extractor.extracted_result)
 
-            content = "\n".join(
-                [doc.get("text", "") for doc in document.get("documents", [])]
-            )
+            content = "\n".join([doc.get("text", "") for doc in document.get("documents", [])])
 
             llm_results = self.llm_extractor.extract(content, hints=hints)
             logger.info("LLM extraction completed")
@@ -129,26 +121,26 @@ class ExtractionPipeline:
         logger.debug("Extraction pipeline reset")
 
 
-if __name__ == "__main__":
-    path = "api/db/policy_lite.json"
-    with open(path, "r") as f:
-        document = json.load(f)
-    pipeline = ExtractionPipeline()
-    converted_result, confidence_result = pipeline.run(document)
+# if __name__ == "__main__":
+#     path = "api/db/policy_mini.json"
+#     with open(path, "r") as f:
+#         document = json.load(f)
+#     pipeline = ExtractionPipeline()
+#     converted_result, confidence_result = pipeline.run(document)
 
-    print("=" * 60)
-    print("转换结果:")
-    print("=" * 60)
-    print(json.dumps(converted_result, ensure_ascii=False, indent=4))
+#     print("=" * 60)
+#     print("转换结果:")
+#     print("=" * 60)
+#     print(json.dumps(converted_result, ensure_ascii=False, indent=4))
 
-    print("\n" + "=" * 60)
-    print("置信度结果:")
-    print("=" * 60)
-    print(json.dumps(confidence_result, ensure_ascii=False, indent=4))
+#     print("\n" + "=" * 60)
+#     print("置信度结果:")
+#     print("=" * 60)
+#     print(json.dumps(confidence_result, ensure_ascii=False, indent=4))
 
-    metadata_creator = MetadataCreator()
-    metadata = metadata_creator.create(converted_result)
-    print("=" * 60)
-    print("元数据:")
-    print("=" * 60)
-    print(json.dumps(metadata, ensure_ascii=False, indent=4))
+#     metadata_creator = MetadataCreator()
+#     metadata = metadata_creator.create(converted_result)
+#     print("=" * 60)
+#     print("元数据:")
+#     print("=" * 60)
+#     print(json.dumps(metadata, ensure_ascii=False, indent=4))

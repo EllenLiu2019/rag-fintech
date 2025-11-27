@@ -52,7 +52,7 @@ class TestContentParser:
         
         # 测试提取
         contents = b"mock file content"
-        documents = parser.extract(contents, "test.mock", "application/mock")
+        documents = parser.parse(contents, "test.mock", "application/mock")
         
         assert documents is not None
         assert len(documents) == 1
@@ -65,7 +65,7 @@ class TestContentParser:
         
         # 测试不支持的文件类型
         with pytest.raises(ValueError) as exc_info:
-            parser.extract(b"content", "test.unknown", "application/unknown")
+            parser.parse(b"content", "test.unknown", "application/unknown")
         
         assert "unsupported file type" in str(exc_info.value).lower()
         assert "test.unknown" in str(exc_info.value)
@@ -80,7 +80,7 @@ class TestContentParser:
         mock_parser.parse_content.return_value = []
         parser.registry._extension_map['.mock'] = lambda: mock_parser
         
-        documents = parser.extract(b"content", "test.mock")
+        documents = parser.parse(b"content", "test.mock")
         assert documents == []
     
     def test_extract_parser_raises_exception(self):
@@ -94,7 +94,7 @@ class TestContentParser:
         parser.registry._extension_map['.mock'] = lambda: mock_parser
         
         with pytest.raises(ValueError) as exc_info:
-            parser.extract(b"content", "test.mock")
+            parser.parse(b"content", "test.mock")
         
         assert "parsing error" in str(exc_info.value)
     
@@ -103,7 +103,7 @@ class TestContentParser:
         parser = ContentParser()
         parser.register_parser(MockParser)
         
-        documents = parser.extract(
+        documents = parser.parse(
             b"content",
             "test.unknown",
             content_type="application/mock"
@@ -126,7 +126,7 @@ class TestContentParser:
         assert 'MockParser' in parsers
         
         # 检查可以使用新注册的解析器
-        documents = parser.extract(b"content", "test.mock")
+        documents = parser.parse(b"content", "test.mock")
         assert documents is not None
     
     def test_register_parser_multiple_times(self):
@@ -148,7 +148,7 @@ class TestContentParser:
         parser.register_parser(MockParser)
         
         with patch('service.parser.parser.logger') as mock_logger:
-            parser.extract(b"content", "test.mock")
+            parser.parse(b"content", "test.mock")
             
             # 检查日志调用
             assert mock_logger.info.called
@@ -167,7 +167,7 @@ class TestContentParser:
         
         with patch('service.parser.parser.logger') as mock_logger:
             with pytest.raises(ValueError):
-                parser.extract(b"content", "test.mock")
+                parser.parse(b"content", "test.mock")
             
             # 检查错误日志
             assert mock_logger.error.called
@@ -178,7 +178,7 @@ class TestContentParser:
         parser = ContentParser()
         parser.register_parser(MockParser)
         
-        documents = parser.extract(b"", "test.mock")
+        documents = parser.parse(b"", "test.mock")
         assert documents is not None
         assert len(documents) == 1
     
@@ -188,7 +188,7 @@ class TestContentParser:
         parser.register_parser(MockParser)
         
         # 只通过扩展名匹配
-        documents = parser.extract(b"content", "test.mock", content_type=None)
+        documents = parser.parse(b"content", "test.mock", content_type=None)
         assert documents is not None
     
     def test_extract_with_empty_filename(self):
@@ -196,7 +196,7 @@ class TestContentParser:
         parser = ContentParser()
         
         with pytest.raises(ValueError):
-            parser.extract(b"content", "", None)
+            parser.parse(b"content", "", None)
 
 
 class TestContentParserIntegration:
@@ -208,7 +208,7 @@ class TestContentParserIntegration:
         
         # 测试 .txt 文件
         contents = b"Hello, World!"
-        documents = parser.extract(contents, "test.txt", "text/plain")
+        documents = parser.parse(contents, "test.txt", "text/plain")
         
         assert documents is not None
         assert len(documents) == 1
@@ -220,7 +220,7 @@ class TestContentParserIntegration:
         parser = ContentParser()
         
         contents = b"# Title\n\nSome content"
-        documents = parser.extract(contents, "test.md", "text/markdown")
+        documents = parser.parse(contents, "test.md", "text/markdown")
         
         assert documents is not None
         assert len(documents) == 1
@@ -232,7 +232,7 @@ class TestContentParserIntegration:
         
         # 使用不常见的扩展名但正确的 MIME 类型
         contents = b"Text content"
-        documents = parser.extract(contents, "test.unknown", "text/plain")
+        documents = parser.parse(contents, "test.unknown", "text/plain")
         
         assert documents is not None
         assert len(documents) == 1
@@ -247,7 +247,7 @@ class TestContentParserEdgeCases:
         parser.register_parser(MockParser)
         
         long_filename = "a" * 1000 + ".mock"
-        documents = parser.extract(b"content", long_filename)
+        documents = parser.parse(b"content", long_filename)
         assert documents is not None
     
     def test_extract_with_special_characters_in_filename(self):
@@ -256,7 +256,7 @@ class TestContentParserEdgeCases:
         parser.register_parser(MockParser)
         
         special_filename = "test-file_123 (copy).mock"
-        documents = parser.extract(b"content", special_filename)
+        documents = parser.parse(b"content", special_filename)
         assert documents is not None
     
     def test_extract_with_multiple_dots_in_filename(self):
@@ -265,7 +265,7 @@ class TestContentParserEdgeCases:
         parser.register_parser(MockParser)
         
         multi_dot_filename = "test.file.name.mock"
-        documents = parser.extract(b"content", multi_dot_filename)
+        documents = parser.parse(b"content", multi_dot_filename)
         assert documents is not None
     
     def test_extract_with_path_in_filename(self):
@@ -274,7 +274,7 @@ class TestContentParserEdgeCases:
         parser.register_parser(MockParser)
         
         path_filename = "/path/to/test.mock"
-        documents = parser.extract(b"content", path_filename)
+        documents = parser.parse(b"content", path_filename)
         assert documents is not None
     
     def test_extract_returns_multiple_documents(self):
@@ -290,7 +290,7 @@ class TestContentParserEdgeCases:
         ]
         parser.registry._extension_map['.mock'] = lambda: mock_parser
         
-        documents = parser.extract(b"content", "test.mock")
+        documents = parser.parse(b"content", "test.mock")
         assert len(documents) == 3
         assert documents[0].text == "doc1"
         assert documents[1].text == "doc2"

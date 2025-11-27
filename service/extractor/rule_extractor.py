@@ -4,6 +4,8 @@ import logging
 from bs4 import BeautifulSoup, Tag
 from typing import Optional, Any, Union
 
+from llama_index.core.schema import Document
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,10 +24,9 @@ class RuleExtractor:
             self.schema: dict[str, Any] = json.load(f)
             self.parse_schema(self.schema)
 
-    def extract(self, document: dict[str, Any]) -> None:
-        docs = document["documents"]
-        for doc in docs:
-            soup = BeautifulSoup(doc["text"], "html.parser")
+    def extract(self, documents: list[dict[str, Any]]) -> None:
+        for document in documents:
+            soup = BeautifulSoup(document["text"], "html.parser")
             self.soups.append(soup)
             self.content_extract(soup)
             tables = soup.find_all("table")
@@ -115,9 +116,7 @@ class RuleExtractor:
         first_header = header_cells[0]
         header_text = first_header.text.strip()
 
-        matched_key, matched_strategy = self._match_table_strategy(
-            header_text, cell_index=0
-        )
+        matched_key, matched_strategy = self._match_table_strategy(header_text, cell_index=0)
 
         if matched_key and matched_strategy:
             table["id"] = matched_key
@@ -189,9 +188,7 @@ class RuleExtractor:
                 return key, strategy
         return None, None
 
-    def _is_strategy_match(
-        self, strategy: dict[str, Any], text: str, cell_index: int
-    ) -> bool:
+    def _is_strategy_match(self, strategy: dict[str, Any], text: str, cell_index: int) -> bool:
         """
         检查文本是否匹配策略
 
@@ -233,18 +230,14 @@ class RuleExtractor:
                 elif table_type == "list":
                     self._extract_list_table(table, table_id)
                 else:
-                    logger.warning(
-                        f"Unknown table type: {table_type} for table id: {table_id}"
-                    )
+                    logger.warning(f"Unknown table type: {table_type} for table id: {table_id}")
             except Exception as e:
                 logger.error(
                     f"Failed to extract table {table_id} ({table_type}): {e}",
                     exc_info=True,
                 )
 
-    def _extract_object_table(
-        self, table: Tag, table_id: Union[str, list[str]]
-    ) -> None:
+    def _extract_object_table(self, table: Tag, table_id: Union[str, list[str]]) -> None:
         """
         提取对象类型表格（单行键值对格式）
 
@@ -298,9 +291,7 @@ class RuleExtractor:
             value_cell = col_cells[i + 1]
 
             # 查找匹配的配置属性
-            matched_prop = self._find_matching_property(
-                header_cell.text.strip(), config_prop_list
-            )
+            matched_prop = self._find_matching_property(header_cell.text.strip(), config_prop_list)
 
             if matched_prop:
                 self._extract_matched_property(

@@ -16,8 +16,7 @@ def get_parser() -> ContentParser:
     return _parser
 
 def parse_content(contents: bytes, filename: str, content_type: str = None) -> List[Document]:
-    """便捷函数：解析文件文本"""
-    return get_parser().extract(contents, filename, content_type)
+    return get_parser().parse(contents, filename, content_type)
 
 __all__ = [
     'ContentParser',

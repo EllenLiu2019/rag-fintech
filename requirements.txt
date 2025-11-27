@@ -14,13 +14,12 @@ ipdb==0.13.13
 debugpy>=1.8.0
 ipykernel>=6.25.0
 
-# parser
+# RAG dependencies
 PyPDF2>=3.0.1
 llama-parse==0.6.81
 llama-index-core>=0.10.0
-
-# extractor
 beautifulsoup4>=4.12.2
-
-# vector store
 pymilvus==2.6.3
+
+# formatting
+black>=24.0.0

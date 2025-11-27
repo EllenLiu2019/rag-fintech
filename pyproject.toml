@@ -34,10 +34,11 @@ dev = [
     "ipdb==0.13.13",
     "debugpy>=1.8.0",
     "ipykernel>=6.25.0",
+    "black>=24.0.0",
 ]
 
 [project.scripts]
-rag-api = "api.main:app"
+rag-api = "api.rag_server:app"
 
 [tool.setuptools]
 packages = ["api", "common", "service", "rag", "repository"]
@@ -51,3 +52,8 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 
+[tool.black]
+line-length = 120
+target-version = ['py312'] 
+include = '\.pyi?$'
+skip-string-normalization = false

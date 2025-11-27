@@ -2,12 +2,11 @@ import logging
 from typing import Any, Optional
 from copy import deepcopy
 
-from llama_index.core.schema import Document
-
 from service.extractor.rule_extractor import RuleExtractor
 from service.extractor.llm_extractor import LLMExtractor
 from service.extractor.converter import FieldConvert
 from service.utils.confidence_calculator import ConfidenceCalculator
+from service.extractor.metadata_creator import MetadataCreator
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +26,11 @@ class ExtractionPipeline:
         self.rule_extractor: RuleExtractor = RuleExtractor()
         self.field_convert: FieldConvert = FieldConvert()
         self.confidence_calculator: ConfidenceCalculator = ConfidenceCalculator()
+        self.metadata_creator = MetadataCreator()
 
-    def run(self, documents: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]]:
+    def run(
+        self, documents: list[dict[str, Any]]
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """
         执行完整的提取流程
 
@@ -36,13 +38,14 @@ class ExtractionPipeline:
         1. 使用规则提取器提取结构化数据
         2. 对提取结果进行字段转换（如数字格式化）
         3. 计算提取结果的置信度
-        4. 如果置信度低于阈值，可触发 LLM 提取（当前未启用）
+        4. 创建元数据
+        5. 如果置信度低于阈值，可触发 LLM 提取（当前未启用）
 
         Args:
-            documents: 包含文档数据的列表，格式为 [Document, ...]
+            documents: 包含文档数据的列表，格式为 [dict[str, Any], ...]
 
         Returns:
-            tuple[dict[str, Any], dict[str, Any]]: 转换后的提取结果和置信度结果
+            tuple[dict[str, Any], dict[str, Any], dict[str, Any]]: 转换后的提取结果、置信度结果和元数据结果
 
         Raises:
             ValueError: 当 documents 格式不正确时
@@ -77,7 +80,9 @@ class ExtractionPipeline:
                 # TODO: 启用 LLM 提取作为补充
                 # self._fallback_to_llm_extraction(document)
 
-            return self.rule_extractor.extracted_result, confidence_result
+            extracted_data = self.rule_extractor.extracted_result
+            metadata = self.metadata_creator.create(extracted_data)
+            return extracted_data, confidence_result, metadata
 
         except Exception as e:
             logger.error(f"Extraction pipeline failed: {e}", exc_info=True)

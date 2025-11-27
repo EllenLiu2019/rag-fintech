@@ -7,7 +7,7 @@ from fastapi import File, UploadFile, Query
 from fastapi.responses import JSONResponse, Response
 
 from common.log_utils import get_logger
-from service.manager.document_manager import DocumentManager
+from service.ingestion.pipeline import IngestionPipeline
 
 from api.db.persist_file import (
     save_file_info,
@@ -24,7 +24,7 @@ async def upload_file(file: UploadFile = File(...)):
     """
     Handle file upload
     """
-    document_manager = DocumentManager()
+    ingestion_pipeline = IngestionPipeline()
     try:
         logger.info(f"received file uploading request, file_name: {file.filename}")
 
@@ -36,7 +36,9 @@ async def upload_file(file: UploadFile = File(...)):
         if not save_original_file(file.filename, contents):
             logger.warning(f"failed to save original file to disk for '{file.filename}'")
 
-        rag_document = document_manager.handle_document(file.filename, contents, file.content_type)
+        rag_document = ingestion_pipeline.handle_document(
+            file.filename, contents, file.content_type
+        )
 
         # For now, we extract pages and summary for frontend display and local storage
         # This maintains backward compatibility with the frontend's expectation

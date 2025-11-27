@@ -11,7 +11,7 @@ from service.extractor.metadata_creator import MetadataCreator
 logger = logging.getLogger(__name__)
 
 
-class ExtractionPipeline:
+class Extractor:
     """
     多策略提取流水线：规则 + 模式 + LLM
 
@@ -28,7 +28,7 @@ class ExtractionPipeline:
         self.confidence_calculator: ConfidenceCalculator = ConfidenceCalculator()
         self.metadata_creator = MetadataCreator()
 
-    def run(
+    def extract(
         self, documents: list[dict[str, Any]]
     ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """
@@ -130,8 +130,8 @@ class ExtractionPipeline:
 #     path = "api/db/policy_mini.json"
 #     with open(path, "r") as f:
 #         document = json.load(f)
-#     pipeline = ExtractionPipeline()
-#     converted_result, confidence_result = pipeline.run(document)
+#     extractor = Extractor()
+#     converted_result, confidence_result = extractor.extract(document)
 
 #     print("=" * 60)
 #     print("转换结果:")

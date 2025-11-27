@@ -3,16 +3,16 @@ import uuid
 from llama_index.core.schema import Document
 from service.parser import parse_content
 import logging
-from service.extractor.extraction_pipeline import ExtractionPipeline
-from service.manager.document import RagDocument
+from service.extractor.extractor import Extractor
+from service.ingestion.document import RagDocument
 from service.parser.serializer_deserializer import serialize_documents
 
 logger = logging.getLogger(__name__)
 
 
-class DocumentManager:
+class IngestionPipeline:
     def __init__(self):
-        self.extraction_pipeline = ExtractionPipeline()
+        self.extractor = Extractor()
 
     def handle_document(self, filename: str, contents: bytes, content_type: str) -> RagDocument:
         try:
@@ -32,7 +32,7 @@ class DocumentManager:
     ) -> RagDocument:
 
         pages = serialize_documents(documents)
-        extracted_data, confidence, metadata = self.extraction_pipeline.run(pages)
+        extracted_data, confidence, metadata = self.extractor.extract(pages)
 
         rag_document = RagDocument.from_extraction_result(
             parsed_documents=pages,

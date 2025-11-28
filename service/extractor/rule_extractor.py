@@ -4,7 +4,6 @@ import logging
 from bs4 import BeautifulSoup, Tag
 from typing import Optional, Any, Union
 
-from llama_index.core.schema import Document
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +45,7 @@ class RuleExtractor:
                             "type": prop_config.get("type"),
                             "match": dict(prop_config.get("match", {})),
                             "transform": prop_config.get("transform"),
+                            "embed_text": prop_config.get("embed_text"),
                         }
                     )
             schema_item = {
@@ -68,12 +68,13 @@ class RuleExtractor:
                 schema_item = {
                     "type": config.get("type"),
                     "match": dict(config.get("match", {})),
+                    "embed_text": config.get("embed_text"),
                 }
                 self.extract_from_content[key] = schema_item
 
-        logger.info(f"Parsed content schema: {self.extract_from_content}")
-        logger.info(f"Parsed table mapping strategy: {self.table_mapping_strategy}")
-        logger.info(f"Parsed table schema: {self.extract_from_table}")
+        logger.debug(f"Parsed content schema: {self.extract_from_content}")
+        logger.debug(f"Parsed table mapping strategy: {self.table_mapping_strategy}")
+        logger.debug(f"Parsed table schema: {self.extract_from_table}")
 
     def content_extract(self, soup: BeautifulSoup) -> None:
         for key, item in self.extract_from_content.items():
@@ -86,22 +87,21 @@ class RuleExtractor:
                 "type": item.get("type"),
                 "match": match_dict,
                 "raw_value": value,
+                "embed_text": item.get("embed_text"),
             }
             self.extracted_result[key] = match_text
 
     def table_identify(self, tables: list[Tag]) -> None:
         """
         识别表格类型并设置表格和行的标识符
-
-        Args:
-            tables: BeautifulSoup 表格元素列表
         """
         for table in tables:
             thead = table.find("thead")
 
             if thead:
                 self._identify_table_with_thead(table, thead)
-            else:
+
+            if not table.get("id"):
                 self._identify_table_without_thead(table)
 
     def _identify_table_with_thead(self, table: Tag, thead: Tag) -> None:
@@ -129,7 +129,7 @@ class RuleExtractor:
 
     def _identify_table_without_thead(self, table: Tag) -> None:
         """
-        识别没有 thead 的表格（对象类型表格，可能有 rowspan）
+        识别没有 thead 或 thead 识别失败的表格（对象类型表格，可能有 rowspan）
 
         Args:
             table: BeautifulSoup 表格元素
@@ -138,7 +138,6 @@ class RuleExtractor:
         if not rows:
             return
 
-        remaining_rowspan = -1
         current_row_id = ""
         table_ids = []
 
@@ -148,28 +147,32 @@ class RuleExtractor:
             if not first_cell:
                 continue
 
-            rowspan_value = first_cell.get("rowspan")
+            first_cell_text = first_cell.text.strip()
 
-            # 如果存在 rowspan，开始新的匹配组
-            if rowspan_value:
-                remaining_rowspan = int(rowspan_value) - 1
-                first_cell_text = first_cell.text.strip()
+            # 优先匹配第一列内容
+            matched_key, matched_strategy = self._match_table_strategy(first_cell_text, cell_index=0)
 
-                matched_key, matched_strategy = self._match_table_strategy(first_cell_text, cell_index=0)
+            # 如果这一行能匹配到 schema 定义的 Key
+            if matched_key and matched_strategy:
+                # 记录这个 table 包含的 table_id (object key)
+                if matched_key not in table_ids:
+                    table_ids.append(matched_key)
 
-                if matched_key and matched_strategy:
-                    current_row_id = matched_key
-                    if matched_key not in table_ids:
-                        table_ids.append(matched_key)
-                    table["id"] = table_ids
-                    table["title"] = matched_strategy["table_type"]
-                    row["id"] = current_row_id
-                    logger.debug(f"Identified row with rowspan: {current_row_id}")
+                # 设置 table 的 id 和 title
+                table["id"] = table_ids
+                table["title"] = matched_strategy["table_type"]
 
-            # 如果还在 rowspan 范围内，使用相同的 row_id
-            elif remaining_rowspan > 0:
+                # 更新当前行 ID
+                current_row_id = matched_key
                 row["id"] = current_row_id
-                remaining_rowspan -= 1
+
+                logger.debug(f"Identified row by content: {current_row_id}")
+
+            # 如果没有直接匹配，但我们已经在一个对象组里（current_row_id 有值）
+            # 且没有开始新的对象，我们假设这一行仍然属于当前对象
+            elif current_row_id:
+                row["id"] = current_row_id
+                logger.debug(f"Assumed row belongs to: {current_row_id}")
 
     def _match_table_strategy(self, text: str, cell_index: int = 0) -> tuple[Optional[str], Optional[dict[str, Any]]]:
         """
@@ -247,10 +250,11 @@ class RuleExtractor:
         logger.debug(f"Extracting object table with id: {table_id}")
 
         # 处理 table_id 可能是列表的情况
-        if isinstance(table_id, list):
-            table_id = table_id[0]
+        ids_to_init = table_id if isinstance(table_id, list) else [table_id]
+        for tid in ids_to_init:
+            if tid not in self.extracted_result:
+                self.extracted_result[tid] = {}
 
-        self.extracted_result[table_id] = {}
         rows = table.find_all("tr")
 
         for row in rows:
@@ -277,26 +281,51 @@ class RuleExtractor:
             row_id: 行标识符
             config_prop_list: 属性配置列表
         """
-        # 获取所有列，如果存在 rowspan，则跳过第一列
+        # 获取所有列
         col_cells = row.find_all(["td", "th"])
-        if col_cells and col_cells[0].get("rowspan"):
-            col_cells = col_cells[1:]
 
-        # 按对处理列（键值对）
-        for i in range(0, len(col_cells) - 1, 2):
-            header_cell = col_cells[i]
-            value_cell = col_cells[i + 1]
+        if not col_cells:
+            return
 
-            # 查找匹配的配置属性
-            matched_prop = self._find_matching_property(header_cell.text.strip(), config_prop_list)
+        # 处理 rowspan 情况（如：第一列是 "投保人" 跨行，实际数据从第二列开始）
+        # 或者像你提供的例子，第一列就是 Key "投保人"，第二列是 Type，第三列是 Value
+
+        # 我们尝试从每一列开始寻找 Key-Value 匹配
+        # 策略：
+        # 1. 遍历列，看哪一列的内容匹配 config 中的属性名
+        # 2. 匹配到的列作为 Key，它的下一列（或下下列，跳过 Type 列）作为 Value
+
+        for i, cell in enumerate(col_cells):
+            cell_text = cell.text.strip()
+            matched_prop = self._find_matching_property(cell_text, config_prop_list)
 
             if matched_prop:
+                # 找到了 Key (比如 "性别")
+                # 尝试找 Value。
+                # 简单的逻辑是取下一个单元格。
+                # 但如果你的表格有 "Field Type" 列，可能需要跳过一列。
+                # 这里我们可以做一个简单的启发式：如果下一列是 "Text"/"Date" 等类型词，再往后找一列。
+
+                if i + 1 >= len(col_cells):
+                    continue
+
+                value_candidate_cell = col_cells[i + 1]
+                value_text = value_candidate_cell.text.strip()
+
+                # 简单的启发式跳过 Type 列 (如果只有3列，且中间列看起来像类型)
+                # 或者更通用：如果 value_text 是 "Text", "Date" 等，取 i+2
+                # 增加 None 检查
+                if value_text in ["Text", "Date", "Number", "Date Range"] and i + 2 < len(col_cells):
+                    value_candidate_cell = col_cells[i + 2]
+                    value_text = value_candidate_cell.text.strip()
+
                 self._extract_matched_property(
-                    value=value_cell.text.strip(),
+                    value=value_text,
                     matched_prop=matched_prop,
                     result_dict=self.extracted_result[row_id],
                     key=matched_prop.get("key"),
                 )
+                # 找到一个就处理一个，不break，防止一行有多个KV对（虽然不常见）
 
     def _extract_list_table(self, table: Tag, table_id: str) -> None:
         """
@@ -392,6 +421,7 @@ class RuleExtractor:
                 "match": matched_prop.get("match"),
                 "transform": matched_prop.get("transform"),
                 "raw_value": value,
+                "embed_text": matched_prop.get("embed_text"),
             }
         elif isinstance(result_dict, list):
             result_dict.append(
@@ -400,6 +430,7 @@ class RuleExtractor:
                     "match": matched_prop.get("match"),
                     "transform": matched_prop.get("transform"),
                     "raw_value": value,
+                    "embed_text": matched_prop.get("embed_text"),
                 }
             )
 

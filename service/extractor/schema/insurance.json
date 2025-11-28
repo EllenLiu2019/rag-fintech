@@ -9,7 +9,8 @@
                 "strategy": "regex",
                 "regex": "保险单号：([A-Z0-9]+)",
                 "group": 1
-            }
+            },
+            "embed_text": "保险单号"
         },
         "policy_holder": {
             "type": "object",
@@ -25,14 +26,16 @@
                     "match": {
                         "strategy": "exact",
                         "values": ["投保人"]
-                    }
+                    },
+                    "embed_text": "投保人姓名"
                 },
                 "gender": {
                     "type": "string",
                     "match": {
                         "strategy": "exact",
                         "values": ["性别"]
-                    }
+                    },
+                    "embed_text": "投保人性别"
                 },
                 "birth_date": {
                     "type": "string",
@@ -64,35 +67,40 @@
                     "match": {
                         "strategy": "exact",
                         "values": ["被保险人"]
-                    }
+                    },
+                    "embed_text": "被保险人姓名"
                 },
                 "gender": {
                     "type": "string",
                     "match": {
                         "strategy": "exact",
                         "values": ["性别"]
-                    }
+                    },
+                    "embed_text": "被保险人性别"
                 },
                 "birth_date": {
                     "type": "string",
                     "match": {
                         "strategy": "exact",
                         "values": ["出生日期"]
-                    }
+                    },
+                    "embed_text": "被保险人出生日期"
                 },
                 "id_number": {
                     "type": "string",
                     "match": {
                         "strategy": "exact",
                         "values": ["证件号码"]
-                    }
+                    },
+                    "embed_text": "被保险人证件号码"
                 },
                 "relationship_to_holder": {
                     "type": "string",
                     "match": {
                         "strategy": "exact",
                         "values": ["与投保人关系"]
-                    }
+                    },
+                    "embed_text": "被保险人与投保人关系"
                 }
             }
         },
@@ -173,7 +181,8 @@
                 "strategy": "regex",
                 "regex": "(?:\\*\\*保险期间\\*\\*：|保险期间)[\\s\\S]*?自(\\d{4}年\\d{2}月\\d{2}日)[\\s\\S]*?起至",
                 "group": 1
-            }
+            },
+            "embed_text": "保险期间开始日期"
         },
         "expiry_date": {
             "type": "string",
@@ -182,7 +191,8 @@
                 "strategy": "regex",
                 "regex": "(?:\\*\\*保险期间\\*\\*：|保险期间)[\\s\\S]*?自[\\s\\S]*?起至(\\d{4}年\\d{2}月\\d{2}日).*?止",
                 "group": 1
-            }
+            },
+            "embed_text": "保险期间结束日期"
         }
     }
     

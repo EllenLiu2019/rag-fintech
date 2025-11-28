@@ -25,13 +25,13 @@ class Extractor:
         self.confidence_calculator: ConfidenceCalculator = ConfidenceCalculator()
         self.metadata_creator = MetadataCreator()
 
-    def extract(self, documents: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    def extract(self, documents: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]]:
         """
         Args:
             documents: list of documents, format: [dict[str, Any], ...]
 
         Returns:
-                tuple[dict[str, Any], dict[str, Any], dict[str, Any]]: extracted_data, confidence_result, metadata
+            tuple[dict[str, Any], dict[str, Any]]: confidence_result, metadata
         """
         if not isinstance(documents, list) or not all(isinstance(doc, dict) for doc in documents):
             raise ValueError("documents must be a list of dict objects")
@@ -51,14 +51,15 @@ class Extractor:
                 self.rule_extractor.schema,
                 self.rule_extractor.soups,
             )
+            metadata = self.metadata_creator.create(self.rule_extractor.extracted_result)
 
             if confidence_result.get("overall_confidence", 0.0) < 0.8:
                 logger.warning(f"Low confidence detected: {confidence_result.get('overall_confidence')}. ")
-                # self._fallback_to_llm_extraction(documents)
+                llm_results = self._fallback_to_llm_extraction(documents, metadata)
+                metadata_llm = self.metadata_creator.create(llm_results.content)
+                metadata.update(metadata_llm)
 
-            extracted_data = self.rule_extractor.extracted_result
-            metadata = self.metadata_creator.create(extracted_data)
-            return extracted_data, confidence_result, metadata
+            return confidence_result, metadata
 
         except Exception as e:
             logger.error(f"Extraction pipeline failed: {e}", exc_info=True)
@@ -70,11 +71,13 @@ class Extractor:
         except Exception as e:
             logger.warning(f"Field conversion failed: {e}", exc_info=True)
 
-    def _fallback_to_llm_extraction(self, document: dict[str, Any]) -> Optional[dict[str, Any]]:
+    def _fallback_to_llm_extraction(
+        self, documents: list[dict[str, Any]], metadata: dict[str, Any]
+    ) -> Optional[dict[str, Any]]:
         try:
-            hints = deepcopy(self.rule_extractor.extracted_result)
+            hints = deepcopy(metadata)
 
-            content = "\n".join([doc.get("text", "") for doc in document.get("documents", [])])
+            content = "\n".join([doc.get("text", "") for doc in documents])
 
             llm_results = self.llm_extractor.extract(content, hints=hints)
             logger.info("LLM extraction completed")

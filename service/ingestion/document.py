@@ -6,9 +6,7 @@ logger = logging.getLogger(__name__)
 
 
 class RagDocument(BaseModel):
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True, exclude_none=False, validate_assignment=True
-    )
+    model_config = ConfigDict(arbitrary_types_allowed=True, exclude_none=False, validate_assignment=True)
 
     document_id: Optional[str] = Field(default=None, description="document_id")
     filename: str = Field(description="filename")
@@ -16,10 +14,7 @@ class RagDocument(BaseModel):
     content_type: Optional[str] = Field(default=None, description="content_type")
     text: str = Field(default="", description="text")
     pages: list[dict[str, Any]] = Field(default_factory=list, description="pages")
-    extracted_data: dict[str, Any] = Field(default_factory=dict, description="extracted_data")
-    confidence: dict[str, Any] = Field(
-        default_factory=dict, description="extracted_data confidence"
-    )
+    confidence: dict[str, Any] = Field(default_factory=dict, description="extracted_data confidence")
     metadata: dict[str, Any] = Field(default_factory=dict, description="metadata")
 
     @field_validator("text", mode="before")
@@ -38,7 +33,7 @@ class RagDocument(BaseModel):
             raise ValueError(f"Expected list for pages, got {type(v).__name__}")
         return v
 
-    @field_validator("extracted_data", "confidence", "metadata", mode="before")
+    @field_validator("confidence", "metadata", mode="before")
     @classmethod
     def validate_dict_fields(cls, v):
         if v is None:
@@ -51,7 +46,6 @@ class RagDocument(BaseModel):
     def from_extraction_result(
         cls,
         parsed_documents: list[dict[str, Any]],
-        extracted_data: dict[str, Any],
         confidence: dict[str, Any],
         metadata: dict[str, Any],
         filename: str,
@@ -64,9 +58,8 @@ class RagDocument(BaseModel):
             filename=filename,
             file_size=file_size,
             content_type=content_type,
-            text="\n\n".join([doc["text"] or "" for doc in parsed_documents]),
             pages=parsed_documents,
-            extracted_data=extracted_data,
+            text="\n\n".join([doc["text"] or "" for doc in parsed_documents]),
             confidence=confidence,
             metadata=metadata,
         )
@@ -86,7 +79,6 @@ class RagDocument(BaseModel):
             "file_size": self.file_size,
             "content_type": self.content_type,
             "text": self.text,
-            "extracted_data": self.extracted_data,
             "confidence": self.confidence,
             "metadata": self.metadata,
             "pages": self.pages,
@@ -121,15 +113,10 @@ class RagDocument(BaseModel):
             "text_length": len(self.text),
             "page_count": len(self.pages),
             "metadata_keys": list(self.metadata.keys()),
-            "extracted_fields": list(self.extracted_data.keys()),
+            "metadata": self.metadata,  # Add full metadata for frontend use
             "overall_confidence": self.confidence.get("overall_confidence"),
         }
 
     def is_complete(self) -> bool:
 
-        return (
-            bool(self.text)
-            and bool(self.filename)
-            and bool(self.metadata)
-            or bool(self.extracted_data)
-        )
+        return bool(self.text) and bool(self.filename) and bool(self.metadata)

@@ -24,19 +24,66 @@ class TestMetadataCreator:
                 "age": {"type": "number", "raw_value": "30", "convert_value": 30},
             },
             "insured": {"name": {"type": "string", "raw_value": "Jane Doe"}},
-            "simple_field": "Simple Value",  # Case where it's not a dict with raw_value
+            "effective_date": {"type": "string", "raw_value": "2025-01-01"},
+            "expiry_date": {"type": "string", "raw_value": "2026-01-01"},
+            "coverage": [
+                {
+                    "cvg_name": {
+                        "type": "string",
+                        "raw_value": "个人癌症医疗保险（互联网2022版A款）",
+                        "match": {"strategy": "exact", "values": ["保险名称"]},
+                        "transform": None,
+                    },
+                    "cvg_type": {
+                        "type": "string",
+                        "raw_value": "恶性肿瘤质子重离子医疗保险金",
+                        "match": {"strategy": "exact", "values": ["保险责任"]},
+                        "transform": None,
+                    },
+                    "cvg_amt": {
+                        "type": "number",
+                        "raw_value": "2,000,000'",
+                        "match": {"strategy": "exact", "values": ["最高保险金额（元）"]},
+                        "transform": {"type": ["remove_commas", "remove_currency"]},
+                        "convert_value": 2000000.0,
+                    },
+                    "description": {
+                        "type": "string",
+                        "raw_value": "次投保或非连续投保等待期:90天免赔额:0元/年社保目录内医疗费用赔付比例:100%社保目录外医疗费用赔付比例:100%",
+                        "match": {"strategy": "exact", "values": ["详细说明"]},
+                        "transform": None,
+                    },
+                }
+            ],
+            "cvg_premium": [
+                {
+                    "cvg_name": {
+                        "type": "string",
+                        "raw_value": "个人癌症医疗保险（互联网2022版A款）",
+                        "match": {"strategy": "exact", "values": ["条款名称"]},
+                        "transform": None,
+                    },
+                    "premium": {
+                        "type": "number",
+                        "raw_value": "2,284.00",
+                        "match": {"strategy": "exact", "values": ["保险费（元）"]},
+                        "transform": {"type": ["remove_commas"]},
+                        "convert_value": 2284.0,
+                    },
+                }
+            ],
         }
 
     def test_default_schema_loading(self, metadata_creator):
         """Test if the default schema is loaded correctly"""
         schema = metadata_creator.schema
         assert "document_id" in schema
-        assert "policy_num" in schema
-        assert "policy_holder_name" in schema
+        assert "policy_number" in schema
+        assert "holder_name" in schema
         assert "insured_name" in schema
 
-        assert schema["policy_num"]["mapping"] == "policy_number"
-        assert schema["policy_holder_name"]["mapping"] == ("policy_holder", "name")
+        assert schema["policy_number"]["mapping"] == "policy_number"
+        assert schema["holder_name"]["mapping"] == ("policy_holder", "name")
 
     def test_create_metadata_basic(self, metadata_creator, sample_extracted_result):
         """Test basic metadata creation with default schema"""
@@ -45,9 +92,9 @@ class TestMetadataCreator:
         # Check mapped fields
         assert metadata["document_id"] == "doc_001"
         # policy_num maps to policy_number, which has convert_value
-        assert metadata["policy_num"] == "POL-123-456"
+        assert metadata["policy_number"] == "POL-123-456"
         # Nested mapping
-        assert metadata["policy_holder_name"] == "John Doe"
+        assert metadata["holder_name"] == "John Doe"
         assert metadata["insured_name"] == "Jane Doe"
 
     def test_create_metadata_missing_fields(self, metadata_creator):
@@ -56,8 +103,8 @@ class TestMetadataCreator:
         metadata = metadata_creator.create(partial_result)
 
         assert metadata["document_id"] == "doc_002"
-        assert "policy_num" not in metadata
-        assert "policy_holder_name" not in metadata
+        assert "policy_number" not in metadata
+        assert "holder_name" not in metadata
 
     def test_create_metadata_invalid_input(self, metadata_creator):
         """Test with invalid input type"""
@@ -71,6 +118,9 @@ class TestMetadataCreator:
 
         # Update existing field mapping
         metadata_creator.register_field_mapping("document_id", "simple_field")
+
+        # Prepare data that has simple_field
+        sample_extracted_result["simple_field"] = {"raw_value": "Simple Value"}
 
         metadata = metadata_creator.create(sample_extracted_result)
 
@@ -111,3 +161,18 @@ class TestMetadataCreator:
         """Test behavior with invalid mappings"""
         with pytest.raises(ValueError):
             metadata_creator.register_field_mapping("bad_field", 123)  # type: ignore
+
+    def test_create_metadata_with_embed_text(self, metadata_creator):
+        """Test embed_metadata generation from embed_text"""
+        data = {
+            "policy_number": {"type": "string", "raw_value": "123456", "embed_text": "Policy No"},
+            "policy_holder": {"name": {"type": "string", "raw_value": "John", "embed_text": "Holder Name"}},
+            "coverage": [{"name": {"raw_value": "Health", "embed_text": "Cvg Name"}}],
+        }
+
+        metadata = metadata_creator.create(data)
+        assert "embed_metadata" in metadata
+        embed_str = metadata["embed_metadata"]
+        assert "Policy No:123456" in embed_str
+        assert "Holder Name:John" in embed_str
+        assert "Cvg Name:Health" in embed_str

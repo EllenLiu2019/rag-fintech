@@ -20,9 +20,20 @@ class MetadataCreator:
     def _load_schema(cls) -> dict[str, FieldConfig]:
         return {
             "document_id": {"type": "str", "mapping": "document_id"},
-            "policy_num": {"type": "str", "mapping": "policy_number"},
-            "policy_holder_name": {"type": "str", "mapping": ("policy_holder", "name")},
+            "policy_number": {"type": "str", "mapping": "policy_number"},
+            "holder_name": {"type": "str", "mapping": ("policy_holder", "name")},
+            "hodler_gender": {"type": "str", "mapping": ("policy_holder", "gender")},
+            "hodler_birth_date": {"type": "str", "mapping": ("policy_holder", "birth_date")},
+            "hodler_id_number": {"type": "str", "mapping": ("policy_holder", "id_number")},
             "insured_name": {"type": "str", "mapping": ("insured", "name")},
+            "insured_gender": {"type": "str", "mapping": ("insured", "gender")},
+            "insured_birth_date": {"type": "str", "mapping": ("insured", "birth_date")},
+            "insured_id_number": {"type": "str", "mapping": ("insured", "id_number")},
+            "insured_relationship_to_holder": {"type": "str", "mapping": ("insured", "relationship_to_holder")},
+            "effective_date": {"type": "str", "mapping": "effective_date"},
+            "expiry_date": {"type": "str", "mapping": "expiry_date"},
+            "coverage": {"type": "list", "mapping": "coverage"},  # Preserve complex structure
+            "cvg_premium": {"type": "list", "mapping": "cvg_premium"},
         }
 
     def create(self, extracted_result: dict[str, Any]) -> dict[str, Any]:
@@ -53,7 +64,7 @@ class MetadataCreator:
                 {
                     "document_id": "...",
                     "policy_number": "ABC123",
-                    "policy_holder_name": "张三",
+                    "holder_name": "张三",
                     "insured_name": "李四"
                 }
         """
@@ -73,6 +84,12 @@ class MetadataCreator:
                     logger.debug(f"Field '{field_name}' not found in extracted_result")
 
             logger.info(f"Created metadata with {len(metadata)} fields")
+
+            embed_parts = self._collect_embed_parts(extracted_result)
+            if embed_parts:
+                metadata["embed_metadata"] = "; ".join(embed_parts)
+
+            logger.info(f"Metadata: {metadata}")
             return metadata
 
         except Exception as e:
@@ -85,8 +102,9 @@ class MetadataCreator:
 
         支持：
         - 直接字段：policy_number → extracted_result["policy_number"]
-        - 嵌套字段：policy_holder_name → extracted_result["policy_holder"]["name"]
-
+        - 嵌套字段：holder_name → extracted_result["policy_holder"]["name"]
+        - 列表字段：coverage → extracted_result["coverage"]
+        - 列表字段：cvg_premium → extracted_result["cvg_premium"]
         Args:
             extracted_result: 提取结果字典
             field_name: 元数据字段名
@@ -123,31 +141,34 @@ class MetadataCreator:
             logger.debug(f"Error extracting field '{field_name}': {e}")
             return None
 
+    def _collect_embed_parts(self, data: Any) -> list[str]:
+        """
+        Recursively collect embed_text and value pairs from extracted result.
+        """
+        parts = []
+        if isinstance(data, list):
+            for item in data:
+                parts.extend(self._collect_embed_parts(item))
+        elif isinstance(data, dict):
+            # Check if it's a leaf node (contains raw_value)
+            if "raw_value" in data:
+                embed_text = data.get("embed_text")
+                if embed_text:
+                    val = data.get("convert_value")
+                    if val is None:
+                        val = data.get("raw_value")
+
+                    if val is not None:
+                        parts.append(f"{embed_text}:{val}")
+            else:
+                # It's a container, recurse on values
+                for value in data.values():
+                    parts.extend(self._collect_embed_parts(value))
+        return parts
+
     def _extract_value_from_path(self, data: dict[str, Any], path: list[str]) -> Optional[Any]:
         """
-        从嵌套字典中按路径提取值
-
-        Args:
-            data:
-            {
-                "policy_number": {
-                    "type": "string",
-                    "raw_value": "ABC123",
-                    "convert_value": "ABC123"  # 可选
-                },
-                "policy_holder": {
-                    "name": {
-                        "type": "string",
-                        "raw_value": "张三"
-                    },
-                    ...
-                },
-                ...
-            }
-            path: ["policy_holder", "name"]
-
-        Returns:
-            Optional[Any]: 提取的值，优先返回 convert_value，否则返回 raw_value
+        从嵌套字典中按路径提取值，并递归清洗数据（剥离 type, raw_value 等元信息）
         """
         if not path:
             return None
@@ -159,17 +180,29 @@ class MetadataCreator:
                 return None
             current = current[key]
 
-        # 如果 current 是字典（包含 type, raw_value 等），提取实际值
-        if isinstance(current, dict):
-            if "convert_value" in current and current["convert_value"] is not None:
-                return current["convert_value"]
-            elif "raw_value" in current:
-                return current["raw_value"]
-            else:
-                return current
+        return self._clean_value(current)
 
-        # 如果 current 不是字典，直接返回
-        return current
+    def _clean_value(self, value: Any) -> Any:
+        """
+        递归清洗值：
+        1. 如果是包含 raw_value/convert_value 的提取对象，解包取值。
+        2. 如果是列表，递归清洗每一项。
+        3. 如果是字典，递归清洗每一个 value。
+        """
+        if isinstance(value, list):
+            return [self._clean_value(item) for item in value]
+
+        if isinstance(value, dict):
+            # Case 1: 它是一个提取对象 (包含 raw_value 或 convert_value)
+            if "raw_value" in value or "convert_value" in value:
+                if "convert_value" in value and value["convert_value"] is not None:
+                    return value["convert_value"]
+                return value.get("raw_value")
+
+            # Case 2: 普通字典，递归清洗其内容
+            return {k: self._clean_value(v) for k, v in value.items()}
+
+        return value
 
     def register_field_mapping(self, field_name: str, mapping: Union[str, tuple[str, ...]]) -> None:
         """

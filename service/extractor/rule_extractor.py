@@ -71,6 +71,10 @@ class RuleExtractor:
                 }
                 self.extract_from_content[key] = schema_item
 
+        logger.info(f"Parsed content schema: {self.extract_from_content}")
+        logger.info(f"Parsed table mapping strategy: {self.table_mapping_strategy}")
+        logger.info(f"Parsed table schema: {self.extract_from_table}")
+
     def content_extract(self, soup: BeautifulSoup) -> None:
         for key, item in self.extract_from_content.items():
             match_dict = item.get("match")
@@ -121,9 +125,7 @@ class RuleExtractor:
         if matched_key and matched_strategy:
             table["id"] = matched_key
             table["title"] = matched_strategy["table_type"]
-            logger.debug(
-                f"Identified table with thead: {matched_key} ({matched_strategy['table_type']})"
-            )
+            logger.debug(f"Identified table with thead: {matched_key} ({matched_strategy['table_type']})")
 
     def _identify_table_without_thead(self, table: Tag) -> None:
         """
@@ -141,7 +143,8 @@ class RuleExtractor:
         table_ids = []
 
         for row in rows:
-            first_cell = row.find("td")
+            # 查找该行的第一个单元格，可能是 td 或 th
+            first_cell = row.find(["td", "th"])
             if not first_cell:
                 continue
 
@@ -152,9 +155,7 @@ class RuleExtractor:
                 remaining_rowspan = int(rowspan_value) - 1
                 first_cell_text = first_cell.text.strip()
 
-                matched_key, matched_strategy = self._match_table_strategy(
-                    first_cell_text, cell_index=0
-                )
+                matched_key, matched_strategy = self._match_table_strategy(first_cell_text, cell_index=0)
 
                 if matched_key and matched_strategy:
                     current_row_id = matched_key
@@ -170,9 +171,7 @@ class RuleExtractor:
                 row["id"] = current_row_id
                 remaining_rowspan -= 1
 
-    def _match_table_strategy(
-        self, text: str, cell_index: int = 0
-    ) -> tuple[Optional[str], Optional[dict[str, Any]]]:
+    def _match_table_strategy(self, text: str, cell_index: int = 0) -> tuple[Optional[str], Optional[dict[str, Any]]]:
         """
         根据文本和单元格索引匹配表格策略
 
@@ -269,9 +268,7 @@ class RuleExtractor:
 
             self._extract_kv_pair(row, row_id, config_prop_list)
 
-    def _extract_kv_pair(
-        self, row: Tag, row_id: str, config_prop_list: list[dict[str, Any]]
-    ) -> None:
+    def _extract_kv_pair(self, row: Tag, row_id: str, config_prop_list: list[dict[str, Any]]) -> None:
         """
         表格中的一行数据按键值对存储
 
@@ -281,7 +278,7 @@ class RuleExtractor:
             config_prop_list: 属性配置列表
         """
         # 获取所有列，如果存在 rowspan，则跳过第一列
-        col_cells = row.find_all("td")
+        col_cells = row.find_all(["td", "th"])
         if col_cells and col_cells[0].get("rowspan"):
             col_cells = col_cells[1:]
 
@@ -341,9 +338,7 @@ class RuleExtractor:
             if row_data:
                 self.extracted_result[table_id].append(row_data)
 
-    def _extract_list_row(
-        self, row: Tag, headers: list[str], config_prop_list: list[dict[str, Any]]
-    ) -> dict[str, Any]:
+    def _extract_list_row(self, row: Tag, headers: list[str], config_prop_list: list[dict[str, Any]]) -> dict[str, Any]:
         """
         提取列表表格中的一行数据
 
@@ -408,9 +403,7 @@ class RuleExtractor:
                 }
             )
 
-    def _find_matching_property(
-        self, text: str, config_prop_list: list[dict[str, Any]]
-    ) -> Optional[dict[str, Any]]:
+    def _find_matching_property(self, text: str, config_prop_list: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
         """
         根据文本查找匹配的属性配置
 

@@ -5,21 +5,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.config import settings
 from common.log_middleware import setup_request_logging_middleware
 from common.settings import init_settings
-from api.document_api import (
-    upload_file,
-    get_file_parsed,
-    get_original_file
-)
-from common.log_utils import get_logger
+from api.document_api import upload_file, get_file_parsed, get_original_file, search_docs
+from common.log_utils import get_logger, init_root_logger
 
+init_root_logger(level=settings.LOG_LEVEL, format_str=settings.LOG_FORMAT)
 logger = get_logger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Ensure initialization only happens once, even in reload mode.
     """
-    try:    
+    try:
         init_settings()
         yield
     except Exception as e:
@@ -55,3 +53,4 @@ setup_request_logging_middleware(app)
 app.post("/api/process")(upload_file)
 app.get("/api/file-parsed")(get_file_parsed)
 app.get("/api/file-original")(get_original_file)
+app.post("/api/search")(search_docs)

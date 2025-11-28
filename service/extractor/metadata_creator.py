@@ -5,46 +5,33 @@ logger = logging.getLogger(__name__)
 
 
 class FieldConfig(TypedDict, total=False):
-    """字段配置类型定义"""
-    type: str  # 字段类型
-    mapping: Union[str, tuple[str, ...]]  # 字段映射路径
+    """Field configuration definition"""
+
+    type: str
+    mapping: Union[str, tuple[str, ...]]  # Field mapping path
 
 
 class MetadataCreator:
-    
+
     def __init__(self) -> None:
         self.schema: dict[str, FieldConfig] = self._load_schema()
 
     @classmethod
     def _load_schema(cls) -> dict[str, FieldConfig]:
         return {
-            "document_id": {
-                "type": "str",
-                "mapping": "document_id" 
-            },
-            "policy_number": {
-                "type": "str",
-                "mapping": "policy_number" 
-            },
-            "policy_holder_name": {
-                "type": "str",
-                "mapping": ("policy_holder", "name")
-            },
-            "insured_name": {
-                "type": "str",
-                "mapping": ("insured", "name")
-            },
+            "document_id": {"type": "str", "mapping": "document_id"},
+            "policy_num": {"type": "str", "mapping": "policy_number"},
+            "policy_holder_name": {"type": "str", "mapping": ("policy_holder", "name")},
+            "insured_name": {"type": "str", "mapping": ("insured", "name")},
         }
 
     def create(self, extracted_result: dict[str, Any]) -> dict[str, Any]:
         """
-        从提取结果创建元数据
-        
         根据 schema 中定义的字段，从 extracted_result 中提取对应的值。
         优先使用 convert_value（如果存在），否则使用 raw_value。
-        
+
         Args:
-            extracted_result: 提取结果字典，格式为：
+            extracted_result:
                 {
                     "policy_number": {
                         "type": "string",
@@ -60,7 +47,7 @@ class MetadataCreator:
                     },
                     ...
                 }
-        
+
         Returns:
             dict[str, Any]: 元数据字典，格式为：
                 {
@@ -73,9 +60,9 @@ class MetadataCreator:
         if not isinstance(extracted_result, dict):
             logger.warning(f"Expected dict for extracted_result, got {type(extracted_result).__name__}")
             return {}
-        
+
         metadata: dict[str, Any] = {}
-        
+
         try:
             # 遍历 schema 中定义的所有字段
             for field_name, field_config in self.schema.items():
@@ -84,30 +71,26 @@ class MetadataCreator:
                     metadata[field_name] = value
                 else:
                     logger.debug(f"Field '{field_name}' not found in extracted_result")
-            
+
             logger.info(f"Created metadata with {len(metadata)} fields")
             return metadata
-            
+
         except Exception as e:
             logger.error(f"Error creating metadata: {e}", exc_info=True)
             return metadata
 
-    def _extract_field_value(
-        self, 
-        extracted_result: dict[str, Any], 
-        field_name: str
-    ) -> Optional[Any]:
+    def _extract_field_value(self, extracted_result: dict[str, Any], field_name: str) -> Optional[Any]:
         """
         从 extracted_result 中提取字段值
-        
+
         支持：
         - 直接字段：policy_number → extracted_result["policy_number"]
         - 嵌套字段：policy_holder_name → extracted_result["policy_holder"]["name"]
-        
+
         Args:
             extracted_result: 提取结果字典
             field_name: 元数据字段名
-            
+
         Returns:
             Optional[Any]: 提取的字段值，如果不存在则返回 None
         """
@@ -116,107 +99,103 @@ class MetadataCreator:
         if not field_config:
             logger.warning(f"No config found for field: {field_name}")
             return None
-        
+
         # 获取字段映射路径
         mapping = field_config.get("mapping")
         if not mapping:
             logger.warning(f"No mapping found for field: {field_name}")
             return None
-        
+
         try:
             # 处理直接映射
             if isinstance(mapping, str):
                 return self._extract_value_from_path(extracted_result, [mapping])
-            
+
             # 处理嵌套映射（元组）
             elif isinstance(mapping, tuple):
                 return self._extract_value_from_path(extracted_result, list(mapping))
-            
+
             else:
                 logger.warning(f"Invalid mapping type for field '{field_name}': {type(mapping)}")
                 return None
-                
+
         except (KeyError, TypeError, IndexError) as e:
             logger.debug(f"Error extracting field '{field_name}': {e}")
             return None
 
-    def _extract_value_from_path(
-        self, 
-        data: dict[str, Any], 
-        path: list[str]
-    ) -> Optional[Any]:
+    def _extract_value_from_path(self, data: dict[str, Any], path: list[str]) -> Optional[Any]:
         """
         从嵌套字典中按路径提取值
-        
+
         Args:
-            data: 数据字典
-            path: 字段路径列表，如 ["policy_holder", "name"]
-            
+            data:
+            {
+                "policy_number": {
+                    "type": "string",
+                    "raw_value": "ABC123",
+                    "convert_value": "ABC123"  # 可选
+                },
+                "policy_holder": {
+                    "name": {
+                        "type": "string",
+                        "raw_value": "张三"
+                    },
+                    ...
+                },
+                ...
+            }
+            path: ["policy_holder", "name"]
+
         Returns:
             Optional[Any]: 提取的值，优先返回 convert_value，否则返回 raw_value
         """
         if not path:
             return None
-        
+
         # 按路径导航到目标字段
         current = data
         for key in path:
             if not isinstance(current, dict) or key not in current:
                 return None
             current = current[key]
-        
+
         # 如果 current 是字典（包含 type, raw_value 等），提取实际值
         if isinstance(current, dict):
-            # 优先使用 convert_value（如果存在且不为空）
             if "convert_value" in current and current["convert_value"] is not None:
                 return current["convert_value"]
-            # 否则使用 raw_value
             elif "raw_value" in current:
                 return current["raw_value"]
-            # 如果都不是，返回整个字典（可能是嵌套结构）
             else:
                 return current
-        
+
         # 如果 current 不是字典，直接返回
         return current
 
-    def register_field_mapping(
-        self, 
-        field_name: str, 
-        mapping: Union[str, tuple[str, ...]]
-    ) -> None:
+    def register_field_mapping(self, field_name: str, mapping: Union[str, tuple[str, ...]]) -> None:
         """
         注册或更新字段映射
-        
+
         Args:
             field_name: 元数据字段名
             mapping: 字段映射路径，可以是字符串（直接映射）或元组（嵌套映射）
         """
         if not isinstance(mapping, (str, tuple)):
-            raise ValueError(
-                f"mapping must be str or tuple, got {type(mapping).__name__}"
-            )
-        
+            raise ValueError(f"mapping must be str or tuple, got {type(mapping).__name__}")
+
         # 如果字段已存在，更新映射；否则创建新字段（使用默认类型 "str"）
         if field_name in self.schema:
             self.schema[field_name]["mapping"] = mapping
         else:
-            self.schema[field_name] = {
-                "type": "str",  # 默认类型
-                "mapping": mapping
-            }
-        
+            self.schema[field_name] = {"type": "str", "mapping": mapping}  # 默认类型
+
         logger.info(f"Registered field mapping: {field_name} -> {mapping}")
 
     def add_schema_field(
-        self, 
-        field_name: str, 
-        field_type: str,
-        mapping: Optional[Union[str, tuple[str, ...]]] = None
+        self, field_name: str, field_type: str, mapping: Optional[Union[str, tuple[str, ...]]] = None
     ) -> None:
         """
         添加新的 schema 字段
-        
+
         Args:
             field_name: 元数据字段名
             field_type: 字段类型
@@ -224,34 +203,31 @@ class MetadataCreator:
         """
         if mapping is None:
             mapping = field_name
-        
-        self.schema[field_name] = {
-            "type": field_type,
-            "mapping": mapping
-        }
-        
+
+        self.schema[field_name] = {"type": field_type, "mapping": mapping}
+
         logger.info(f"Added schema field: {field_name} ({field_type}) with mapping: {mapping}")
-    
+
     def get_field_type(self, field_name: str) -> Optional[str]:
         """
         获取字段类型
-        
+
         Args:
             field_name: 元数据字段名
-            
+
         Returns:
             Optional[str]: 字段类型，如果字段不存在则返回 None
         """
         field_config = self.schema.get(field_name)
         return field_config.get("type") if field_config else None
-    
+
     def get_field_mapping(self, field_name: str) -> Optional[Union[str, tuple[str, ...]]]:
         """
         获取字段映射路径
-        
+
         Args:
             field_name: 元数据字段名
-            
+
         Returns:
             Optional[Union[str, tuple[str, ...]]]: 字段映射路径，如果字段不存在则返回 None
         """

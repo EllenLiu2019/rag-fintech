@@ -13,12 +13,9 @@ logger = logging.getLogger(__name__)
 
 class Extractor:
     """
-    多策略提取流水线：规则 + 模式 + LLM
-
-    提取策略：
-    - 强格式字段（保单号、日期）→ 规则优先
-    - 弱格式字段（特别约定）→ LLM
-    - 关键字段 → 交叉验证
+    Multi-strategy extraction pipeline: rule + pattern + LLM
+    - Rule-based extraction: Strong format fields
+    - LLM-based extraction: Complex fields
     """
 
     def __init__(self) -> None:
@@ -28,42 +25,26 @@ class Extractor:
         self.confidence_calculator: ConfidenceCalculator = ConfidenceCalculator()
         self.metadata_creator = MetadataCreator()
 
-    def extract(
-        self, documents: list[dict[str, Any]]
-    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    def extract(self, documents: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """
-        执行完整的提取流程
-
-        流程步骤：
-        1. 使用规则提取器提取结构化数据
-        2. 对提取结果进行字段转换（如数字格式化）
-        3. 计算提取结果的置信度
-        4. 创建元数据
-        5. 如果置信度低于阈值，可触发 LLM 提取（当前未启用）
-
         Args:
-            documents: 包含文档数据的列表，格式为 [dict[str, Any], ...]
+            documents: list of documents, format: [dict[str, Any], ...]
 
         Returns:
-            tuple[dict[str, Any], dict[str, Any], dict[str, Any]]: 转换后的提取结果、置信度结果和元数据结果
-
-        Raises:
-            ValueError: 当 documents 格式不正确时
-            Exception: 提取过程中的其他错误
+                tuple[dict[str, Any], dict[str, Any], dict[str, Any]]: extracted_data, confidence_result, metadata
         """
         if not isinstance(documents, list) or not all(isinstance(doc, dict) for doc in documents):
             raise ValueError("documents must be a list of dict objects")
 
         try:
-            # 步骤 1: 规则提取（快速、准确）
             logger.info("Starting rule-based extraction")
-            self.rule_extractor.extract(documents)
 
-            # 步骤 2: 字段转换（格式化数字等）
+            raw_documents = deepcopy(documents)
+            self.rule_extractor.extract(raw_documents)
+
             logger.info("Converting extracted fields")
             self._convert_extracted_fields()
 
-            # 步骤 3: 计算置信度
             logger.info("Calculating confidence scores")
             confidence_result = self.confidence_calculator.calculate(
                 self.rule_extractor.extracted_result,
@@ -71,14 +52,9 @@ class Extractor:
                 self.rule_extractor.soups,
             )
 
-            # 步骤 4: 低置信度时触发 LLM 提取（可选）
             if confidence_result.get("overall_confidence", 0.0) < 0.8:
-                logger.warning(
-                    f"Low confidence detected: {confidence_result.get('overall_confidence')}. "
-                    "LLM extraction is available but currently disabled."
-                )
-                # TODO: 启用 LLM 提取作为补充
-                # self._fallback_to_llm_extraction(document)
+                logger.warning(f"Low confidence detected: {confidence_result.get('overall_confidence')}. ")
+                # self._fallback_to_llm_extraction(documents)
 
             extracted_data = self.rule_extractor.extracted_result
             metadata = self.metadata_creator.create(extracted_data)
@@ -109,21 +85,12 @@ class Extractor:
             return None
 
     def get_extracted_result(self) -> dict[str, Any]:
-        """
-        获取当前提取结果
-
-        Returns:
-            dict[str, Any]: 提取结果字典
-        """
         return self.rule_extractor.extracted_result
 
     def reset(self) -> None:
-        """
-        重置提取器状态，清空之前的提取结果
-        """
         self.rule_extractor.extracted_result = {}
         self.rule_extractor.soups = []
-        logger.debug("Extraction pipeline reset")
+        logger.info("Extractor reset")
 
 
 # if __name__ == "__main__":

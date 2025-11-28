@@ -1,11 +1,10 @@
 import re
 from typing import Any, Optional
 
+
 class ConfidenceCalculator:
 
-    def calculate(
-        self, policy_result: dict, schema: dict, soups: list[Any]
-    ) -> dict[str, Any]:
+    def calculate(self, policy_result: dict, schema: dict, soups: list[Any]) -> dict[str, Any]:
         confidence_report = {
             "overall_confidence": 0.0,
             "field_confidence": {},
@@ -36,9 +35,7 @@ class ConfidenceCalculator:
                         data_type = prop_value.get("type", "")
 
                         # 匹配置信度
-                        match_conf = self.calculate_match_confidence(
-                            match_strategy, raw_value, soup_texts
-                        )
+                        match_conf = self.calculate_match_confidence(match_strategy, raw_value, soup_texts)
 
                         # 数据类型验证
                         type_conf, error_msg = self.validate_data_type(data_type, raw_value)
@@ -58,15 +55,14 @@ class ConfidenceCalculator:
                                 f"{field_key}.{prop_key}: 置信度较低 ({prop_confidence:.2f})"
                             )
                         if error_msg:
-                            confidence_report["errors"].append(
-                                f"{field_key}.{prop_key}: {error_msg}"
-                            )
+                            confidence_report["errors"].append(f"{field_key}.{prop_key}: {error_msg}")
 
                 field_confidences[field_key] = {
-                    "confidence": sum(p["confidence"] for p in prop_confidences.values())
-                    / len(prop_confidences)
-                    if prop_confidences
-                    else 0.0,
+                    "confidence": (
+                        sum(p["confidence"] for p in prop_confidences.values()) / len(prop_confidences)
+                        if prop_confidences
+                        else 0.0
+                    ),
                     "properties": prop_confidences,
                 }
 
@@ -82,9 +78,7 @@ class ConfidenceCalculator:
                                 raw_value = prop_value.get("raw_value", "")
                                 data_type = prop_value.get("type", "")
 
-                                match_conf = self.calculate_match_confidence(
-                                    match_strategy, raw_value, soup_texts
-                                )
+                                match_conf = self.calculate_match_confidence(match_strategy, raw_value, soup_texts)
                                 type_conf, error_msg = self.validate_data_type(
                                     data_type, raw_value, prop_value.get("transform")
                                 )
@@ -99,8 +93,7 @@ class ConfidenceCalculator:
                                 }
 
                         item_avg_conf = (
-                            sum(p["confidence"] for p in item_confidences.values())
-                            / len(item_confidences)
+                            sum(p["confidence"] for p in item_confidences.values()) / len(item_confidences)
                             if item_confidences
                             else 0.0
                         )
@@ -113,10 +106,11 @@ class ConfidenceCalculator:
                         )
 
                 field_confidences[field_key] = {
-                    "confidence": sum(c["confidence"] for c in list_confidences)
-                    / len(list_confidences)
-                    if list_confidences
-                    else 0.0,
+                    "confidence": (
+                        sum(c["confidence"] for c in list_confidences) / len(list_confidences)
+                        if list_confidences
+                        else 0.0
+                    ),
                     "items": list_confidences,
                 }
 
@@ -127,9 +121,7 @@ class ConfidenceCalculator:
                     raw_value = field_value.get("raw_value", "")
                     data_type = field_value.get("type", "")
 
-                    match_conf = self.calculate_match_confidence(
-                        match_strategy, raw_value, soup_texts
-                    )
+                    match_conf = self.calculate_match_confidence(match_strategy, raw_value, soup_texts)
                     type_conf, error_msg = self.validate_data_type(data_type, raw_value)
 
                     field_confidence = match_conf * 0.6 + type_conf * 0.4
@@ -142,9 +134,7 @@ class ConfidenceCalculator:
                     }
 
                     if field_confidence < 0.7:
-                        confidence_report["warnings"].append(
-                            f"{field_key}: 置信度较低 ({field_confidence:.2f})"
-                        )
+                        confidence_report["warnings"].append(f"{field_key}: 置信度较低 ({field_confidence:.2f})")
 
         confidence_report["field_confidence"] = field_confidences
 
@@ -157,9 +147,7 @@ class ConfidenceCalculator:
             all_confidences.append(completeness)
 
         if all_confidences:
-            confidence_report["overall_confidence"] = sum(all_confidences) / len(
-                all_confidences
-            )
+            confidence_report["overall_confidence"] = sum(all_confidences) / len(all_confidences)
 
         return confidence_report
 
@@ -192,7 +180,6 @@ class ConfidenceCalculator:
             else:
                 confidence = 0.0
         return confidence
-
 
     def validate_data_type(
         self, field_type: str, raw_value: str, transform: Optional[dict] = None
@@ -245,10 +232,7 @@ class ConfidenceCalculator:
 
         return (confidence, error_msg)
 
-
-    def calculate_table_match_confidence(
-        table_id: str, table_mapping_strategy: dict, matched_text: str
-    ) -> float:
+    def calculate_table_match_confidence(table_id: str, table_mapping_strategy: dict, matched_text: str) -> float:
         """
         计算表格匹配的置信度
         """
@@ -269,7 +253,6 @@ class ConfidenceCalculator:
             return 0.3
         else:
             return 0.0
-
 
     def calculate_field_completeness(self, policy_result: dict, schema: dict) -> dict[str, float]:
         """
@@ -294,9 +277,7 @@ class ConfidenceCalculator:
                         completeness_scores[field_key] = 1.0
                     else:
                         missing = required_props_set - extracted_props
-                        completeness_scores[field_key] = 1.0 - (
-                            len(missing) / len(required_props_set)
-                        )
+                        completeness_scores[field_key] = 1.0 - (len(missing) / len(required_props_set))
                 else:
                     completeness_scores[field_key] = 0.0
 
@@ -313,9 +294,7 @@ class ConfidenceCalculator:
                             completeness_scores[field_key] = 1.0
                         else:
                             missing = required_props_set - extracted_props
-                            completeness_scores[field_key] = 1.0 - (
-                                len(missing) / len(required_props_set)
-                            )
+                            completeness_scores[field_key] = 1.0 - (len(missing) / len(required_props_set))
                     else:
                         completeness_scores[field_key] = 0.5
                 else:
@@ -323,17 +302,13 @@ class ConfidenceCalculator:
 
             else:
                 # 简单类型：检查是否有值
-                if extracted and (
-                    isinstance(extracted, dict) and extracted.get("raw_value")
-                ):
+                if extracted and (isinstance(extracted, dict) and extracted.get("raw_value")):
                     completeness_scores[field_key] = 1.0
                 else:
                     completeness_scores[field_key] = 0.0
 
         return completeness_scores
 
-
-    
 
 def print_confidence_report(report: dict):
     """

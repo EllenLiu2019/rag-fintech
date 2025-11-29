@@ -1,0 +1,18 @@
+{
+    "fields": {
+        "id": {"data_type": "varchar", "is_primary": true, "max_length": 100},
+        "doc_id": {"data_type": "varchar", "max_length": 100},
+        "kb_id": {"data_type": "varchar", "max_length": 100},
+        "dense_vector": {"data_type": "float_vector", "dim": 1024},
+        "sparse_vector": {"data_type": "sparse_float_vector"},
+        "text": {"data_type": "varchar", "max_length": 65535},
+        "policy_number": {"data_type": "varchar", "max_length": 20},
+        "holder_name": {"data_type": "varchar", "max_length": 100},
+        "insured_name": {"data_type": "varchar", "max_length": 100},
+        "metadata": {"data_type": "json", "nullable": true}
+    },
+    "indexes": {
+        "dense_vector": {"index_name": "dense_vector_index", "index_type": "FLAT", "metric_type": "COSINE"},
+        "sparse_vector": {"index_name": "sparse_vector_index", "index_type": "SPARSE_INVERTED_INDEX", "metric_type": "IP", "params": {"inverted_index_algo": "DAAT_MAXSCORE"}}
+    }
+}

@@ -2,10 +2,13 @@ import uuid
 
 from llama_index.core.schema import Document
 from service.parser import parse_content
+from repository.vector.milvus_client import VectorStoreClient
 import logging
 from service.extractor.extractor import Extractor
 from service.ingestion.document import RagDocument
 from service.parser.serializer_deserializer import serialize_documents
+from service.splitter.markdown_splitter import RagMarkdownSplitter
+from service.embedding.embedder import EmbeddingService
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +16,9 @@ logger = logging.getLogger(__name__)
 class IngestionPipeline:
     def __init__(self):
         self.extractor = Extractor()
+        self.splitter = RagMarkdownSplitter()
+        self.embedder = EmbeddingService()
+        self.vector_store = VectorStoreClient()
 
     def handle_document(self, filename: str, contents: bytes, content_type: str) -> RagDocument:
         try:
@@ -22,8 +28,36 @@ class IngestionPipeline:
 
         rag_document = self.build_from_parsed_documents(filename, contents, content_type, documents)
 
-        # TODO: Asynchronously save rag_document to Milvus (next step)
-        # self.milvus_service.save(rag_document)
+        # Step 2: Split document into chunks
+        chunks = self.splitter.split_document(rag_document)
+        logger.info(f"Document split into {len(chunks)} chunks")
+
+        # Step 3: Embed chunks (generate vectors)
+        chunks_with_vectors = self.embedder.embed_chunks(chunks)
+
+        # Step 4: Prepare data for Milvus
+        rows_to_insert = []
+        for chunk in chunks_with_vectors:
+            metadata = chunk.get("metadata", {})
+
+            row = {
+                "id": chunk["chunk_id"],
+                "doc_id": metadata.get("document_id", ""),
+                "kb_id": "default_kb",  # TODO: Support multi-KB
+                "dense_vector": chunk.get("dense_vector", []),
+                "sparse_vector": [],  # TODO: Implement sparse embedding
+                "text": chunk.get("text", ""),
+                "policy_number": metadata.get("policy_number", ""),
+                "holder_name": metadata.get("holder_name", ""),
+                "insured_name": metadata.get("insured_name", ""),
+                "metadata": metadata or {},
+            }
+            rows_to_insert.append(row)
+
+        # Step 5: Save to Milvus
+        if rows_to_insert:
+            self.vector_store.insert(rows_to_insert, "rag_fintech", "default_kb")
+            logger.info(f"Saved {len(rows_to_insert)} chunks to Milvus")
 
         return rag_document
 
@@ -32,11 +66,10 @@ class IngestionPipeline:
     ) -> RagDocument:
 
         pages = serialize_documents(documents)
-        extracted_data, confidence, metadata = self.extractor.extract(pages)
+        confidence, metadata = self.extractor.extract(pages)
 
         rag_document = RagDocument.from_extraction_result(
             parsed_documents=pages,
-            extracted_data=extracted_data,
             confidence=confidence,
             metadata=metadata,
             filename=filename,
@@ -45,11 +78,6 @@ class IngestionPipeline:
             document_id=str(uuid.uuid4()),
         )
 
-        logger.info(
-            f"Built RagDocument for '{filename}': "
-            f"{len(pages)} pages, "
-            f"{len(extracted_data)} extracted fields, "
-            f"{len(metadata)} metadata fields"
-        )
+        logger.info(f"Built RagDocument for '{filename}': " f"{len(pages)} pages, " f"{len(metadata)} metadata fields")
 
         return rag_document

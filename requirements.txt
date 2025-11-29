@@ -20,6 +20,7 @@ llama-parse==0.6.81
 llama-index-core>=0.10.0
 beautifulsoup4>=4.12.2
 pymilvus==2.6.3
+openai==2.8.1
 
 # formatting
 black>=24.0.0

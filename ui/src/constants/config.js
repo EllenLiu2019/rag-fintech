@@ -19,6 +19,7 @@ export const SAMPLE_FILE = {
 export const ROUTES = {
   UPLOAD: 'upload',
   PARSE: 'parse',
+  SEARCH: 'search',
 }
 
 export const TIMING = {

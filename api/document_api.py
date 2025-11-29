@@ -16,8 +16,17 @@ from api.db.persist_file import (
     save_original_file,
     load_original_file,
 )
+from service.retrieval.retriever import Retriever
+from pydantic import BaseModel
 
 logger = get_logger(__name__)
+
+
+class SearchRequest(BaseModel):
+    query: str
+    kb_id: str = "default_kb"
+    top_k: int = 5
+    filters: dict
 
 
 async def upload_file(file: UploadFile = File(...)):
@@ -36,9 +45,7 @@ async def upload_file(file: UploadFile = File(...)):
         if not save_original_file(file.filename, contents):
             logger.warning(f"failed to save original file to disk for '{file.filename}'")
 
-        rag_document = ingestion_pipeline.handle_document(
-            file.filename, contents, file.content_type
-        )
+        rag_document = ingestion_pipeline.handle_document(file.filename, contents, file.content_type)
 
         # For now, we extract pages and summary for frontend display and local storage
         # This maintains backward compatibility with the frontend's expectation
@@ -78,11 +85,7 @@ async def get_file_parsed(filename: str = Query(..., description="文件名")):
     """
     try:
         stored_files = list_stored_files()
-        logger.info(
-            f"received file content request, "
-            f"filename: {filename}; "
-            f"stored files: {stored_files}"
-        )
+        logger.info(f"received file content request, " f"filename: {filename}; " f"stored files: {stored_files}")
 
         file_info = load_file_info(filename)
         if file_info is None:
@@ -133,14 +136,10 @@ async def get_original_file(filename: str = Query(..., description="文件名"))
         # Get file info to determine content_type
         file_info = load_file_info(filename)
         content_type = (
-            file_info.get("content_type", "application/octet-stream")
-            if file_info
-            else "application/octet-stream"
+            file_info.get("content_type", "application/octet-stream") if file_info else "application/octet-stream"
         )
 
-        logger.info(
-            f"original file found: {filename}; size: {len(file_contents)} bytes; content_type: {content_type}"
-        )
+        logger.info(f"original file found: {filename}; size: {len(file_contents)} bytes; content_type: {content_type}")
 
         # Return file content
         return Response(
@@ -157,3 +156,27 @@ async def get_original_file(filename: str = Query(..., description="文件名"))
 
         logger.error(f"   error stack:\n{traceback.format_exc()}")
         return JSONResponse(status_code=500, content={"message": f"获取原始文件失败: {str(e)}"})
+
+
+async def search_docs(request: SearchRequest):
+    """
+    Semantic search
+    """
+    retriever = Retriever()
+    try:
+        results = retriever.search(
+            query=request.query, kb_id=request.kb_id, top_k=request.top_k, filters=request.filters
+        )
+
+        formatted_results = results or []
+
+        return JSONResponse(
+            status_code=200,
+            content={"query": request.query, "results": formatted_results, "total": len(formatted_results)},
+        )
+    except Exception as e:
+        logger.error(f"Search failed: {str(e)}")
+        import traceback
+
+        logger.error(f"   error stack:\n{traceback.format_exc()}")
+        return JSONResponse(status_code=500, content={"message": f"搜索失败: {str(e)}"})

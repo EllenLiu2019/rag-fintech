@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import './ParseFile.css'
 
-function ParseFile({ fileInfo, onBack }) {
+function ParseFile({ fileInfo, onBack, onSearch }) {
   const [content, setContent] = useState('')
   const [summary, setSummary] = useState(null) // 新增 summary 状态
   const [loading, setLoading] = useState(true)
@@ -42,7 +42,7 @@ function ParseFile({ fileInfo, onBack }) {
         }
 
         const data = await response.json()
-        // 处理返回的数据：可能是 pages 数组或 content/text 字符串
+        // 处理返回的数据：可能是 pages content/text 字符串
         if (data.summary) {
           setSummary(data.summary)
         }
@@ -107,18 +107,6 @@ function ParseFile({ fileInfo, onBack }) {
                     </span>
                   </div>
                   <div className="file-info-item">
-                    <span className="label">Extracted Fields:</span>
-                    <div className="tags-container">
-                      {summary.extracted_fields && summary.extracted_fields.length > 0 ? (
-                        summary.extracted_fields.map((field, index) => (
-                          <span key={index} className="field-tag">{field}</span>
-                        ))
-                      ) : (
-                        <span className="value">-</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="file-info-item">
                     <span className="label">Metadata Keys:</span>
                     <div className="tags-container">
                       {summary.metadata_keys && summary.metadata_keys.length > 0 ? (
@@ -145,7 +133,7 @@ function ParseFile({ fileInfo, onBack }) {
             <button className="function-button">
               Indexing with Vector Database
             </button>
-            <button className="function-button">
+            <button className="function-button" onClick={() => onSearch({ ...fileInfo, summary })}>
               Similarity Search
             </button>
           </div>

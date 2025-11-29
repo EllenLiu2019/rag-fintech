@@ -3,6 +3,7 @@ import './App.css'
 import { ROUTES } from './constants/config'
 import UploadFile from './pages/UploadFile'
 import ParseFile from './pages/ParseFile'
+import SearchFile from './pages/SearchFile'
 
 /**
  * App 组件
@@ -14,7 +15,7 @@ const DEV_MODE_SHOW_PARSE = true // 设置为 true 可直接显示 ParseFile 页
 
 // 模拟文件信息（用于开发调试）
 const MOCK_FILE_INFO = {
-  filename: 'policy_lite.pdf',
+  filename: 'policy_mini.pdf',
   content_type: 'application/pdf',
   size: 0, 
 }
@@ -35,12 +36,36 @@ function App() {
     setUploadedFileInfo(null)
   }
 
+  // 跳转到搜索页面
+  const handleGoToSearch = (detailedFileInfo) => {
+    if (detailedFileInfo) {
+      setUploadedFileInfo(curr => ({ ...curr, ...detailedFileInfo }))
+    }
+    setCurrentPage(ROUTES.SEARCH)
+  }
+
+  // 从搜索页面返回解析页面
+  const handleBackToParse = () => {
+    setCurrentPage(ROUTES.PARSE)
+  }
+
   // 根据当前页面渲染对应组件
   return (
     <div className="app">
-      {currentPage === ROUTES.PARSE ? (
-        <ParseFile fileInfo={uploadedFileInfo} onBack={handleBackToUpload} />
-      ) : (
+      {currentPage === ROUTES.PARSE && (
+        <ParseFile 
+          fileInfo={uploadedFileInfo} 
+          onBack={handleBackToUpload} 
+          onSearch={handleGoToSearch}
+        />
+      )}
+      {currentPage === ROUTES.SEARCH && (
+        <SearchFile 
+          fileInfo={uploadedFileInfo} 
+          onBack={handleBackToParse} 
+        />
+      )}
+      {currentPage === ROUTES.UPLOAD && (
         <UploadFile onUploadSuccess={handleUploadSuccess} />
       )}
     </div>

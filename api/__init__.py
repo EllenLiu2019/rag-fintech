@@ -3,9 +3,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import settings
+from api.routers import document_api, chat_api, search_api
 from common.log_middleware import setup_request_logging_middleware
 from common.settings import init_settings
-from api.document_api import upload_file, get_file_parsed, get_original_file, search_docs
+
 from common.log_utils import get_logger, init_root_logger
 
 init_root_logger(level=settings.LOG_LEVEL, format_str=settings.LOG_FORMAT)
@@ -49,8 +50,7 @@ app.add_middleware(
 # Add request logging middleware
 setup_request_logging_middleware(app)
 
-# Register document API routes
-app.post("/api/process")(upload_file)
-app.get("/api/file-parsed")(get_file_parsed)
-app.get("/api/file-original")(get_original_file)
-app.post("/api/search")(search_docs)
+# Register API routes using APIRouter
+app.include_router(document_api.router)
+app.include_router(chat_api.router)
+app.include_router(search_api.router)

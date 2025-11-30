@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import './ParseFile.css'
 
-function ParseFile({ fileInfo, onBack, onSearch }) {
+function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
   const [content, setContent] = useState('')
   const [summary, setSummary] = useState(null) // 新增 summary 状态
   const [loading, setLoading] = useState(true)
@@ -135,6 +135,9 @@ function ParseFile({ fileInfo, onBack, onSearch }) {
             </button>
             <button className="function-button" onClick={() => onSearch({ ...fileInfo, summary })}>
               Similarity Search
+            </button>
+            <button className="function-button" onClick={() => onChat && onChat({ ...fileInfo, summary })}>
+              Intelligent Q&A
             </button>
           </div>
         </div>

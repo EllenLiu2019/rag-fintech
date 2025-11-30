@@ -1,14 +1,8 @@
-"""
-Document API endpoints
-Handles file upload, parsing, and retrieval operations
-"""
-
-from fastapi import File, UploadFile, Query
+from fastapi import APIRouter, File, UploadFile, Query
 from fastapi.responses import JSONResponse, Response
 
 from common.log_utils import get_logger
 from service.ingestion.pipeline import IngestionPipeline
-
 from api.db.persist_file import (
     save_file_info,
     load_file_info,
@@ -16,22 +10,22 @@ from api.db.persist_file import (
     save_original_file,
     load_original_file,
 )
-from service.retrieval.retriever import Retriever
-from pydantic import BaseModel
 
 logger = get_logger(__name__)
 
+router = APIRouter(
+    prefix="/api",
+    tags=["Document"],
+    responses={404: {"description": "Not found"}},
+)
 
-class SearchRequest(BaseModel):
-    query: str
-    kb_id: str = "default_kb"
-    top_k: int = 5
-    filters: dict
 
-
+@router.post("/process")
 async def upload_file(file: UploadFile = File(...)):
     """
     Handle file upload
+
+    - **file**: Uploaded file (PDF, TXT, etc.)
     """
     ingestion_pipeline = IngestionPipeline()
     try:
@@ -79,9 +73,12 @@ async def upload_file(file: UploadFile = File(...)):
         return JSONResponse(status_code=500, content={"message": f"文件上传失败: {str(e)}"})
 
 
+@router.get("/file-parsed")
 async def get_file_parsed(filename: str = Query(..., description="文件名")):
     """
     Get parsed content of uploaded file
+
+    - **filename**: Name of the file to retrieve
     """
     try:
         stored_files = list_stored_files()
@@ -120,9 +117,12 @@ async def get_file_parsed(filename: str = Query(..., description="文件名")):
         return JSONResponse(status_code=500, content={"message": f"获取文件内容失败: {str(e)}"})
 
 
+@router.get("/file-original")
 async def get_original_file(filename: str = Query(..., description="文件名")):
     """
     Get original uploaded file (PDF, TXT, etc.)
+
+    - **filename**: Name of the file to retrieve
     """
     try:
         logger.info(f"received original file request, filename: {filename}")
@@ -156,27 +156,3 @@ async def get_original_file(filename: str = Query(..., description="文件名"))
 
         logger.error(f"   error stack:\n{traceback.format_exc()}")
         return JSONResponse(status_code=500, content={"message": f"获取原始文件失败: {str(e)}"})
-
-
-async def search_docs(request: SearchRequest):
-    """
-    Semantic search
-    """
-    retriever = Retriever()
-    try:
-        results = retriever.search(
-            query=request.query, kb_id=request.kb_id, top_k=request.top_k, filters=request.filters
-        )
-
-        formatted_results = results or []
-
-        return JSONResponse(
-            status_code=200,
-            content={"query": request.query, "results": formatted_results, "total": len(formatted_results)},
-        )
-    except Exception as e:
-        logger.error(f"Search failed: {str(e)}")
-        import traceback
-
-        logger.error(f"   error stack:\n{traceback.format_exc()}")
-        return JSONResponse(status_code=500, content={"message": f"搜索失败: {str(e)}"})

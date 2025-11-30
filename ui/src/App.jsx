@@ -4,6 +4,7 @@ import { ROUTES } from './constants/config'
 import UploadFile from './pages/UploadFile'
 import ParseFile from './pages/ParseFile'
 import SearchFile from './pages/SearchFile'
+import ChatQA from './pages/ChatQA'
 
 /**
  * App 组件
@@ -44,8 +45,21 @@ function App() {
     setCurrentPage(ROUTES.SEARCH)
   }
 
+  // 跳转到智能问答页面
+  const handleGoToChat = (detailedFileInfo) => {
+    if (detailedFileInfo) {
+      setUploadedFileInfo(curr => ({ ...curr, ...detailedFileInfo }))
+    }
+    setCurrentPage(ROUTES.CHAT)
+  }
+
   // 从搜索页面返回解析页面
   const handleBackToParse = () => {
+    setCurrentPage(ROUTES.PARSE)
+  }
+
+  // 从智能问答页面返回解析页面
+  const handleBackToParseFromChat = () => {
     setCurrentPage(ROUTES.PARSE)
   }
 
@@ -57,12 +71,19 @@ function App() {
           fileInfo={uploadedFileInfo} 
           onBack={handleBackToUpload} 
           onSearch={handleGoToSearch}
+          onChat={handleGoToChat}
         />
       )}
       {currentPage === ROUTES.SEARCH && (
         <SearchFile 
           fileInfo={uploadedFileInfo} 
           onBack={handleBackToParse} 
+        />
+      )}
+      {currentPage === ROUTES.CHAT && (
+        <ChatQA 
+          fileInfo={uploadedFileInfo} 
+          onBack={handleBackToParseFromChat} 
         />
       )}
       {currentPage === ROUTES.UPLOAD && (

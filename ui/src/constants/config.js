@@ -20,6 +20,7 @@ export const ROUTES = {
   UPLOAD: 'upload',
   PARSE: 'parse',
   SEARCH: 'search',
+  CHAT: 'chat',
 }
 
 export const TIMING = {

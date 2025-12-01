@@ -106,18 +106,58 @@ async def chat_qa_stream(request: ChatRequest):
 
     Returns Server-Sent Events (SSE) stream
     """
-    # TODO: Phase 2
     from fastapi.responses import StreamingResponse
     import json
 
     async def event_generator():
-        # 模拟流式输出
-        yield f"data: {json.dumps({'type': 'chunks', 'data': []})}\n\n"
-        yield f"data: {json.dumps({'type': 'reasoning', 'data': 'Placeholder reasoning'})}\n\n"
-        yield f"data: {json.dumps({'type': 'token', 'data': 'This '})}\n\n"
-        yield f"data: {json.dumps({'type': 'token', 'data': 'is '})}\n\n"
-        yield f"data: {json.dumps({'type': 'token', 'data': 'a '})}\n\n"
-        yield f"data: {json.dumps({'type': 'token', 'data': 'placeholder'})}\n\n"
-        yield "data: [DONE]\n\n"
+        try:
+            logger.info(f"Received chat stream request: query='{request.query}', kb_id='{request.kb_id}'")
+
+            # 1. Retrieval
+            retriever = Retriever()
+            top_k = request.generation_config.get("top_k", 5) if request.generation_config else 5
+            filters = request.filters or {}
+
+            logger.info(f"Retrieving top {top_k} chunks with filters: {filters}")
+            retrieved_chunks = retriever.search(
+                query=request.query,
+                kb_id=request.kb_id,
+                top_k=top_k,
+                filters=filters,
+            )
+
+            # 2. Send chunks
+            if retrieved_chunks:
+                yield f"data: {json.dumps({'type': 'chunks', 'data': retrieved_chunks}, ensure_ascii=False)}\n\n"
+            else:
+                # No chunks found
+                yield f"data: {json.dumps({'type': 'error', 'data': {'message': '抱歉，没有找到相关的文档片段来回答您的问题。'}}, ensure_ascii=False)}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
+            # 3. Stream generation
+            llm_service = LLMService()
+            generation_config = request.generation_config or {}
+            temperature = generation_config.get("temperature", 0.7)
+            max_tokens = generation_config.get("max_tokens")
+
+            async for event in llm_service.stream_answer_question(
+                question=request.query,
+                context=retrieved_chunks,
+                conversation_history=request.conversation_history,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                yield event
+
+            yield "data: [DONE]\n\n"
+
+        except Exception as e:
+            logger.error(f"Chat stream failed: {str(e)}")
+            import traceback
+
+            logger.error(f"   error stack:\n{traceback.format_exc()}")
+            yield f"data: {json.dumps({'type': 'error', 'data': {'message': str(e)}}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

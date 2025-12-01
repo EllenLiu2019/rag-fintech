@@ -483,6 +483,96 @@
   }
 }
 
+/* 流式输出光标闪烁 */
+.cursor-blink {
+  display: inline-block;
+  color: var(--accent-cyan, #5be9ff);
+  animation: blink 1s infinite;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%, 49% {
+    opacity: 1;
+  }
+  50%, 100% {
+    opacity: 0;
+  }
+}
+
+/* 思考指示器 */
+.thinking-indicator {
+  color: #00ff9d;
+  font-size: 0.8em;
+  font-style: italic;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Tokens 计算中动画 */
+.tokens-calculating {
+  color: var(--accent-cyan, #5be9ff);
+  font-style: italic;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* 重试指示器 */
+.retry-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(255, 215, 0, 0.1);
+  border-left: 3px solid rgba(255, 215, 0, 0.6);
+  border-radius: 0.25rem;
+}
+
+.retry-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 215, 0, 0.3);
+  border-top-color: rgba(255, 215, 0, 1);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.retry-text {
+  color: rgba(255, 215, 0, 1);
+  font-size: 0.9rem;
+  flex: 1;
+}
+
+/* 重试警告样式 */
+.error-message.retry-warning {
+  background: rgba(255, 215, 0, 0.1);
+  border-color: rgba(255, 215, 0, 0.5);
+  color: rgba(255, 215, 0, 1);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.retry-count-badge {
+  background: rgba(255, 215, 0, 0.2);
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-left: auto;
+}
+
 .chat-input-container {
   padding: 1rem;
   border-top: 1px solid rgba(91, 233, 255, 0.2);

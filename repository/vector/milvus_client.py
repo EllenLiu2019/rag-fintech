@@ -149,17 +149,24 @@ class VectorStoreClient(DocStoreClient):
             """Convert value to string, handling None."""
             return str(value) if value is not None else default
 
-        def _extract_entity_fields(entity_or_hit):
-            """Extract entity fields from entity dict or hit object."""
-            if isinstance(entity_or_hit, dict):
-                return {
-                    "text": _safe_str(entity_or_hit.get("text")),
-                    "policy_number": _safe_str(entity_or_hit.get("policy_number")),
-                    "holder_name": _safe_str(entity_or_hit.get("holder_name")),
-                    "insured_name": _safe_str(entity_or_hit.get("insured_name")),
-                    "doc_id": _safe_str(entity_or_hit.get("doc_id")),
-                    "metadata": entity_or_hit.get("metadata", {}),
-                }
+        def _extract_entity_fields(entity_dict):
+            """
+            Extract entity fields from entity dict.
+
+            Note: entity_dict is guaranteed to be a dict type because:
+            1. Hit class initializes entity as {} (empty dict)
+            2. Hit inherits from UserDict, and hit["entity"] accesses self.data["entity"]
+            3. All field data is populated using dict methods (__setitem__)
+            """
+            # entity_dict is always a dict (from pymilvus Hit class)
+            return {
+                "text": _safe_str(entity_dict.get("text")),
+                "policy_number": _safe_str(entity_dict.get("policy_number")),
+                "holder_name": _safe_str(entity_dict.get("holder_name")),
+                "insured_name": _safe_str(entity_dict.get("insured_name")),
+                "doc_id": _safe_str(entity_dict.get("doc_id")),
+                "metadata": entity_dict.get("metadata", {}),
+            }
 
         # Flatten the list of Hits (which is a list of lists) and convert to dicts
         flat_res = []

@@ -3,8 +3,8 @@ import json
 from pathlib import Path
 from service.extractor.rule_extractor import RuleExtractor
 
-# 定义数据目录
-DATA_DIR = Path(__file__).parent / "data"
+# 定义数据目录（指向 tests/data，因为数据文件在根目录）
+DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
 
 @pytest.fixture

@@ -1,10 +1,11 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 
 from common.log_utils import get_logger
 from service.retrieval.retriever import Retriever
 from service.llm_service import LLMService
+from service.dependencies import get_retriever, get_llm_service
 
 logger = get_logger(__name__)
 
@@ -36,12 +37,19 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat_qa(request: ChatRequest):
+async def chat_qa(
+    request: ChatRequest,
+    retriever: Retriever = Depends(get_retriever),
+    llm_service: LLMService = Depends(get_llm_service),
+):
+    """
+    Standard chat endpoint with dependency injection.
 
+    Services are injected as singletons.
+    """
     try:
         logger.info(f"Received chat request: query='{request.query}', kb_id='{request.kb_id}'")
 
-        retriever = Retriever()
         top_k = request.generation_config.get("top_k", 5) if request.generation_config else 5
         filters = request.filters or {}
 
@@ -56,8 +64,6 @@ async def chat_qa(request: ChatRequest):
         logger.info(f"Retrieved {len(retrieved_chunks)} chunks")
 
         if retrieved_chunks:
-            llm_service = LLMService()
-
             generation_config = request.generation_config or {}
             temperature = generation_config.get("temperature", 0.7)
             max_tokens = generation_config.get("max_tokens")
@@ -100,11 +106,15 @@ async def chat_qa(request: ChatRequest):
 
 
 @router.post("/chat/stream")
-async def chat_qa_stream(request: ChatRequest):
+async def chat_qa_stream(
+    request: ChatRequest,
+    retriever: Retriever = Depends(get_retriever),
+    llm_service: LLMService = Depends(get_llm_service),
+):
     """
-    Stream version of chat_qa endpoint
+    Stream version of chat_qa endpoint.
 
-    Returns Server-Sent Events (SSE) stream
+    Returns Server-Sent Events (SSE) stream.
     """
     from fastapi.responses import StreamingResponse
     import json
@@ -113,8 +123,7 @@ async def chat_qa_stream(request: ChatRequest):
         try:
             logger.info(f"Received chat stream request: query='{request.query}', kb_id='{request.kb_id}'")
 
-            # 1. Retrieval
-            retriever = Retriever()
+            # 1. Retrieval (using injected retriever)
             top_k = request.generation_config.get("top_k", 5) if request.generation_config else 5
             filters = request.filters or {}
 
@@ -135,8 +144,7 @@ async def chat_qa_stream(request: ChatRequest):
                 yield "data: [DONE]\n\n"
                 return
 
-            # 3. Stream generation
-            llm_service = LLMService()
+            # 3. Stream generation (using injected llm_service)
             generation_config = request.generation_config or {}
             temperature = generation_config.get("temperature", 0.7)
             max_tokens = generation_config.get("max_tokens")
@@ -157,7 +165,7 @@ async def chat_qa_stream(request: ChatRequest):
             import traceback
 
             logger.error(f"   error stack:\n{traceback.format_exc()}")
+            # This enables retry mechanism in the frontend
             yield f"data: {json.dumps({'type': 'error', 'data': {'message': str(e)}}, ensure_ascii=False)}\n\n"
-            yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

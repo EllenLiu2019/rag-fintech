@@ -1,8 +1,9 @@
-from fastapi import APIRouter, File, UploadFile, Query
+from fastapi import APIRouter, File, UploadFile, Query, Depends
 from fastapi.responses import JSONResponse, Response
 
 from common.log_utils import get_logger
 from service.ingestion.pipeline import IngestionPipeline
+from service.dependencies import get_ingestion_pipeline
 from api.db.persist_file import (
     save_file_info,
     load_file_info,
@@ -21,13 +22,11 @@ router = APIRouter(
 
 
 @router.post("/process")
-async def upload_file(file: UploadFile = File(...)):
-    """
-    Handle file upload
+async def upload_file(
+    file: UploadFile = File(...),
+    ingestion_pipeline: IngestionPipeline = Depends(get_ingestion_pipeline),
+):
 
-    - **file**: Uploaded file (PDF, TXT, etc.)
-    """
-    ingestion_pipeline = IngestionPipeline()
     try:
         logger.info(f"received file uploading request, file_name: {file.filename}")
 

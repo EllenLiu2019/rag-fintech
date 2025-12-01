@@ -174,6 +174,7 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
                         src={`${apiBaseUrl}/api/file-original?filename=${encodeURIComponent(fileInfo.filename)}`}
                         title="PDF Viewer"
                         className="pdf-iframe"
+                        allow="fullscreen"
                         onError={() => {
                           setPdfLoadError(true)
                           console.error('PDF 加载失败')

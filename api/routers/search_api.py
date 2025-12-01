@@ -1,9 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from common.log_utils import get_logger
 from service.retrieval.retriever import Retriever
+from service.dependencies import get_retriever
 
 logger = get_logger(__name__)
 
@@ -22,9 +23,10 @@ class SearchRequest(BaseModel):
 
 
 @router.post("/search")
-async def search_docs(request: SearchRequest):
-
-    retriever = Retriever()
+async def search_docs(
+    request: SearchRequest,
+    retriever: Retriever = Depends(get_retriever),
+):
     try:
         results = retriever.search(
             query=request.query, kb_id=request.kb_id, top_k=request.top_k, filters=request.filters

@@ -115,11 +115,20 @@ function ChatQA({ fileInfo, onBack }) {
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
+    let streamCompletedNormally = false // Track if stream ended with [DONE]
 
     while (true) {
       const { done, value } = await reader.read()
       
-      if (done) break
+      if (done) {
+        // Stream closed - check if it completed normally
+        if (!streamCompletedNormally) {
+          // Stream closed unexpectedly (e.g., due to error)
+          // This allows retry mechanism to trigger
+          throw new Error('Stream closed unexpectedly - connection may have failed')
+        }
+        break
+      }
 
       // 解码数据块
       buffer += decoder.decode(value, { stream: true })
@@ -133,7 +142,8 @@ function ChatQA({ fileInfo, onBack }) {
           const data = line.slice(6).trim()
           
           if (data === '[DONE]') {
-            // 流结束
+            // Stream completed normally
+            streamCompletedNormally = true
             setMessages(prev => {
               const updated = [...prev]
               const lastMsg = updated[updated.length - 1]
@@ -195,7 +205,8 @@ function ChatQA({ fileInfo, onBack }) {
               })
             }
             else if (event.type === 'done') {
-              // 完成
+              // Stream completed normally (done event received)
+              streamCompletedNormally = true
               setMessages(prev => {
                 const updated = [...prev]
                 const lastMsg = updated[updated.length - 1]
@@ -299,6 +310,7 @@ function ChatQA({ fileInfo, onBack }) {
         console.log('Stream request completed successfully')
         setRetryCount(0)
         setIsRetrying(false)
+        setError('') // Clear error message on success
         
         // 更新会话预览
         if (conversations.length > 0 && conversations[0].id === currentConversationId) {
@@ -393,6 +405,8 @@ function ChatQA({ fileInfo, onBack }) {
     setLoading(false)
     setRetryCount(0)
     setIsRetrying(false)
+    // Note: Error message is cleared in success branch (line 313)
+    // If we reach here after failure, error message should remain for user feedback
   }
 
   // 非流式发送消息

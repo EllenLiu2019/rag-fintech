@@ -2,8 +2,8 @@ from fastapi import APIRouter, File, UploadFile, Query, Depends
 from fastapi.responses import JSONResponse, Response
 
 from common.log_utils import get_logger
-from service.ingestion.pipeline import IngestionPipeline
-from service.dependencies import get_ingestion_pipeline
+from rag.ingestion.pipeline import IngestionPipeline
+from rag.dependencies import get_ingestion_pipeline
 from api.db.persist_file import (
     save_file_info,
     load_file_info,

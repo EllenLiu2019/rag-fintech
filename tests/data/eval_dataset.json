@@ -1,0 +1,64 @@
+{
+  "description": "Evaluation dataset for insurance RAG system",
+  "samples": [
+    {
+      "question": "张三的保单号是多少？",
+      "retrieved_docs": [
+        {
+          "id": "doc1_chunk1",
+          "text": "投保人：张三\n保单号：ABC123456\n被保险人：张三",
+          "policy_number": "ABC123456",
+          "holder_name": "张三",
+          "insured_name": "张三"
+        },
+        {
+          "id": "doc2_chunk1",
+          "text": "投保人：李四\n保单号：DEF789012",
+          "policy_number": "DEF789012",
+          "holder_name": "李四",
+          "insured_name": "李四"
+        }
+      ],
+      "generated_answer": "张三的保单号是ABC123456。",
+      "ground_truth_answer": "ABC123456",
+      "relevant_doc_ids": ["doc1_chunk1"]
+    },
+    {
+      "question": "保险的保障期限是多久？",
+      "retrieved_docs": [
+        {
+          "id": "doc1_chunk2",
+          "text": "保险期间：自保险合同生效之日起至被保险人年满100周岁",
+          "policy_number": "ABC123456"
+        },
+        {
+          "id": "doc1_chunk3",
+          "text": "缴费期间：20年",
+          "policy_number": "ABC123456"
+        }
+      ],
+      "generated_answer": "保险的保障期限是自保险合同生效之日起至被保险人年满100周岁。",
+      "ground_truth_answer": "至被保险人年满100周岁",
+      "relevant_doc_ids": ["doc1_chunk2"]
+    },
+    {
+      "question": "如果被保险人在保险期间内身故，可以获得什么保障？",
+      "retrieved_docs": [
+        {
+          "id": "doc1_chunk4",
+          "text": "身故保险金：被保险人身故时，按以下约定给付身故保险金：\n1. 18周岁前身故，给付已交保费\n2. 18周岁后身故，给付保险金额",
+          "policy_number": "ABC123456"
+        },
+        {
+          "id": "doc1_chunk5",
+          "text": "重大疾病保险金：首次确诊重大疾病，给付基本保险金额",
+          "policy_number": "ABC123456"
+        }
+      ],
+      "generated_answer": "如果被保险人在保险期间内身故，18周岁前身故给付已交保费，18周岁后身故给付保险金额。",
+      "ground_truth_answer": "18周岁前身故给付已交保费，18周岁后身故给付保险金额",
+      "relevant_doc_ids": ["doc1_chunk4"]
+    }
+  ]
+}
+

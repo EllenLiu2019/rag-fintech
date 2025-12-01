@@ -42,7 +42,7 @@ dev = [
 rag-api = "api.rag_server:app"
 
 [tool.setuptools]
-packages = ["api", "common", "service", "rag", "repository"]
+packages = ["api", "common", "rag", "repository"]
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.yaml", "*.yml"]

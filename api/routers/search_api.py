@@ -3,8 +3,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from common.log_utils import get_logger
-from service.retrieval.retriever import Retriever
-from service.dependencies import get_retriever
+from rag.retrieval.retriever import Retriever
+from rag.dependencies import get_retriever
 
 logger = get_logger(__name__)
 

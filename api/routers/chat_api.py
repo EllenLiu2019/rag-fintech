@@ -3,9 +3,9 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 from common.log_utils import get_logger
-from service.retrieval.retriever import Retriever
-from service.llm_service import LLMService
-from service.dependencies import get_retriever, get_llm_service
+from rag.retrieval.retriever import Retriever
+from rag.generation.llm_service import LLMService
+from rag.dependencies import get_retriever, get_llm_service
 
 logger = get_logger(__name__)
 

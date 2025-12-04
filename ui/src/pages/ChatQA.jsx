@@ -29,6 +29,7 @@ function ChatQA({ fileInfo, onBack }) {
   const [maxTokens, setMaxTokens] = useState(2000)
   const [streamOutput, setStreamOutput] = useState(true) // 默认启用流式输出
   const [enableReasoning, setEnableReasoning] = useState(true)
+  const [retrievalMode, setRetrievalMode] = useState('hybrid') // 检索模式: dense or hybrid，默认 hybrid
 
   // 右侧栏状态
   const [retrievedChunks, setRetrievedChunks] = useState([])
@@ -40,12 +41,65 @@ function ChatQA({ fileInfo, onBack }) {
 
   // 初始化Filters（从fileInfo.summary中提取）
   useEffect(() => {
-    if (fileInfo?.summary?.metadata_keys) {
-      setAvailableFilters(fileInfo.summary.metadata_keys)
+    if (fileInfo?.summary?.metadata) {
+      const metadata = fileInfo.summary.metadata
+      
+      // 预填 filters 和 checkbox 状态
+      const initialFilters = {}
       const initialSelected = {}
+      const validKeys = [] // 存储有效（非列表值）的 key
+
+      Object.entries(metadata).forEach(([key, value]) => {
+        // 排除列表类型的值
+        if (Array.isArray(value)) {
+          return
+        }
+
+        validKeys.push(key)
+        initialSelected[key] = false // 默认不选
+
+        // 只预填简单类型的值
+        if (typeof value === 'string' || typeof value === 'number') {
+           initialFilters[key] = String(value)
+        } else if (value !== null) {
+           // 尝试提取嵌套对象中的 name 字段
+           if (value.name) {
+             initialFilters[key] = value.name
+           } else if (value.value) {
+             initialFilters[key] = value.value
+           }
+        }
+      })
+      
+      // 添加 document_id 作为隐式过滤器（如果存在）
+      if (fileInfo.summary.document_id) {
+        validKeys.unshift('doc_id') // 将 doc_id 放在最前面
+        initialFilters['doc_id'] = fileInfo.summary.document_id
+        initialSelected['doc_id'] = true // 默认选中 document_id
+      }
+      
+      setAvailableFilters(validKeys)
+      setFilters(initialFilters)
+      setSelectedFilters(initialSelected)
+    } else if (fileInfo?.summary?.metadata_keys) {
+      // 只有 keys 时，初始化 selected 状态
+      const keys = [...fileInfo.summary.metadata_keys]
+      const initialFilters = {}
+      const initialSelected = {}
+      
+      // 添加 document_id 作为隐式过滤器（如果存在）
+      if (fileInfo.summary.document_id) {
+        keys.unshift('doc_id')
+        initialFilters['doc_id'] = fileInfo.summary.document_id
+        initialSelected['doc_id'] = true
+      }
+      
       fileInfo.summary.metadata_keys.forEach(key => {
         initialSelected[key] = false
       })
+      
+      setAvailableFilters(keys)
+      setFilters(initialFilters)
       setSelectedFilters(initialSelected)
     }
   }, [fileInfo])
@@ -274,6 +328,11 @@ function ChatQA({ fileInfo, onBack }) {
       }
     })
 
+    // 确保 document_id 总是被包含（如果存在）
+    if (fileInfo?.summary?.document_id) {
+      activeFilters['doc_id'] = fileInfo.summary.document_id
+    }
+
     // 构建请求体
     const requestBody = {
       query: currentInput,
@@ -283,6 +342,7 @@ function ChatQA({ fileInfo, onBack }) {
         content: m.content
       })),
       filters: activeFilters,
+      mode: retrievalMode,
       stream: true,
       generation_config: {
         top_k: 5,
@@ -436,6 +496,11 @@ function ChatQA({ fileInfo, onBack }) {
         }
       })
 
+      // 确保 document_id 总是被包含（如果存在）
+      if (fileInfo?.summary?.document_id) {
+        activeFilters['doc_id'] = fileInfo.summary.document_id
+      }
+
       // 构建请求体
       const requestBody = {
         query: currentInput,
@@ -445,6 +510,7 @@ function ChatQA({ fileInfo, onBack }) {
           content: m.content
         })),
         filters: activeFilters,
+        mode: retrievalMode,
         stream: false, // 暂时使用非流式，后续可以实现流式
         generation_config: {
           top_k: 5, // 可以从 UI 配置中获取
@@ -613,42 +679,102 @@ function ChatQA({ fileInfo, onBack }) {
           </div>
 
           {/* Filters */}
-          <div className="sidebar-section filters-section">
-            <h3>🔍 Filters</h3>
-            <div className="filters-list">
+          <details className="sidebar-section filters-section collapsible-section">
+            <summary className="collapsible-header">
+              <span className="collapse-icon">▼</span>
+              <h3>🎯 Metadata Filters</h3>
+              <span className="filter-count">{Object.values(selectedFilters).filter(Boolean).length} active</span>
+            </summary>
+            <div className="filters-table-container">
               {availableFilters.length > 0 ? (
-                availableFilters.map(key => (
-                  <div key={key} className="filter-item">
-                    <div className="filter-header">
-                      <input
-                        type="checkbox"
-                        id={`filter-${key}`}
-                        checked={!!selectedFilters[key]}
-                        onChange={() => handleCheckboxChange(key)}
-                        className="filter-checkbox"
-                      />
-                      <label htmlFor={`filter-${key}`} className="filter-label">{key}:</label>
-                    </div>
-                    <input
-                      type="text"
-                      className="filter-input"
-                      placeholder="Any"
-                      value={filters[key] || ''}
-                      onChange={(e) => handleFilterChange(key, e.target.value)}
-                      disabled={!selectedFilters[key]}
-                    />
-                  </div>
-                ))
+                <table className="filters-table">
+                  <thead>
+                    <tr>
+                      <th className="col-checkbox"></th>
+                      <th className="col-field">Field</th>
+                      <th className="col-value">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {availableFilters.map(key => (
+                      <tr key={key} className={`filter-row ${key === 'doc_id' ? 'filter-row-locked' : ''} ${selectedFilters[key] ? 'filter-row-active' : ''}`}>
+                        <td className="col-checkbox">
+                          <input
+                            type="checkbox"
+                            id={`filter-${key}`}
+                            checked={!!selectedFilters[key]}
+                            onChange={() => handleCheckboxChange(key)}
+                            className="filter-checkbox"
+                            disabled={key === 'doc_id'}
+                          />
+                        </td>
+                        <td className="col-field">
+                          <label htmlFor={`filter-${key}`} className="filter-field-label">
+                            {key}
+                            {key === 'doc_id' && <span className="filter-lock-icon">🔒</span>}
+                          </label>
+                        </td>
+                        <td className="col-value">
+                          <input
+                            type="text"
+                            className="filter-value-input"
+                            placeholder="Any"
+                            value={filters[key] || ''}
+                            onChange={(e) => handleFilterChange(key, e.target.value)}
+                            disabled={key === 'doc_id' || !selectedFilters[key]}
+                            readOnly={key === 'doc_id'}
+                            title={filters[key] || ''}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : (
                 <div className="no-filters">No metadata keys available</div>
               )}
             </div>
-          </div>
+          </details>
 
-          {/* Model Settings */}
+          {/* Advanced Settings */}
           <div className="sidebar-section model-settings-section">
-            <h3>⚙️ Model Settings</h3>
+            <h3>⚙️ Advanced Settings</h3>
             <div className="settings-content">
+              {/* Retrieval Strategy */}
+              <div className="setting-group">
+                <label className="setting-group-label">🔎 Retrieval Strategy</label>
+                <div className="strategy-options">
+                  <div className="strategy-radio-item">
+                    <input 
+                      type="radio" 
+                      id="strategy-hybrid"
+                      name="retrieval-strategy" 
+                      value="hybrid" 
+                      checked={retrievalMode === 'hybrid'}
+                      onChange={(e) => setRetrievalMode(e.target.value)}
+                    />
+                    <label htmlFor="strategy-hybrid">
+                      <span className="strategy-name">Hybrid Search</span>
+                      <span className="strategy-desc">Dense + Sparse with RRF</span>
+                    </label>
+                  </div>
+                  <div className="strategy-radio-item">
+                    <input 
+                      type="radio" 
+                      id="strategy-dense"
+                      name="retrieval-strategy" 
+                      value="dense" 
+                      checked={retrievalMode === 'dense'}
+                      onChange={(e) => setRetrievalMode(e.target.value)}
+                    />
+                    <label htmlFor="strategy-dense">
+                      <span className="strategy-name">Dense Vector</span>
+                      <span className="strategy-desc">Semantic embedding search</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
               <div className="setting-item">
                 <label>Model:</label>
                 <select
@@ -878,7 +1004,7 @@ function ChatQA({ fileInfo, onBack }) {
                     {retrievedChunks.map((chunk, index) => (
                       <div key={index} className="chunk-card">
                         <div className="chunk-header">
-                          <span className="chunk-number">📄 Chunk #{index + 1}</span>
+                          <span className="chunk-number">🏷️ Chunk #{index + 1}</span>
                           <span className="chunk-score" style={{
                             backgroundColor: chunk.score >= 0.9 ? 'rgba(0, 255, 157, 0.2)' :
                                            chunk.score >= 0.8 ? 'rgba(91, 233, 255, 0.2)' :

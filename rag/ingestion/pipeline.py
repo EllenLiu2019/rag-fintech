@@ -36,28 +36,27 @@ class IngestionPipeline:
         chunks_with_vectors = self.embedder.embed_chunks(chunks)
 
         # Step 4: Prepare data for Milvus
-        rows_to_insert = []
+        chunks_to_insert = []
         for chunk in chunks_with_vectors:
             metadata = chunk.get("metadata", {})
 
-            row = {
+            chunk_to_insert = {
                 "id": chunk["chunk_id"],
                 "doc_id": metadata.get("document_id", ""),
                 "kb_id": "default_kb",  # TODO: Support multi-KB
                 "dense_vector": chunk.get("dense_vector", []),
-                "sparse_vector": [],  # TODO: Implement sparse embedding
                 "text": chunk.get("text", ""),
                 "policy_number": metadata.get("policy_number", ""),
                 "holder_name": metadata.get("holder_name", ""),
                 "insured_name": metadata.get("insured_name", ""),
                 "metadata": metadata or {},
             }
-            rows_to_insert.append(row)
+            chunks_to_insert.append(chunk_to_insert)
 
         # Step 5: Save to Milvus
-        if rows_to_insert:
-            self.vector_store.insert(rows_to_insert, "rag_fintech", "default_kb")
-            logger.info(f"Saved {len(rows_to_insert)} chunks to Milvus")
+        if chunks_to_insert:
+            self.vector_store.insert(chunks_to_insert, "rag_fintech", "default_kb")
+            logger.info(f"Saved {len(chunks_to_insert)} chunks to Milvus")
 
         return rag_document
 
@@ -81,4 +80,3 @@ class IngestionPipeline:
         logger.info(f"Built RagDocument for '{filename}': " f"{len(pages)} pages, " f"{len(metadata)} metadata fields")
 
         return rag_document
-

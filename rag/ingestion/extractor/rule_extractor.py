@@ -230,6 +230,13 @@ class RuleExtractor:
                 logger.warning("Table missing id or title, skipping")
                 continue
 
+            # Normalize table_id: if it's a list, take the first element
+            if isinstance(table_id, list):
+                table_id = table_id[0] if table_id else None
+                if not table_id:
+                    logger.warning("Table has empty id list, skipping")
+                    continue
+
             try:
                 if table_type == "object":
                     self._extract_object_table(table, table_id)
@@ -243,13 +250,13 @@ class RuleExtractor:
                     exc_info=True,
                 )
 
-    def _extract_object_table(self, table: Tag, table_id: Union[str, list[str]]) -> None:
+    def _extract_object_table(self, table: Tag, table_id: str) -> None:
         """
         提取对象类型表格（单行键值对格式）
 
         Args:
             table: BeautifulSoup 表格元素
-            table_id: 表格标识符
+            table_id: 表格标识符（字符串）
         """
         logger.debug(f"Extracting object table with id: {table_id}")
 
@@ -458,4 +465,3 @@ class RuleExtractor:
                 return config_prop
 
         return None
-

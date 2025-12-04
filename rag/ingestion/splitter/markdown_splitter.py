@@ -42,10 +42,9 @@ class RagMarkdownSplitter(BaseSplitter):
 
             chunk = {
                 "chunk_id": node.node_id,
-                "text": embed_text + "\n" + node.get_content(metadata_mode="none"),
+                "text": node.get_content(metadata_mode="none"),
                 "metadata": node.metadata,
             }
             chunks.append(chunk)
 
         return chunks
-

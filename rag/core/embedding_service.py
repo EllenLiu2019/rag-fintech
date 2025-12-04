@@ -1,7 +1,5 @@
 import os
 import logging
-import hashlib
-from typing import List
 from rag.llm.embedding_model import VoyageEmbed
 from repository.cache.redis_client import get_cache
 
@@ -9,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class EmbeddingService:
-    def __init__(self, enable_cache: bool = True):
+    def __init__(self, enable_cache: bool = False):
         self.provider = "voyage"
         self.enable_cache = enable_cache
 
@@ -56,13 +54,13 @@ class EmbeddingService:
         Queries are frequently repeated, so caching provides significant benefit.
         """
         # Try cache first
-        if self.enable_cache and self.cache and self.cache.enabled:
-            cache_key = self._get_query_cache_key(text)
-            cached_embedding = self.cache.get(cache_key)
+        # if self.enable_cache and self.cache and self.cache.enabled:
+        #     cache_key = self._get_query_cache_key(text)
+        #     cached_embedding = self.cache.get(cache_key)
 
-            if cached_embedding is not None:
-                logger.debug(f"Query embedding cache hit for: '{text[:50]}...'")
-                return cached_embedding
+        #     if cached_embedding is not None:
+        #         logger.debug(f"Query embedding cache hit for: '{text[:50]}...'")
+        #         return cached_embedding
 
         # Cache miss - compute embedding
         try:
@@ -70,10 +68,10 @@ class EmbeddingService:
             result = embedding.tolist()
 
             # Store in cache (TTL: 1 hour)
-            if self.enable_cache and self.cache and self.cache.enabled:
-                cache_key = self._get_query_cache_key(text)
-                self.cache.set(cache_key, result, ttl=3600)
-                logger.debug(f"Query embedding cached for: '{text[:50]}...'")
+            # if self.enable_cache and self.cache and self.cache.enabled:
+            #     cache_key = self._get_query_cache_key(text)
+            #     self.cache.set(cache_key, result, ttl=3600)
+            #     logger.debug(f"Query embedding cached for: '{text[:50]}...'")
 
             return result
 
@@ -81,60 +79,59 @@ class EmbeddingService:
             logger.error(f"Failed to embed query: {e}")
             raise
 
-    def _get_query_cache_key(self, text: str) -> str:
-        """Generate cache key for query embedding."""
-        text_hash = hashlib.md5(text.encode()).hexdigest()
-        return f"embedding:query:{self.model_name}:{text_hash}"
+    # def _get_query_cache_key(self, text: str) -> str:
+    #     """Generate cache key for query embedding."""
+    #     text_hash = hashlib.md5(text.encode()).hexdigest()
+    #     return f"embedding:query:{self.model_name}:{text_hash}"
 
-    def embed_queries_batch(self, texts: List[str]) -> List[list[float]]:
-        """
-        Batch embed queries with caching.
+    # def embed_queries_batch(self, texts: List[str]) -> List[list[float]]:
+    #     """
+    #     Batch embed queries with caching.
 
-        Args:
-            texts: List of query texts
+    #     Args:
+    #         texts: List of query texts
 
-        Returns:
-            List of embeddings
-        """
-        results = []
-        uncached_texts = []
-        uncached_indices = []
+    #     Returns:
+    #         List of embeddings
+    #     """
+    #     results = []
+    #     uncached_texts = []
+    #     uncached_indices = []
 
-        # Check cache for each query
-        for idx, text in enumerate(texts):
-            if self.enable_cache and self.cache and self.cache.enabled:
-                cache_key = self._get_query_cache_key(text)
-                cached_embedding = self.cache.get(cache_key)
+    #     # Check cache for each query
+    #     for idx, text in enumerate(texts):
+    #         if self.enable_cache and self.cache and self.cache.enabled:
+    #             cache_key = self._get_query_cache_key(text)
+    #             cached_embedding = self.cache.get(cache_key)
 
-                if cached_embedding is not None:
-                    results.append(cached_embedding)
-                    continue
+    #             if cached_embedding is not None:
+    #                 results.append(cached_embedding)
+    #                 continue
 
-            # Mark as uncached
-            results.append(None)
-            uncached_texts.append(text)
-            uncached_indices.append(idx)
+    #         # Mark as uncached
+    #         results.append(None)
+    #         uncached_texts.append(text)
+    #         uncached_indices.append(idx)
 
-        # Batch process uncached queries
-        if uncached_texts:
-            try:
-                embeddings, _ = self.model.encode(uncached_texts, input_type="query")
+    #     # Batch process uncached queries
+    #     if uncached_texts:
+    #         try:
+    #             embeddings, _ = self.model.encode(uncached_texts, input_type="query")
 
-                for i, idx in enumerate(uncached_indices):
-                    embedding = embeddings[i].tolist()
-                    results[idx] = embedding
+    #             for i, idx in enumerate(uncached_indices):
+    #                 embedding = embeddings[i].tolist()
+    #                 results[idx] = embedding
 
-                    # Cache the result
-                    if self.enable_cache and self.cache and self.cache.enabled:
-                        cache_key = self._get_query_cache_key(uncached_texts[i])
-                        self.cache.set(cache_key, embedding, ttl=3600)
+    #                 # Cache the result
+    #                 if self.enable_cache and self.cache and self.cache.enabled:
+    #                     cache_key = self._get_query_cache_key(uncached_texts[i])
+    #                     self.cache.set(cache_key, embedding, ttl=3600)
 
-            except Exception as e:
-                logger.error(f"Failed to batch embed queries: {e}")
-                # Fill with zeros for failed embeddings
-                for idx in uncached_indices:
-                    if results[idx] is None:
-                        results[idx] = []
+    #         except Exception as e:
+    #             logger.error(f"Failed to batch embed queries: {e}")
+    #             # Fill with zeros for failed embeddings
+    #             for idx in uncached_indices:
+    #                 if results[idx] is None:
+    #                     results[idx] = []
 
-        return results
-
+    #     return results

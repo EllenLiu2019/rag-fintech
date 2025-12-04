@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from common.log_utils import get_logger
 from rag.retrieval.retriever import Retriever
@@ -25,6 +25,7 @@ class ChatRequest(BaseModel):
     filters: Optional[dict] = {}
     stream: bool = True
     generation_config: Optional[dict] = {}
+    mode: Literal["dense", "hybrid"] = "dense"
 
 
 class ChatResponse(BaseModel):
@@ -34,6 +35,7 @@ class ChatResponse(BaseModel):
     reasoning: Optional[str] = None
     sources: List[dict] = []
     tokens: Optional[int] = None
+    mode: Literal["dense", "hybrid"] = "dense"
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -59,6 +61,7 @@ async def chat_qa(
             kb_id=request.kb_id,
             top_k=top_k,
             filters=filters,
+            mode=request.mode,
         )
 
         logger.info(f"Retrieved {len(retrieved_chunks)} chunks")
@@ -90,6 +93,7 @@ async def chat_qa(
             reasoning=reasoning,
             sources=retrieved_chunks,
             tokens=tokens,
+            mode=request.mode,
         )
 
     except Exception as e:
@@ -102,6 +106,7 @@ async def chat_qa(
             reasoning="检索过程中发生异常",
             sources=[],
             tokens=0,
+            mode=request.mode,
         )
 
 
@@ -133,6 +138,7 @@ async def chat_qa_stream(
                 kb_id=request.kb_id,
                 top_k=top_k,
                 filters=filters,
+                mode=request.mode,
             )
 
             # 2. Send chunks

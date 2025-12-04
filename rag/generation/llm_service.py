@@ -19,6 +19,16 @@ class LLMService:
     ) -> List[Dict[str, str]]:
         conversation_history = conversation_history or []
 
+        # system prompt
+        system_prompt = """你是一个专业的保险领域智能问答助手。请遵循以下规则：
+
+        1. **基于上下文回答**：严格根据提供的上下文信息回答问题，不要使用先验知识
+        2. **明确投被保人信息**：根据保险合同信息明确投保人、被保险人信息
+        3. **验证投被保人**：验证问题中指代的投保人和被保险人是否在合同中存在，如果不存在或不正确，请明确说明无法验证
+        4. **引用来源**：在回答中使用 [1][2] 等标注引用来源（对应上下文中的编号）
+        5. **简洁准确**：只回答问题中提到的内容，不要添加无关信息
+        """
+
         # format context, add reference annotation
         context_parts = []
         for idx, chunk in enumerate(context):
@@ -29,38 +39,29 @@ class LLMService:
 
         context_str = "\n\n".join(context_parts)
 
-        # build system prompt
-        system_prompt = """你是一个专业的保险领域智能问答助手。请遵循以下规则：
+        # format conversation history
+        history_text = ""
+        if conversation_history:
+            history_parts = []
+            for i in range(0, len(conversation_history), 2):
+                q = conversation_history[i].get("content", "")
+                a = conversation_history[i + 1].get("content", "") if i + 1 < len(conversation_history) else ""
+                history_parts.append(f"Q: {q}\nA: {a}")
+            history_text = "\n\n".join(history_parts)
 
-        1. **基于上下文回答**：严格根据提供的上下文信息回答问题，不要使用先验知识
-        2. **明确投被保人信息**：根据保险合同信息明确投保人、被保险人信息
-        3. **验证投被保人**：验证问题中指代的投保人和被保险人是否在合同中存在，如果不存在或不正确，请明确说明无法验证
-        4. **引用来源**：在回答中使用 [1][2] 等标注引用来源（对应上下文中的编号）
-        5. **简洁准确**：只回答问题中提到的内容，不要添加无关信息
-        """
-
-        # build user message with context and current question
+        # user message with context and current question
         user_content_parts = [
-            f"### 参考信息\n{context_str}\n",
-            f"### 问题\n{question}\n",
-            "### 回答要求\n请根据参考信息回答问题，并在答案中使用 [1][2] 等标注引用来源。",
+            f"### 对话历史（仅供理解用户意图）\n{history_text}\n",
+            f"### 参考信息（用于回答[用户当前问题]）\n{context_str}\n",
+            f"### [用户当前问题]\n{question}\n",
+            "### 回答要求\n请根据参考信息回答[用户当前问题]，并在答案中使用 [1][2] 等标注引用来源。",
         ]
         user_content = "\n".join(user_content_parts)
 
-        # build messages (support multi-turn conversation)
-        messages = [{"role": "system", "content": system_prompt}]
-
-        # add conversation history directly to messages (preserve structure)
-        if conversation_history:
-            logger.info(f"Conversation history: {conversation_history}")
-            # Add conversation history to messages (preserving role structure)
-            for msg in conversation_history:
-                if msg.get("role") in ["user", "assistant"]:
-                    messages.append({"role": msg["role"], "content": msg.get("content", "")})
-
-        # Add current question with context as the final user message
-        messages.append({"role": "user", "content": user_content})
-
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ]
         return messages
 
     def answer_question(
@@ -129,4 +130,3 @@ class LLMService:
 
         # Send done signal with tokens information
         yield f"data: {json.dumps({'type': 'done', 'data': {'answer': answer_buffer, 'tokens': total_tokens}}, ensure_ascii=False)}\n\n"
-

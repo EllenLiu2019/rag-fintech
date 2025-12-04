@@ -38,7 +38,7 @@ class MatchDenseExpr(ABC):
         self.extra_options = extra_options
 
 
-MatchExpr = MatchTextExpr | MatchDenseExpr
+MatchExpr = MatchDenseExpr | MatchTextExpr
 
 
 class OrderByExpr(ABC):
@@ -147,3 +147,22 @@ class DocStoreClient(ABC):
         Delete rows with given conjunctive equivalent filtering condition
         """
         raise NotImplementedError("Not implemented")
+
+
+# Helper function to safely extract field values
+def _safe_str(value, default=""):
+    """Convert value to string, handling None."""
+    return str(value) if value is not None else default
+
+
+def extract_entity_fields(entity_dict: dict, selectFields: list[str]) -> dict:
+    """
+    Extract entity fields from entity dict.
+
+    Note: entity_dict is guaranteed to be a dict type because:
+    1. Hit class initializes entity as {} (empty dict)
+    2. Hit inherits from UserDict, and hit["entity"] accesses self.data["entity"]
+    3. All field data is populated using dict methods (__setitem__)
+    """
+    # entity_dict is always a dict (from pymilvus Hit class)
+    return {field: _safe_str(entity_dict.get(field)) for field in selectFields if field in entity_dict}

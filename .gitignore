@@ -29,6 +29,7 @@ __pycache__
 *$py.class
 *.so
 .Python
-docs/
+docs/*
+!docs/adr/
 api/scripts/
 rag_fintech.egg-info/

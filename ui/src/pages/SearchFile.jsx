@@ -13,6 +13,7 @@ function SearchFile({ fileInfo, onBack }) {
   const [filters, setFilters] = useState({}) // 存储筛选值
   const [selectedFilters, setSelectedFilters] = useState({}) // 存储用户勾选的 filters 状态
   const [availableFilters, setAvailableFilters] = useState([])
+  const [retrievalMode, setRetrievalMode] = useState('dense') // 检索模式: dense or hybrid
 
   // 初始化过滤器：从 summary 中提取可用的 metadata
   useEffect(() => {
@@ -47,6 +48,13 @@ function SearchFile({ fileInfo, onBack }) {
         }
       })
       
+      // 添加 document_id 作为隐式过滤器（如果存在）
+      if (fileInfo.summary.document_id) {
+        validKeys.unshift('doc_id') // 将 doc_id 放在最前面
+        initialFilters['doc_id'] = fileInfo.summary.document_id
+        initialSelected['doc_id'] = true // 默认选中 document_id
+      }
+      
       setAvailableFilters(validKeys)
       setFilters(initialFilters)
       setSelectedFilters(initialSelected)
@@ -57,6 +65,12 @@ function SearchFile({ fileInfo, onBack }) {
       fileInfo.summary.metadata_keys.forEach(key => {
         initialSelected[key] = true
       })
+      
+      // 添加 document_id
+      if (fileInfo.summary?.document_id) {
+        initialSelected['doc_id'] = true
+      }
+      
       setSelectedFilters(initialSelected)
     }
   }, [fileInfo])
@@ -78,6 +92,11 @@ function SearchFile({ fileInfo, onBack }) {
         }
       })
 
+      // 确保 document_id 总是被包含（如果存在）
+      if (fileInfo?.summary?.document_id) {
+        activeFilters['doc_id'] = fileInfo.summary.document_id
+      }
+
       const response = await fetch(`${apiBaseUrl}/api/search`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -85,7 +104,8 @@ function SearchFile({ fileInfo, onBack }) {
           query: query,
           kb_id: "default_kb", // TODO: 动态获取或配置
           top_k: 5,
-          filters: activeFilters
+          filters: activeFilters,
+          mode: retrievalMode
         })
       })
 
@@ -136,52 +156,91 @@ function SearchFile({ fileInfo, onBack }) {
           </div>
 
           {/* Metadata Filters */}
-          <div className="control-card filters-card">
-            <h3>Metadata Filters</h3>
-            <div className="filters-list">
+          <details className="control-card filters-card collapsible-section">
+            <summary className="collapsible-header">
+              <span className="collapse-icon">▼</span>
+              <h3>🎯 Metadata Filters</h3>
+              <span className="filter-count">{Object.values(selectedFilters).filter(Boolean).length} active</span>
+            </summary>
+            <div className="filters-table-container">
               {availableFilters.length > 0 ? (
-                availableFilters.map(key => (
-                  <div key={key} className="filter-item">
-                    <div className="filter-header">
-                      <input
-                        type="checkbox"
-                        id={`filter-${key}`}
-                        checked={!!selectedFilters[key]}
-                        onChange={() => handleCheckboxChange(key)}
-                        className="filter-checkbox"
-                      />
-                      <label htmlFor={`filter-${key}`} className="filter-label">{key}:</label>
-                    </div>
-                    <input 
-                      type="text" 
-                      className="filter-input"
-                      placeholder="Any"
-                      value={filters[key] || ''}
-                      onChange={(e) => handleFilterChange(key, e.target.value)}
-                      disabled={!selectedFilters[key]}
-                    />
-                  </div>
-                ))
+                <table className="filters-table">
+                  <thead>
+                    <tr>
+                      <th className="col-checkbox"></th>
+                      <th className="col-field">Field</th>
+                      <th className="col-value">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {availableFilters.map(key => (
+                      <tr key={key} className={`filter-row ${key === 'doc_id' ? 'filter-row-locked' : ''} ${selectedFilters[key] ? 'filter-row-active' : ''}`}>
+                        <td className="col-checkbox">
+                          <input
+                            type="checkbox"
+                            id={`filter-${key}`}
+                            checked={!!selectedFilters[key]}
+                            onChange={() => handleCheckboxChange(key)}
+                            className="filter-checkbox"
+                            disabled={key === 'doc_id'}
+                          />
+                        </td>
+                        <td className="col-field">
+                          <label htmlFor={`filter-${key}`} className="filter-field-label">
+                            {key}
+                            {key === 'doc_id' && <span className="filter-lock-icon">🔒</span>}
+                          </label>
+                        </td>
+                        <td className="col-value">
+                          <input
+                            type="text"
+                            className="filter-value-input"
+                            placeholder="Any"
+                            value={filters[key] || ''}
+                            onChange={(e) => handleFilterChange(key, e.target.value)}
+                            disabled={key === 'doc_id' || !selectedFilters[key]}
+                            readOnly={key === 'doc_id'}
+                            title={filters[key] || ''}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : (
                 <div className="no-filters">No metadata keys available</div>
               )}
             </div>
-          </div>
+          </details>
 
-          {/* Retrieval Strategy (预留) */}
+          {/* Retrieval Strategy */}
           <div className="control-card strategy-card">
             <h3>Retrieval Strategy</h3>
             <div className="strategy-option">
               <label>
-                <input type="radio" name="strategy" value="vector" defaultChecked />
-                Vector Search
+                <input 
+                  type="radio" 
+                  name="strategy" 
+                  value="dense" 
+                  checked={retrievalMode === 'dense'}
+                  onChange={(e) => setRetrievalMode(e.target.value)}
+                />
+                Dense Vector Search
               </label>
+              <p className="strategy-description">Semantic search using dense embeddings</p>
             </div>
-            <div className="strategy-option disabled">
+            <div className="strategy-option">
               <label>
-                <input type="radio" name="strategy" value="hybrid" disabled />
-                Hybrid Search (Coming Soon)
+                <input 
+                  type="radio" 
+                  name="strategy" 
+                  value="hybrid" 
+                  checked={retrievalMode === 'hybrid'}
+                  onChange={(e) => setRetrievalMode(e.target.value)}
+                />
+                Hybrid Search
               </label>
+              <p className="strategy-description">Combines dense vectors + sparse with RRF reranking</p>
             </div>
           </div>
         </div>

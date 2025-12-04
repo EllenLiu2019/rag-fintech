@@ -1,10 +1,18 @@
-from pymilvus import MilvusClient, DataType
+from pymilvus import (
+    MilvusClient,
+    DataType,
+    Function,
+    FunctionType,
+    model,
+    AnnSearchRequest,
+)
 from common import settings
 from common.config_utils import load_yaml_conf
 from common.decorator import singleton
-from .doc_store_client import DocStoreClient, MatchExpr, MatchDenseExpr
+from .doc_store_client import DocStoreClient, extract_entity_fields
 from common.file_utils import get_project_base_directory
 import logging
+from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +34,14 @@ class VectorStoreClient(DocStoreClient):
             self.client = MilvusClient(uri=self.uri, token=self.token)
             logger.info("Milvus client initialized successfully.")
 
+            self.bge_m3_embedding_function = model.hybrid.BGEM3EmbeddingFunction(
+                device="cpu",
+                normalize_embeddings=False,
+                return_dense=False,
+                return_sparse=True,
+                return_colbert_vecs=False,
+            )
+            logger.info("BGE-M3 embedding function initialized successfully.")
         except Exception as e:
             logger.error(f"Failed to initialize Milvus client: {e}")
             raise
@@ -68,6 +84,16 @@ class VectorStoreClient(DocStoreClient):
             if "max_length" in field_config:
                 field_kwargs["max_length"] = field_config["max_length"]
 
+            if field_config.get("enable_analyzer", False):
+                field_kwargs["enable_analyzer"] = True
+                bm25_function = Function(
+                    name=f"{field_name}_bm25_emb",
+                    input_field_names=[field_name],
+                    output_field_names=["sparse_vector"],
+                    function_type=FunctionType.BM25,
+                )
+                schema.add_function(bm25_function)
+
             if "dim" in field_config:
                 field_kwargs["dim"] = vectorSize
 
@@ -104,69 +130,35 @@ class VectorStoreClient(DocStoreClient):
     def search(
         self,
         selectFields: list[str],
-        matchExprs: list[MatchExpr],
+        query_vector: list[float],
         limit: int,
-        knowledgebaseIds: list[str],
         indexNames: str | list[str],
-    ):
+        knowledgebaseIds: list[str],
+        filters: Optional[Dict] = None,
+    ) -> List[Dict[str, Any]]:
         if isinstance(indexNames, str):
             indexNames = indexNames.split(",")
 
         collection_name = f"{indexNames[0]}_{knowledgebaseIds[0]}"
 
-        # Handle vector search parameters
+        # Handle filters
         expr_parts = []
-        vector_data = None
-        topk = limit
-        vector_field = ""
         filter_expr = ""
-        for matchExpr in matchExprs:
-            if isinstance(matchExpr, MatchDenseExpr):
-                vector_data = matchExpr.embedding_data  # query vector
-                topk = matchExpr.topn
-                vector_field = matchExpr.vector_column_name
-                for k, v in matchExpr.extra_options.get("filters", {}).items():
-                    expr_parts.append(f'{k} == "{v}"')
-                filter_expr = " and ".join(expr_parts) if expr_parts else ""
-                break
+        if filters:
+            for k, v in filters.items():
+                expr_parts.append(f'{k} == "{v}"')
+            filter_expr = " and ".join(expr_parts) if expr_parts else ""
 
-        if not vector_data:
-            logger.warning("No vector data provided.")
-            return []
-
+        # Handle vector search
         search_res = self.client.search(
             collection_name=collection_name,
-            data=[vector_data],
-            anns_field=vector_field,  # dense_vector
+            data=[query_vector],
+            anns_field="dense_vector",
             filter=filter_expr,
-            limit=topk,
+            limit=limit,
             output_fields=selectFields,
             search_params={"metric_type": "COSINE"},
         )
-
-        # Helper function to safely extract field values
-        def _safe_str(value, default=""):
-            """Convert value to string, handling None."""
-            return str(value) if value is not None else default
-
-        def _extract_entity_fields(entity_dict):
-            """
-            Extract entity fields from entity dict.
-
-            Note: entity_dict is guaranteed to be a dict type because:
-            1. Hit class initializes entity as {} (empty dict)
-            2. Hit inherits from UserDict, and hit["entity"] accesses self.data["entity"]
-            3. All field data is populated using dict methods (__setitem__)
-            """
-            # entity_dict is always a dict (from pymilvus Hit class)
-            return {
-                "text": _safe_str(entity_dict.get("text")),
-                "policy_number": _safe_str(entity_dict.get("policy_number")),
-                "holder_name": _safe_str(entity_dict.get("holder_name")),
-                "insured_name": _safe_str(entity_dict.get("insured_name")),
-                "doc_id": _safe_str(entity_dict.get("doc_id")),
-                "metadata": entity_dict.get("metadata", {}),
-            }
 
         # Flatten the list of Hits (which is a list of lists) and convert to dicts
         flat_res = []
@@ -177,19 +169,89 @@ class VectorStoreClient(DocStoreClient):
                         "id": str(hit.id),
                         "distance": hit.distance,
                         "score": hit.score,
-                        **_extract_entity_fields(hit["entity"]),
+                        **extract_entity_fields(hit["entity"], selectFields),
                     }
                 )
 
         return flat_res
 
-    def insert(self, rows: list[dict], indexName: str, knowledgebaseId: str = None) -> list[str]:
+    def hybrid_search(
+        self,
+        selectFields: list[str],
+        query: str,
+        query_vector: list[float],
+        limit: int,
+        indexNames: str | list[str],
+        knowledgebaseIds: list[str],
+        filters: Optional[Dict] = None,
+    ) -> List[Dict[str, Any]]:
+        if isinstance(indexNames, str):
+            indexNames = indexNames.split(",")
+
+        collection_name = f"{indexNames[0]}_{knowledgebaseIds[0]}"
+
+        # Handle vector search parameters
+        dense_search_params = {
+            "data": [query_vector],
+            "anns_field": "dense_vector",
+            "param": {"nprobe": 10},
+            "limit": limit,
+        }
+        dense_request = AnnSearchRequest(**dense_search_params)
+
+        sparse_search_params = {
+            "data": self.bge_m3_embedding_function([query])["sparse"],
+            "anns_field": "sparse_vector",
+            "param": {"drop_ratio_search": 0.5},
+            "limit": limit,
+        }
+        sparse_request = AnnSearchRequest(**sparse_search_params)
+        requests = [dense_request, sparse_request]
+
+        ranker = Function(
+            name="rrf",
+            input_field_names=[],  # Must be an empty list
+            function_type=FunctionType.RERANK,
+            params={"reranker": "rrf", "k": limit},
+        )
+
+        expr_parts = []
+        filter_expr = ""
+        if filters:
+            for k, v in filters.items():
+                expr_parts.append(f'{k} == "{v}"')
+            filter_expr = " and ".join(expr_parts) if expr_parts else ""
+
+        search_res = self.client.hybrid_search(
+            collection_name=collection_name,
+            reqs=requests,
+            ranker=ranker,
+            filters=filter_expr,
+            limit=limit,
+            output_fields=selectFields,
+        )
+
+        # Flatten the list of Hits (which is a list of lists) and convert to dicts
+        flat_res = []
+        for hits in search_res:
+            for hit in hits:
+                flat_res.append(
+                    {
+                        "id": str(hit.id),
+                        "distance": hit.distance,
+                        "score": hit.score,
+                        **extract_entity_fields(hit["entity"], selectFields),
+                    }
+                )
+        return flat_res
+
+    def insert(self, chunks: list[dict], indexName: str, knowledgebaseId: str = None) -> list[str]:
         collection_name = f"{indexName}_{knowledgebaseId}"
 
         if not self.indexExist(indexName, knowledgebaseId):
             vector_size = 0
-            if rows and "dense_vector" in rows[0]:
-                vector_size = len(rows[0]["dense_vector"])
+            if chunks and "dense_vector" in chunks[0]:
+                vector_size = len(chunks[0]["dense_vector"])
 
             if vector_size > 0:
                 self.createIdx(indexName, knowledgebaseId, vector_size)
@@ -199,15 +261,40 @@ class VectorStoreClient(DocStoreClient):
         data_to_insert = []
         field_names = self.milvus_mapping["fields"].keys()
 
-        for row in rows:
+        embedding_to_use = [chunk.get("text", "") for chunk in chunks]
+        sparse_vectors = self.bge_m3_embedding_function(embedding_to_use)
+
+        for chunk, sparse_vector in zip(chunks, sparse_vectors["sparse"]):
+            # Convert scipy sparse matrix to Milvus dict format
+            if hasattr(sparse_vector, "tocoo"):
+                # Convert CSR to COO format for easier iteration
+                coo_matrix = sparse_vector.tocoo()
+                sparse_dict = {int(idx): float(val) for idx, val in zip(coo_matrix.col, coo_matrix.data)}
+                chunk["sparse_vector"] = sparse_dict
+                logger.info(f"Converted sparse vector with {len(sparse_dict)} non-zero elements")
+            else:
+                chunk["sparse_vector"] = sparse_vector
+                logger.warning(f"Sparse vector is not in expected scipy format: {type(sparse_vector)}")
+
+        for chunk in chunks:
             item = {}
             for field in field_names:
-                if field in row:
-                    item[field] = row[field]
+                if field in chunk:
+                    item[field] = chunk[field]
 
             data_to_insert.append(item)
 
-        res = self.client.insert(collection_name=collection_name, data=data_to_insert)
+        res = []
+        for i in range(0, len(data_to_insert), 50):
+            data_batch = data_to_insert[i : i + 50]
+            res_batch = self.client.insert(collection_name=collection_name, data=data_batch)
+
+            insert_count = res_batch["insert_count"]
+            ids = res_batch["ids"]
+            cost = res_batch["cost"]
+            logger.info(f"Milvus inserted {insert_count} rows into {collection_name} with cost {cost}")
+            res.extend(ids)
+
         return res
 
     def update(self, condition: dict, newValue: dict, indexName: str, knowledgebaseId: str) -> bool:

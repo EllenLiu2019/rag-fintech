@@ -1144,9 +1144,15 @@
   font-size: 0.7rem;
 }
 
-.view-document-button {
+/* Chunk Context (Full Context View) */
+.view-context-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   width: 100%;
   padding: 0.5rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
   background: rgba(91, 233, 255, 0.1);
   border: 1px solid rgba(91, 233, 255, 0.3);
   border-radius: 4px;
@@ -1154,11 +1160,166 @@
   font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.2s;
+  user-select: none;
 }
 
-.view-document-button:hover {
+.view-context-button:hover {
   background: rgba(91, 233, 255, 0.2);
   border-color: rgba(91, 233, 255, 0.5);
+}
+
+.context-icon {
+  font-size: 0.85rem;
+  margin-right: 0.5rem;
+}
+
+.context-text {
+  flex: 1;
+  text-align: left;
+  font-weight: 500;
+}
+
+.context-arrow {
+  font-size: 0.65rem;
+  transition: transform 0.2s;
+  margin-left: 0.5rem;
+}
+
+.context-arrow.expanded {
+  transform: rotate(180deg);
+}
+
+/* Context Chunk Styles */
+.context-chunk {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-radius: 0.25rem;
+  border-left: 3px solid;
+  transition: all 0.2s;
+}
+
+.context-chunk-prev {
+  background: rgba(91, 233, 255, 0.03);
+  border-left-color: rgba(91, 233, 255, 0.2);
+}
+
+.context-chunk-current {
+  background: rgba(91, 233, 255, 0.1);
+  border-left-color: rgba(91, 233, 255, 0.5);
+}
+
+.context-chunk-next {
+  background: rgba(91, 233, 255, 0.03);
+  border-left-color: rgba(91, 233, 255, 0.2);
+}
+
+.context-chunk-empty {
+  opacity: 0.6;
+}
+
+.context-chunk-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.context-chunk-icon {
+  font-size: 0.85rem;
+  color: var(--accent-cyan, #5be9ff);
+  flex-shrink: 0;
+}
+
+.context-chunk-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--foreground-muted, #9fb4ce);
+}
+
+.context-chunk-current .context-chunk-title {
+  color: var(--accent-cyan, #5be9ff);
+  font-size: 0.8rem;
+}
+
+.context-chunk-id {
+  font-size: 0.65rem;
+  color: var(--foreground-muted, #9fb4ce);
+  opacity: 0.7;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.context-chunk-text {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--foreground, #f3f7ff);
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 0.25rem;
+}
+
+.context-chunk-current .context-chunk-text {
+  background: rgba(91, 233, 255, 0.05);
+}
+
+.context-chunk-text-empty {
+  font-size: 0.75rem;
+  color: var(--foreground-muted, #9fb4ce);
+  font-style: italic;
+  padding: 0.5rem;
+  text-align: center;
+}
+
+/* Markdown styles for context chunks */
+.context-chunk-text :global(p) {
+  margin: 0.5rem 0;
+  line-height: 1.6;
+}
+
+.context-chunk-text :global(strong) {
+  color: var(--accent-cyan, #5be9ff);
+  font-weight: 600;
+}
+
+.context-chunk-text :global(code) {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.8em;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.context-chunk-text :global(pre) {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+
+.context-chunk-text :global(pre code) {
+  background: transparent;
+  padding: 0;
+}
+
+.context-chunk-text :global(ul),
+.context-chunk-text :global(ol) {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.context-chunk-text :global(li) {
+  margin: 0.25rem 0;
+}
+
+.context-chunk-text :global(blockquote) {
+  border-left: 3px solid rgba(91, 233, 255, 0.3);
+  padding-left: 1rem;
+  margin: 0.75rem 0;
+  color: var(--foreground-muted, #9fb4ce);
+  font-style: italic;
 }
 
 .empty-chunks {

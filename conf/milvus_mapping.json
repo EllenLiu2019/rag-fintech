@@ -2,14 +2,16 @@
     "fields": {
         "id": {"data_type": "varchar", "is_primary": true, "max_length": 100},
         "doc_id": {"data_type": "varchar", "max_length": 100},
+        "file_name": {"data_type": "varchar", "max_length": 100},
+        "page_number": {"data_type": "INT8", "default": 0},
+        "prev_chunk": {"data_type": "varchar", "max_length": 100, "nullable": true, "default": "N/A"},
+        "next_chunk": {"data_type": "varchar", "max_length": 100, "nullable": true, "default": "N/A"},
         "kb_id": {"data_type": "varchar", "max_length": 100},
         "dense_vector": {"data_type": "float_vector", "dim": 1024},
         "sparse_vector": {"data_type": "sparse_float_vector"},
         "text": {"data_type": "varchar", "max_length": 65535, "enable_analyzer": false},
-        "policy_number": {"data_type": "varchar", "max_length": 20},
-        "holder_name": {"data_type": "varchar", "max_length": 100},
-        "insured_name": {"data_type": "varchar", "max_length": 100},
-        "metadata": {"data_type": "json", "nullable": true}
+        "business_data": {"data_type": "json", "nullable": true},
+        "upload_time": {"data_type": "TIMESTAMPTZ", "nullable": true}
     },
     "indexes": {
         "dense_vector": {

@@ -38,18 +38,20 @@ class IngestionPipeline:
         # Step 4: Prepare data for Milvus
         chunks_to_insert = []
         for chunk in chunks_with_vectors:
-            metadata = chunk.get("metadata", {})
+            chunk_metadata = chunk.get("metadata", {})
 
             chunk_to_insert = {
                 "id": chunk["chunk_id"],
-                "doc_id": metadata.get("document_id", ""),
+                "doc_id": rag_document.document_id,
+                "file_name": rag_document.filename,
+                "page_number": chunk_metadata.get("page_number", 0),
+                "prev_chunk": chunk.get("prev_chunk", None),
+                "next_chunk": chunk.get("next_chunk", None),
                 "kb_id": "default_kb",  # TODO: Support multi-KB
                 "dense_vector": chunk.get("dense_vector", []),
                 "text": chunk.get("text", ""),
-                "policy_number": metadata.get("policy_number", ""),
-                "holder_name": metadata.get("holder_name", ""),
-                "insured_name": metadata.get("insured_name", ""),
-                "metadata": metadata or {},
+                "business_data": rag_document.business_data or {},
+                "upload_time": rag_document.upload_time,
             }
             chunks_to_insert.append(chunk_to_insert)
 
@@ -65,18 +67,29 @@ class IngestionPipeline:
     ) -> RagDocument:
 
         pages = serialize_documents(documents)
-        confidence, metadata = self.extractor.extract(pages)
+        # import json
+        # import os
+
+        # with open(f"api/db/{os.path.splitext(filename)[0]}.json", "r") as f:
+        #     document = json.load(f)
+        # pages = document["pages"]
+
+        confidence, business_data = self.extractor.extract(pages)
 
         rag_document = RagDocument.from_extraction_result(
+            document_id=str(uuid.uuid4()),
             parsed_documents=pages,
             confidence=confidence,
-            metadata=metadata,
+            business_data=business_data,
             filename=filename,
             file_size=len(contents),
             content_type=content_type,
-            document_id=str(uuid.uuid4()),
         )
 
-        logger.info(f"Built RagDocument for '{filename}': " f"{len(pages)} pages, " f"{len(metadata)} metadata fields")
+        logger.info(
+            f"Built RagDocument for '{filename}': "
+            f"{len(pages)} pages, "
+            f"{len(business_data)} business_data fields on {rag_document.upload_time} UTC"
+        )
 
         return rag_document

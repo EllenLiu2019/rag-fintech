@@ -94,29 +94,3 @@ class Extractor:
         self.rule_extractor.extracted_result = {}
         self.rule_extractor.soups = []
         logger.info("Extractor reset")
-
-
-# if __name__ == "__main__":
-#     path = "api/db/policy_mini.json"
-#     with open(path, "r") as f:
-#         document = json.load(f)
-#     extractor = Extractor()
-#     converted_result, confidence_result = extractor.extract(document)
-
-#     print("=" * 60)
-#     print("转换结果:")
-#     print("=" * 60)
-#     print(json.dumps(converted_result, ensure_ascii=False, indent=4))
-
-#     print("\n" + "=" * 60)
-#     print("置信度结果:")
-#     print("=" * 60)
-#     print(json.dumps(confidence_result, ensure_ascii=False, indent=4))
-
-#     metadata_creator = MetadataCreator()
-#     metadata = metadata_creator.create(converted_result)
-#     print("=" * 60)
-#     print("元数据:")
-#     print("=" * 60)
-#     print(json.dumps(metadata, ensure_ascii=False, indent=4))
-

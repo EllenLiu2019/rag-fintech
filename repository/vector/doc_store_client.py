@@ -165,4 +165,14 @@ def extract_entity_fields(entity_dict: dict, selectFields: list[str]) -> dict:
     3. All field data is populated using dict methods (__setitem__)
     """
     # entity_dict is always a dict (from pymilvus Hit class)
-    return {field: _safe_str(entity_dict.get(field)) for field in selectFields if field in entity_dict}
+    result = {}
+    for field in selectFields:
+        if field in entity_dict:
+            value = entity_dict.get(field)
+            # Keep JSON fields (like business_data) as their original type (dict/list)
+            # Only convert other fields to string
+            if field == "business_data" and isinstance(value, (dict, list)):
+                result[field] = value
+            else:
+                result[field] = _safe_str(value)
+    return result

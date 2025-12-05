@@ -24,10 +24,14 @@ dependencies = [
     "llama-index-core>=0.10.0",
     "beautifulsoup4>=4.12.2",
     "openai==2.8.1",
-    "pymilvus==2.6.3",
+    "pymilvus>=2.6.3",
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "httpx>=0.24.0",
+    "redis==7.1.0",
+    "hiredis==3.3.0",
+    "ragas==0.3.9",
+    "datasets==4.4.1",
 ]
 
 [project.optional-dependencies]

@@ -1,3 +1,4 @@
+from xxlimited import Str
 from rag.core.embedding_service import EmbeddingService
 from repository.vector.milvus_client import VectorStoreClient
 from repository.cache.redis_client import get_cache
@@ -6,6 +7,8 @@ import hashlib
 from typing import Optional, Dict, Any, List, Literal
 
 logger = logging.getLogger(__name__)
+
+SELECT_FIELDS = ["id", "doc_id", "text", "page_number", "prev_chunk", "next_chunk", "business_data", "upload_time"]
 
 
 class Retriever:
@@ -94,7 +97,7 @@ class Retriever:
 
         try:
             results = self.vector_store.search(
-                selectFields=["id", "text", "policy_number", "holder_name", "insured_name", "metadata", "doc_id"],
+                selectFields=SELECT_FIELDS,
                 query_vector=query_vector,
                 limit=top_k,
                 indexNames="rag_fintech",
@@ -103,7 +106,7 @@ class Retriever:
             )
 
             logger.info(f"Found {len(results) if results else 0} results.")
-            return results
+            return self._get_relevant_chunks(results, kb_id)
 
         except Exception as e:
             logger.error(f"Search failed: {e}", exc_info=True)
@@ -120,7 +123,7 @@ class Retriever:
         query_vector = self.embedder.embed_query(query)
 
         results = self.vector_store.hybrid_search(
-            selectFields=["id", "text", "policy_number", "holder_name", "insured_name", "metadata", "doc_id"],
+            selectFields=SELECT_FIELDS,
             query=query,
             query_vector=query_vector,
             limit=top_k,
@@ -128,6 +131,18 @@ class Retriever:
             knowledgebaseIds=[kb_id],
             filters=filters,
         )
+
+        return self._get_relevant_chunks(results, kb_id)
+
+    def _get_relevant_chunks(self, results: List[Dict[str, Any]], kb_id: Str) -> List[Dict[str, Any]]:
+        """Get relevant chunks from the vector store."""
+        for result in results:
+            prev_chunk_id = result.get("prev_chunk")
+            next_chunk_id = result.get("next_chunk")
+            if prev_chunk_id != "":
+                result["prev_chunk_text"] = self.vector_store.get(prev_chunk_id, "rag_fintech", [kb_id])
+            if next_chunk_id != "":
+                result["next_chunk_text"] = self.vector_store.get(next_chunk_id, "rag_fintech", [kb_id])
 
         return results
 

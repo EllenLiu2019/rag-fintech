@@ -34,6 +34,7 @@ function ChatQA({ fileInfo, onBack }) {
   // 右侧栏状态
   const [retrievedChunks, setRetrievedChunks] = useState([])
   const [activeTab, setActiveTab] = useState('source') // 'source' or 'graph'
+  const [expandedContexts, setExpandedContexts] = useState({}) // 跟踪每个 chunk 的上下文展开状态
 
   // 重试机制状态
   const [retryCount, setRetryCount] = useState(0)
@@ -41,15 +42,15 @@ function ChatQA({ fileInfo, onBack }) {
 
   // 初始化Filters（从fileInfo.summary中提取）
   useEffect(() => {
-    if (fileInfo?.summary?.metadata) {
-      const metadata = fileInfo.summary.metadata
+    if (fileInfo?.summary?.business_data) {
+      const business_data = fileInfo.summary.business_data
       
       // 预填 filters 和 checkbox 状态
       const initialFilters = {}
       const initialSelected = {}
       const validKeys = [] // 存储有效（非列表值）的 key
 
-      Object.entries(metadata).forEach(([key, value]) => {
+      Object.entries(business_data).forEach(([key, value]) => {
         // 排除列表类型的值
         if (Array.isArray(value)) {
           return
@@ -79,26 +80,6 @@ function ChatQA({ fileInfo, onBack }) {
       }
       
       setAvailableFilters(validKeys)
-      setFilters(initialFilters)
-      setSelectedFilters(initialSelected)
-    } else if (fileInfo?.summary?.metadata_keys) {
-      // 只有 keys 时，初始化 selected 状态
-      const keys = [...fileInfo.summary.metadata_keys]
-      const initialFilters = {}
-      const initialSelected = {}
-      
-      // 添加 document_id 作为隐式过滤器（如果存在）
-      if (fileInfo.summary.document_id) {
-        keys.unshift('doc_id')
-        initialFilters['doc_id'] = fileInfo.summary.document_id
-        initialSelected['doc_id'] = true
-      }
-      
-      fileInfo.summary.metadata_keys.forEach(key => {
-        initialSelected[key] = false
-      })
-      
-      setAvailableFilters(keys)
       setFilters(initialFilters)
       setSelectedFilters(initialSelected)
     }
@@ -220,12 +201,13 @@ function ChatQA({ fileInfo, onBack }) {
                 text: source.text || '',
                 score: source.score || 0.0,
                 source: source.doc_id || fileInfo?.filename || 'Unknown',
-                page: source.metadata?.page || source.page || 'N/A',
-                metadata: source.metadata || {},
-                policy_number: source.policy_number,
-                holder_name: source.holder_name,
-                insured_name: source.insured_name,
+                page: source.page_number || 'N/A',
+                business_data: source.business_data || {},
                 doc_id: source.doc_id,
+                prev_chunk: source.prev_chunk,
+                next_chunk: source.next_chunk,
+                prev_chunk_text: source.prev_chunk_text || null,
+                next_chunk_text: source.next_chunk_text || null,
                 referenced: true
               }))
               setRetrievedChunks(formattedChunks)
@@ -546,11 +528,12 @@ function ChatQA({ fileInfo, onBack }) {
             text: source.text || '',
             score: source.score || 0.0,
             source: sourceName,
-            page: source.metadata?.page || source.page || 'N/A',
-            metadata: source.metadata || {},
-            policy_number: source.policy_number,
-            holder_name: source.holder_name,
-            insured_name: source.insured_name,
+            page: source.page_number || 'N/A',
+            business_data: source.business_data || {},
+            prev_chunk: source.prev_chunk,
+            next_chunk: source.next_chunk,
+            prev_chunk_text: source.prev_chunk_text || null,
+            next_chunk_text: source.next_chunk_text || null,
             doc_id: source.doc_id,
             referenced: true // 标记为被引用
           }
@@ -682,7 +665,7 @@ function ChatQA({ fileInfo, onBack }) {
           <details className="sidebar-section filters-section collapsible-section">
             <summary className="collapsible-header">
               <span className="collapse-icon">▼</span>
-              <h3>🎯 Metadata Filters</h3>
+              <h3>🎯 Filters</h3>
               <span className="filter-count">{Object.values(selectedFilters).filter(Boolean).length} active</span>
             </summary>
             <div className="filters-table-container">
@@ -1018,27 +1001,100 @@ function ChatQA({ fileInfo, onBack }) {
                           </span>
                         </div>
                         <div className="chunk-source">
-                          Source: {chunk.source || 'Unknown'} (p.{chunk.page || 'N/A'})
+                          Document: {chunk.source || 'Unknown'} [Page.{chunk.page || 'N/A'}]
                         </div>
+                        <button 
+                          className="view-context-button"
+                          onClick={() => {
+                            setExpandedContexts(prev => ({
+                              ...prev,
+                              [index]: !prev[index]
+                            }))
+                          }}
+                        >
+                          <span className="context-icon">📄</span>
+                          <span className="context-text">View Full Context</span>
+                          <span className={`context-arrow ${expandedContexts[index] ? 'expanded' : ''}`}>▼</span>
+                        </button>
+                        {/* Previous Chunk - 显示在当前 chunk 上方 */}
+                        {expandedContexts[index] && (
+                          <>
+                            {chunk.prev_chunk_text ? (
+                              <div className="context-chunk context-chunk-prev">
+                                <div className="context-chunk-header">
+                                  <span className="context-chunk-icon">◀</span>
+                                  <span className="context-chunk-title">Previous Chunk</span>
+                                  {chunk.prev_chunk && (
+                                    <span className="context-chunk-id">({chunk.prev_chunk})</span>
+                                  )}
+                                </div>
+                                <div className="context-chunk-text">
+                                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                                    {chunk.prev_chunk_text}
+                                  </ReactMarkdown>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="context-chunk context-chunk-prev context-chunk-empty">
+                                <div className="context-chunk-header">
+                                  <span className="context-chunk-icon">◀</span>
+                                  <span className="context-chunk-title">Previous Chunk</span>
+                                </div>
+                                <div className="context-chunk-text-empty">
+                                  No previous chunk available
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {/* Current Chunk - 始终显示 */}
                         <div className="chunk-text">
                           <ReactMarkdown rehypePlugins={[rehypeRaw]}>
                             {chunk.text || 'No content'}
                           </ReactMarkdown>
                         </div>
+                        {/* Next Chunk - 显示在当前 chunk 下方 */}
+                        {expandedContexts[index] && (
+                          <>
+                            {chunk.next_chunk_text ? (
+                              <div className="context-chunk context-chunk-next">
+                                <div className="context-chunk-header">
+                                  <span className="context-chunk-icon">▶</span>
+                                  <span className="context-chunk-title">Next Chunk</span>
+                                  {chunk.next_chunk && (
+                                    <span className="context-chunk-id">({chunk.next_chunk})</span>
+                                  )}
+                                </div>
+                                <div className="context-chunk-text">
+                                  <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                                    {chunk.next_chunk_text}
+                                  </ReactMarkdown>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="context-chunk context-chunk-next context-chunk-empty">
+                                <div className="context-chunk-header">
+                                  <span className="context-chunk-icon">▶</span>
+                                  <span className="context-chunk-title">Next Chunk</span>
+                                </div>
+                                <div className="context-chunk-text-empty">
+                                  No next chunk available
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
                         {chunk.referenced && (
                           <div className="chunk-reference">
                             [{index + 1}] Referenced in answer
                           </div>
                         )}
-                        {chunk.metadata && (
+                        {chunk.business_data && (
                           <details className="chunk-metadata">
-                            <summary>Metadata</summary>
-                            <pre>{JSON.stringify(chunk.metadata, null, 2)}</pre>
+                            <summary>Business Data</summary>
+                            <pre>{JSON.stringify(chunk.business_data, null, 2)}</pre>
                           </details>
                         )}
-                        <button className="view-document-button">
-                          View Full Document
-                        </button>
                       </div>
                     ))}
                   </div>

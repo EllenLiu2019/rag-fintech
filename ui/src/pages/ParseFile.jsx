@@ -107,10 +107,10 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
                     </span>
                   </div>
                   <div className="file-info-item">
-                    <span className="label">Metadata Keys:</span>
+                    <span className="label">Business Data Keys:</span>
                     <div className="tags-container">
-                      {summary.metadata_keys && summary.metadata_keys.length > 0 ? (
-                        summary.metadata_keys.map((key, index) => (
+                      {summary.business_data && Object.keys(summary.business_data).length > 0 ? (
+                        Object.keys(summary.business_data).map((key, index) => (
                           <span key={index} className="meta-tag">{key}</span>
                         ))
                       ) : (

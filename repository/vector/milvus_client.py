@@ -60,9 +60,6 @@ class VectorStoreClient(DocStoreClient):
 
         collection_name = f"{indexName}_{knowledgebaseId}"
 
-        if self.client.has_collection(collection_name):
-            self.client.drop_collection(collection_name)
-
         schema = MilvusClient.create_schema(
             auto_id=False,
             enable_dynamic_field=True,
@@ -79,6 +76,7 @@ class VectorStoreClient(DocStoreClient):
                 "datatype": getattr(DataType, type_str),
                 "is_primary": field_config.get("is_primary", False),
                 "nullable": field_config.get("nullable", False),
+                "default": field_config.get("default", None),
             }
 
             if "max_length" in field_config:
@@ -141,15 +139,8 @@ class VectorStoreClient(DocStoreClient):
 
         collection_name = f"{indexNames[0]}_{knowledgebaseIds[0]}"
 
-        # Handle filters
-        expr_parts = []
-        filter_expr = ""
-        if filters:
-            for k, v in filters.items():
-                expr_parts.append(f'{k} == "{v}"')
-            filter_expr = " and ".join(expr_parts) if expr_parts else ""
+        filter_expr = self._build_filter_expr(filters)
 
-        # Handle vector search
         search_res = self.client.search(
             collection_name=collection_name,
             data=[query_vector],
@@ -160,20 +151,17 @@ class VectorStoreClient(DocStoreClient):
             search_params={"metric_type": "COSINE"},
         )
 
-        # Flatten the list of Hits (which is a list of lists) and convert to dicts
-        flat_res = []
-        for hits in search_res:
-            for hit in hits:
-                flat_res.append(
-                    {
-                        "id": str(hit.id),
-                        "distance": hit.distance,
-                        "score": hit.score,
-                        **extract_entity_fields(hit["entity"], selectFields),
-                    }
-                )
-
-        return flat_res
+        res = [
+            {
+                "id": str(hit.id),
+                "distance": hit.distance,
+                "score": hit.score,
+                **extract_entity_fields(hit["entity"], selectFields),
+            }
+            for hits in search_res
+            for hit in hits
+        ]
+        return res
 
     def hybrid_search(
         self,
@@ -190,20 +178,24 @@ class VectorStoreClient(DocStoreClient):
 
         collection_name = f"{indexNames[0]}_{knowledgebaseIds[0]}"
 
+        filter_expr = self._build_filter_expr(filters)
+
         # Handle vector search parameters
         dense_search_params = {
             "data": [query_vector],
             "anns_field": "dense_vector",
             "param": {"nprobe": 10},
             "limit": limit,
+            "expr": filter_expr,
         }
         dense_request = AnnSearchRequest(**dense_search_params)
 
         sparse_search_params = {
             "data": self.bge_m3_embedding_function([query])["sparse"],
             "anns_field": "sparse_vector",
-            "param": {"drop_ratio_search": 0.5},
+            "param": {"drop_ratio_search": 0.2},
             "limit": limit,
+            "expr": filter_expr,
         }
         sparse_request = AnnSearchRequest(**sparse_search_params)
         requests = [dense_request, sparse_request]
@@ -212,15 +204,8 @@ class VectorStoreClient(DocStoreClient):
             name="rrf",
             input_field_names=[],  # Must be an empty list
             function_type=FunctionType.RERANK,
-            params={"reranker": "rrf", "k": limit},
+            params={"reranker": "rrf", "k": 60},
         )
-
-        expr_parts = []
-        filter_expr = ""
-        if filters:
-            for k, v in filters.items():
-                expr_parts.append(f'{k} == "{v}"')
-            filter_expr = " and ".join(expr_parts) if expr_parts else ""
 
         search_res = self.client.hybrid_search(
             collection_name=collection_name,
@@ -231,19 +216,17 @@ class VectorStoreClient(DocStoreClient):
             output_fields=selectFields,
         )
 
-        # Flatten the list of Hits (which is a list of lists) and convert to dicts
-        flat_res = []
-        for hits in search_res:
-            for hit in hits:
-                flat_res.append(
-                    {
-                        "id": str(hit.id),
-                        "distance": hit.distance,
-                        "score": hit.score,
-                        **extract_entity_fields(hit["entity"], selectFields),
-                    }
-                )
-        return flat_res
+        res = [
+            {
+                "id": str(hit.id),
+                "distance": hit.distance,
+                "score": hit.score,
+                **extract_entity_fields(hit["entity"], selectFields),
+            }
+            for hits in search_res
+            for hit in hits
+        ]
+        return res
 
     def insert(self, chunks: list[dict], indexName: str, knowledgebaseId: str = None) -> list[str]:
         collection_name = f"{indexName}_{knowledgebaseId}"
@@ -310,8 +293,8 @@ class VectorStoreClient(DocStoreClient):
 
     def get(self, chunkId: str, indexName: str, knowledgebaseIds: list[str]) -> dict | None:
         collection_name = f"{indexName}_{knowledgebaseIds[0]}"
-        res = self.client.get(collection_name=collection_name, ids=[chunkId])
-        return res[0] if res else None
+        search_res = self.client.get(collection_name=collection_name, ids=[chunkId], output_fields=["text"])
+        return search_res[0]["text"] if search_res else None
 
     def _build_delete_expr(self, condition: dict) -> str:
         parts = []
@@ -322,3 +305,13 @@ class VectorStoreClient(DocStoreClient):
             else:
                 parts.append(f'{k} == "{v}"')
         return " && ".join(parts)
+
+    def _build_filter_expr(self, filters: dict) -> str:
+        parts = []
+        for k, v in filters.items():
+            if isinstance(v, list):
+                v_str = ", ".join([f'"{item}"' for item in v])
+                parts.append(f"{k} in [{v_str}]")
+            else:
+                parts.append(f'{k} == "{v}"')
+        return " and ".join(parts) if parts else ""

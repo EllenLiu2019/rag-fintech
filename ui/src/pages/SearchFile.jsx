@@ -17,16 +17,16 @@ function SearchFile({ fileInfo, onBack }) {
 
   // 初始化过滤器：从 summary 中提取可用的 metadata
   useEffect(() => {
-    if (fileInfo?.summary?.metadata) {
-      const metadata = fileInfo.summary.metadata
-      setAvailableFilters(Object.keys(metadata))
+    if (fileInfo?.summary?.business_data) {
+      const business_data = fileInfo.summary.business_data
+      setAvailableFilters(Object.keys(business_data))
       
       // 预填 filters 和 checkbox 状态
       const initialFilters = {}
       const initialSelected = {}
       const validKeys = [] // 存储有效（非列表值）的 key
 
-      Object.entries(metadata).forEach(([key, value]) => {
+      Object.entries(business_data).forEach(([key, value]) => {
         // 排除列表类型的值
         if (Array.isArray(value)) {
           return
@@ -57,20 +57,6 @@ function SearchFile({ fileInfo, onBack }) {
       
       setAvailableFilters(validKeys)
       setFilters(initialFilters)
-      setSelectedFilters(initialSelected)
-    } else if (fileInfo?.summary?.metadata_keys) {
-      setAvailableFilters(fileInfo.summary.metadata_keys)
-      // 只有 keys 时，初始化 selected 状态
-      const initialSelected = {}
-      fileInfo.summary.metadata_keys.forEach(key => {
-        initialSelected[key] = true
-      })
-      
-      // 添加 document_id
-      if (fileInfo.summary?.document_id) {
-        initialSelected['doc_id'] = true
-      }
-      
       setSelectedFilters(initialSelected)
     }
   }, [fileInfo])
@@ -288,7 +274,22 @@ function SearchFile({ fileInfo, onBack }) {
                     <div className="result-metadata">
                       <details>
                         <summary>View Metadata</summary>
-                        <pre>{JSON.stringify(result.metadata, null, 2)}</pre>
+                        <pre>
+                          {(() => {
+                            try {
+                              const data = result.business_data;
+                              if (!data) return 'No metadata available';
+                              // Handle JSON string or object
+                              if (typeof data === 'string') {
+                                const parsed = JSON.parse(data);
+                                return JSON.stringify(parsed, null, 2);
+                              }
+                              return JSON.stringify(data, null, 2);
+                            } catch (e) {
+                              return result.business_data || 'No metadata available';
+                            }
+                          })()}
+                        </pre>
                       </details>
                     </div>
                   </div>

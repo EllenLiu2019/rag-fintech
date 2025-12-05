@@ -18,11 +18,13 @@ class TestRagMarkdownSplitter:
             filename="test_policy.pdf",
             file_size=1024,
             content_type="application/pdf",
-            text="# Insurance Policy\n\n## Policy Number\n\nPOL-123-456\n\n## Policy Holder\n\nName: John Doe\n\n## Coverage\n\n- Medical Insurance\n- Life Insurance",
-            pages=[{"text": "Page 1 content", "metadata": {"page_number": 1}}],
-            extracted_data={"policy_number": "POL-123-456", "holder_name": "John Doe"},
+            pages=[
+                {
+                    "text": "# Insurance Policy ## Policy Number POL-123-456\n\n## Policy Holder Name: John Doe\n\n## Coverage\n\n- Medical Insurance\n- Life Insurance",
+                    "metadata": {"page_number": 1},
+                }
+            ],
             confidence={"overall_confidence": 0.95},
-            metadata={"policy_number": "POL-123-456", "holder_name": "John Doe"},
         )
 
     @pytest.fixture
@@ -31,7 +33,7 @@ class TestRagMarkdownSplitter:
         return RagDocument(
             document_id="minimal-doc",
             filename="minimal.txt",
-            text="Simple text content without markdown.",
+            pages=[{"text": "Simple text content without markdown.", "metadata": {"page_number": 1}}],
         )
 
     @pytest.fixture
@@ -40,7 +42,7 @@ class TestRagMarkdownSplitter:
         return RagDocument(
             document_id="empty-doc",
             filename="empty.txt",
-            text="",
+            pages=[],
         )
 
     def test_split_document_basic(self, splitter, sample_rag_document):
@@ -69,8 +71,6 @@ class TestRagMarkdownSplitter:
             assert metadata["filename"] == "test_policy.pdf"
             assert metadata["document_id"] == "test-doc-001"
             assert metadata["content_type"] == "application/pdf"
-            # Check that extracted_data metadata is also present
-            assert "policy_number" in metadata and "holder_name" in metadata
 
     def test_split_empty_document(self, splitter, empty_rag_document):
         """Test splitting an empty document"""
@@ -93,9 +93,8 @@ class TestRagMarkdownSplitter:
         doc = RagDocument(
             document_id="test-doc",
             filename="test.pdf",
-            text="# Test\n\nContent here",
-            content_type=None,  # None value
-            metadata={"key1": "value1", "key2": None},  # None in metadata
+            pages=[{"text": "# Test\n\nContent here", "metadata": {"page_number": 1}}],
+            content_type="application/pdf",
         )
 
         chunks = splitter.split_document(doc)
@@ -107,19 +106,7 @@ class TestRagMarkdownSplitter:
             # But valid values should be present
             assert metadata["filename"] == "test.pdf"
             assert metadata["document_id"] == "test-doc"
-            assert metadata.get("key1") == "value1"
-            assert "key2" not in metadata or metadata["key2"] is not None
-
-    def test_chunk_text_content(self, splitter, sample_rag_document):
-        """Test that chunk text content is extracted correctly"""
-        chunks = splitter.split_document(sample_rag_document)
-
-        # Collect all text from chunks
-        all_text = " ".join(chunk["text"] for chunk in chunks)
-
-        # Original content should be present in chunks
-        assert "POL-123-456" in all_text or any("POL-123-456" in chunk["text"] for chunk in chunks)
-        assert "John Doe" in all_text or any("John Doe" in chunk["text"] for chunk in chunks)
+            assert metadata["content_type"] == "application/pdf"
 
     def test_chunk_id_uniqueness(self, splitter, sample_rag_document):
         """Test that each chunk has a unique chunk_id"""
@@ -147,8 +134,12 @@ class TestRagMarkdownSplitter:
         doc = RagDocument(
             document_id="multi-section-doc",
             filename="multi.md",
-            text="# Section 1\n\nContent 1\n\n## Subsection 1.1\n\nSubcontent\n\n# Section 2\n\nContent 2",
-            metadata={"policy_number": "POL-123-456", "holder_name": "John Doe"},
+            pages=[
+                {"text": "# Page 1 \n\n content 1", "metadata": {"page_number": 1}},
+                {"text": "## Page 1.1 \n\n Subcontent 1.1", "metadata": {"page_number": 2}},
+                {"text": "# Page 2 \n\n content 2", "metadata": {"page_number": 3}},
+            ],
+            content_type="text/markdown",
         )
 
         chunks = splitter.split_document(doc)
@@ -158,5 +149,187 @@ class TestRagMarkdownSplitter:
 
         # Verify sections are split
         texts = [chunk["text"] for chunk in chunks]
-        assert any("Section 1" in text for text in texts)
-        assert any("Section 2" in text for text in texts)
+        assert any("content 1" in text for text in texts)
+        assert any("Subcontent" in text for text in texts)
+        assert any("content 2" in text for text in texts)
+
+    def test_page_number_extraction_with_marker(self, splitter):
+        """Test that page numbers are correctly extracted from chunks with page markers"""
+        doc = RagDocument(
+            document_id="page-marker-doc",
+            filename="test.pdf",
+            pages=[
+                {"text": "# Title\n\nContent from page 1", "metadata": {"page_number": 1}},
+                {"text": "Content from page 2", "metadata": {"page_number": 2}},
+            ],
+            content_type="application/pdf",
+        )
+
+        chunks = splitter.split_document(doc)
+
+        # Verify that chunks have page_number in metadata
+        for chunk in chunks:
+            assert "page_number" in chunk["metadata"]
+            page_num = chunk["metadata"]["page_number"]
+            assert isinstance(page_num, int)
+            assert page_num >= 0
+
+        # Verify that page markers are removed from text
+        for chunk in chunks:
+            assert "[PAGE:" not in chunk["text"]
+            assert "PAGE:" not in chunk["text"]
+
+    def test_page_number_inheritance(self, splitter):
+        """Test that chunks without page markers inherit the last page number"""
+        doc = RagDocument(
+            document_id="inheritance-doc",
+            filename="test.pdf",
+            pages=[
+                {"text": "# Section 1\n\nFirst part of content", "metadata": {"page_number": 1}},
+                {"text": "Second part of content\n\nThird part", "metadata": {"page_number": 1}},
+            ],
+            content_type="application/pdf",
+        )
+
+        chunks = splitter.split_document(doc)
+
+        # All chunks should have page_number
+        for chunk in chunks:
+            assert "page_number" in chunk["metadata"]
+            # Since all content is from page 1, all chunks should have page_number = 1
+            # (or at least the first chunk with marker should be 1, others inherit)
+            assert chunk["metadata"]["page_number"] == 1
+
+    def test_multiple_pages_page_numbers(self, splitter):
+        """Test page number assignment across multiple pages"""
+        doc = RagDocument(
+            document_id="multi-page-doc",
+            filename="test.pdf",
+            pages=[
+                {"text": "# Page 1 Title\n\nPage 1 content", "metadata": {"page_number": 1}},
+                {"text": "Page 2 content line 1\n\nPage 2 content line 2", "metadata": {"page_number": 2}},
+                {"text": "# Page 3 Title\n\nPage 3 content", "metadata": {"page_number": 3}},
+            ],
+            content_type="application/pdf",
+        )
+
+        chunks = splitter.split_document(doc)
+
+        # Verify chunks exist
+        assert len(chunks) > 0
+
+        # Collect page numbers
+        page_numbers = [chunk["metadata"]["page_number"] for chunk in chunks]
+
+        # Verify that page numbers are present and reasonable
+        assert all(pn > 0 for pn in page_numbers), f"All page numbers should be > 0, got: {page_numbers}"
+
+        for chunk in chunks:
+            if "Page 1 content" in chunk["text"]:
+                assert chunk["metadata"]["page_number"] == 1
+            elif "Page 2 content line 1" in chunk["text"]:
+                assert chunk["metadata"]["page_number"] == 2
+            elif "Page 3 content" in chunk["text"]:
+                assert chunk["metadata"]["page_number"] == 3
+
+    def test_page_marker_removal(self, splitter):
+        """Test that page markers are completely removed from chunk text"""
+        doc = RagDocument(
+            document_id="marker-removal-doc",
+            filename="test.pdf",
+            pages=[
+                {"text": "Some content here", "metadata": {"page_number": 1}},
+            ],
+            content_type="application/pdf",
+        )
+
+        chunks = splitter.split_document(doc)
+
+        # Verify no page markers remain in text
+        for chunk in chunks:
+            text = chunk["text"]
+            assert "[PAGE:" not in text
+            assert "PAGE:" not in text
+            # Verify text is not empty (unless it's a special case)
+            if chunk["metadata"].get("page_number", 0) > 0:
+                assert len(text.strip()) > 0 or "Some content" in text
+
+    def test_page_number_continuity(self, splitter):
+        """Test that page numbers maintain continuity across chunks from the same page"""
+        doc = RagDocument(
+            document_id="continuity-doc",
+            filename="test.pdf",
+            pages=[
+                {
+                    "text": "# Section A\n\nContent A1\n\n## Subsection A1\n\nContent A2",
+                    "metadata": {"page_number": 1},
+                },
+                {
+                    "text": "# Section B\n\nContent B1",
+                    "metadata": {"page_number": 2},
+                },
+            ],
+            content_type="application/pdf",
+        )
+
+        chunks = splitter.split_document(doc)
+
+        # Verify all chunks have page numbers
+        page_numbers = [chunk["metadata"]["page_number"] for chunk in chunks]
+        assert all(pn in [1, 2] for pn in page_numbers)
+
+        # Verify that chunks from the same logical page have consistent page numbers
+        # (This depends on how MarkdownNodeParser splits, but at minimum
+        # we should have valid page numbers)
+        assert len(set(page_numbers)) == 2, "Should have 2 different page numbers"
+
+    def test_empty_pages_handling(self, splitter):
+        """Test handling of documents with empty pages"""
+        doc = RagDocument(
+            document_id="empty-pages-doc",
+            filename="test.pdf",
+            pages=[
+                {"text": "Content from page 1", "metadata": {"page_number": 1}},
+                {"text": "", "metadata": {"page_number": 2}},  # Empty page
+                {"text": "Content from page 3", "metadata": {"page_number": 3}},
+            ],
+            content_type="application/pdf",
+        )
+
+        chunks = splitter.split_document(doc)
+
+        # Should still produce chunks (empty pages are skipped)
+        assert isinstance(chunks, list)
+        # Should have at least chunks from non-empty pages
+        assert len(chunks) > 0
+
+        # All chunks should have valid page numbers
+        for chunk in chunks:
+            if "Content from page 1" in chunk["text"]:
+                assert chunk["metadata"]["page_number"] == 1
+            elif "Content from page 3" in chunk["text"]:
+                assert chunk["metadata"]["page_number"] == 3
+            else:
+                assert chunk["metadata"]["page_number"] == 2
+
+    def test_page_number_without_metadata(self, splitter):
+        """Test page number extraction when page metadata doesn't have page_number"""
+        doc = RagDocument(
+            document_id="no-metadata-doc",
+            filename="test.pdf",
+            pages=[
+                {"text": "Content 1", "metadata": {}},  # No page_number in metadata
+                {"text": "Content 2", "metadata": {"page_number": 2}},
+            ],
+            content_type="application/pdf",
+        )
+
+        chunks = splitter.split_document(doc)
+
+        # Should still process chunks
+        assert len(chunks) > 0
+
+        # Chunks should have page_number (may be 0 if no marker found and no inheritance)
+        for chunk in chunks:
+            assert "page_number" in chunk["metadata"]
+            assert isinstance(chunk["metadata"]["page_number"], int)

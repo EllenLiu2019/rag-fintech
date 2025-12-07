@@ -2,6 +2,7 @@ import os
 import logging
 from rag.llm.embedding_model import VoyageEmbed
 from repository.cache.redis_client import get_cache
+from repository.rdb.models.models import Document as RDBDocument
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,7 @@ class EmbeddingService:
         self.enable_cache = enable_cache
 
         self.api_key = os.environ.get("VOYAGE_API_KEY")
-        self.model_name = "voyage-3-lite"  # voyage-3-large
+        self.model_name = "voyage-3.5-lite"
 
         if self.provider == "voyage":
             self.model = VoyageEmbed(key=self.api_key, model_name=self.model_name)
@@ -22,7 +23,7 @@ class EmbeddingService:
         # Initialize cache
         self.cache = get_cache() if enable_cache else None
 
-    def embed_chunks(self, chunks: list[dict]) -> list[dict]:
+    def embed_chunks(self, chunks: list[dict], rdb_document: RDBDocument) -> list[dict]:
         """
         Embed chunks with optional batch caching.
         Note: Chunk embedding typically happens during ingestion,
@@ -40,6 +41,8 @@ class EmbeddingService:
 
             for i, chunk in enumerate(chunks):
                 chunk["dense_vector"] = embeddings[i].tolist()
+
+            rdb_document.token_num += total_tokens
 
             logger.info(f"Embedding completed. Total tokens: {total_tokens}")
             return chunks

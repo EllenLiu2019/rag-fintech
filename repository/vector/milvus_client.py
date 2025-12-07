@@ -23,10 +23,8 @@ class VectorStoreClient(DocStoreClient):
         self.milvus_mapping = load_yaml_conf(get_project_base_directory("conf", "milvus_mapping.json"))
 
         milvus_config = settings.MILVUS
-        self.uri = f"http://{milvus_config.get('host', 'localhost')}:{milvus_config.get('port', 19530)}"
-        self.token = (
-            f"{milvus_config.get('user', '')}:{milvus_config.get('password', '')}" if milvus_config.get("user") else ""
-        )
+        self.uri = milvus_config.get("host", "http://localhost:19530")
+        self.token = milvus_config.get("token", "root:Milvus")
 
         logger.info(f"Use Milvus at {self.uri} as the doc engine.")
 
@@ -93,12 +91,16 @@ class VectorStoreClient(DocStoreClient):
                 schema.add_function(bm25_function)
 
             if "dim" in field_config:
+                field_kwargs["field_name"] = f"{field_name}_{vectorSize}"
                 field_kwargs["dim"] = vectorSize
 
             schema.add_field(**field_kwargs)
 
         index_params = self.client.prepare_index_params()
         for field_name, index_config in self.milvus_mapping["indexes"].items():
+            if field_name == "dense_vector":
+                field_name = f"{field_name}_{vectorSize}"
+                index_config["index_name"] = f"{index_config['index_name']}_{vectorSize}"
             index_params.add_index(
                 field_name=field_name,
                 index_name=index_config["index_name"],
@@ -144,7 +146,7 @@ class VectorStoreClient(DocStoreClient):
         search_res = self.client.search(
             collection_name=collection_name,
             data=[query_vector],
-            anns_field="dense_vector",
+            anns_field=f"dense_vector_{len(query_vector)}",
             filter=filter_expr,
             limit=limit,
             output_fields=selectFields,
@@ -183,7 +185,7 @@ class VectorStoreClient(DocStoreClient):
         # Handle vector search parameters
         dense_search_params = {
             "data": [query_vector],
-            "anns_field": "dense_vector",
+            "anns_field": f"dense_vector_{len(query_vector)}",
             "param": {"nprobe": 10},
             "limit": limit,
             "expr": filter_expr,
@@ -231,15 +233,15 @@ class VectorStoreClient(DocStoreClient):
     def insert(self, chunks: list[dict], indexName: str, knowledgebaseId: str = None) -> list[str]:
         collection_name = f"{indexName}_{knowledgebaseId}"
 
-        if not self.indexExist(indexName, knowledgebaseId):
-            vector_size = 0
-            if chunks and "dense_vector" in chunks[0]:
-                vector_size = len(chunks[0]["dense_vector"])
+        vector_size = 0
+        if chunks and "dense_vector" in chunks[0]:
+            vector_size = len(chunks[0]["dense_vector"])
+        if vector_size == 0:
+            logger.exception(f"Cannot create collection {collection_name}: unknown vector size.")
+            raise ValueError(f"{collection_name}: unknown vector size.")
 
-            if vector_size > 0:
-                self.createIdx(indexName, knowledgebaseId, vector_size)
-            else:
-                logger.warning(f"Cannot create collection {collection_name}: unknown vector size.")
+        if not self.indexExist(indexName, knowledgebaseId):
+            self.createIdx(indexName, knowledgebaseId, vector_size)
 
         data_to_insert = []
         field_names = self.milvus_mapping["fields"].keys()
@@ -264,6 +266,10 @@ class VectorStoreClient(DocStoreClient):
             for field in field_names:
                 if field in chunk:
                     item[field] = chunk[field]
+
+            if "dense_vector" in item:
+                item[f"dense_vector_{vector_size}"] = chunk["dense_vector"]
+                item.pop("dense_vector")
 
             data_to_insert.append(item)
 

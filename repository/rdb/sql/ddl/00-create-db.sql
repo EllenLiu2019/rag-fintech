@@ -1,0 +1,2 @@
+DROP DATABASE IF EXISTS rag_fintech;
+CREATE DATABASE rag_fintech;

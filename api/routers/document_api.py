@@ -4,11 +4,9 @@ from fastapi.responses import JSONResponse, Response
 from common.log_utils import get_logger
 from rag.ingestion.pipeline import IngestionPipeline
 from rag.dependencies import get_ingestion_pipeline
-from api.db.persist_file import (
-    save_file_info,
+from rag.ingestion.file_service import (
     load_file_info,
     list_stored_files,
-    save_original_file,
     load_original_file,
 )
 
@@ -32,28 +30,7 @@ async def upload_file(
 
         contents = await file.read()
 
-        logger.info(f"file size: {len(contents)} bytes")
-
-        # Save original file to disk
-        if not save_original_file(file.filename, contents):
-            logger.warning(f"failed to save original file to disk for '{file.filename}'")
-
-        rag_document = ingestion_pipeline.handle_document(file.filename, contents, file.content_type)
-
-        # For now, we extract pages and summary for frontend display and local storage
-        # This maintains backward compatibility with the frontend's expectation
-        shown_documents = {
-            "filename": rag_document.filename,
-            "size": rag_document.file_size,
-            "content_type": rag_document.content_type,
-            "pages": rag_document.pages,  # Frontend expects 'pages' list
-            "summary": rag_document.get_summary(),  # Optional: Add summary info
-        }
-
-        if not save_file_info(file.filename, shown_documents):
-            logger.warning(f"failed to save file info to disk for '{file.filename}'")
-
-        logger.info(f"file '{file.filename}' uploaded and saved successfully")
+        ingestion_pipeline.handle_document(file.filename, contents, file.content_type)
 
         return JSONResponse(
             status_code=200,
@@ -70,50 +47,6 @@ async def upload_file(
 
         logger.error(f"   error stack:\n{traceback.format_exc()}")
         return JSONResponse(status_code=500, content={"message": f"文件上传失败: {str(e)}"})
-
-
-@router.get("/file-parsed")
-async def get_file_parsed(filename: str = Query(..., description="文件名")):
-    """
-    Get parsed content of uploaded file
-
-    - **filename**: Name of the file to retrieve
-    """
-    try:
-        stored_files = list_stored_files()
-        logger.info(f"received file content request, " f"filename: {filename}; " f"stored files: {stored_files}")
-
-        file_info = load_file_info(filename)
-        if file_info is None:
-            logger.warning(f"file '{filename}' not found")
-            return JSONResponse(status_code=404, content={"message": f"文件 '{filename}' 未找到"})
-        logger.info(
-            f"file found: {file_info['filename']}; "
-            f"size: {file_info['size']} bytes; "
-            f"content_type: {file_info['content_type']}"
-        )
-
-        pages = file_info["pages"]
-        summary = file_info.get("summary", {})
-
-        logger.info(f"documents: {len(pages)} pages")
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "filename": file_info["filename"],
-                "pages": pages,
-                "summary": summary,
-                "size": file_info["size"],
-                "content_type": file_info["content_type"],
-            },
-        )
-    except Exception as e:
-        logger.error(f"failed to get file content: {str(e)}")
-        import traceback
-
-        logger.error(f"   error stack:\n{traceback.format_exc()}")
-        return JSONResponse(status_code=500, content={"message": f"获取文件内容失败: {str(e)}"})
 
 
 @router.get("/file-original")
@@ -155,3 +88,51 @@ async def get_original_file(filename: str = Query(..., description="文件名"))
 
         logger.error(f"   error stack:\n{traceback.format_exc()}")
         return JSONResponse(status_code=500, content={"message": f"获取原始文件失败: {str(e)}"})
+
+
+@router.get("/file-parsed")
+async def get_file_parsed(filename: str = Query(..., description="文件名")):
+    """
+    Get parsed content of uploaded file
+
+    - **filename**: Name of the file to retrieve
+    """
+    try:
+        stored_files = list_stored_files()
+        logger.info(f"received file content request, " f"filename: {filename}; " f"stored files: {stored_files}")
+
+        file_info = load_file_info(filename)
+        if file_info is None:
+            logger.warning(f"file '{filename}' not found")
+            return JSONResponse(status_code=404, content={"message": f"文件 '{filename}' 未找到"})
+        logger.info(
+            f"file found: {file_info['filename']}; "
+            f"size: {file_info['file_size']} bytes; "
+            f"content_type: {file_info['content_type']}"
+        )
+
+        pages = file_info["pages"]
+        business_data = file_info.get("business_data", {})
+        confidence = file_info.get("overall_confidence", 0)
+        document_id = file_info.get("document_id")  # Extract document_id
+
+        logger.info(f"documents: {len(pages)} pages, document_id: {document_id}")
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "filename": file_info["filename"],
+                "pages": pages,
+                "business_data": business_data,
+                "confidence": confidence,
+                "document_id": document_id,  # Include document_id in response
+                "size": file_info["file_size"],
+                "content_type": file_info["content_type"],
+            },
+        )
+    except Exception as e:
+        logger.error(f"failed to get file content: {str(e)}")
+        import traceback
+
+        logger.error(f"   error stack:\n{traceback.format_exc()}")
+        return JSONResponse(status_code=500, content={"message": f"获取文件内容失败: {str(e)}"})

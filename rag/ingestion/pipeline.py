@@ -1,26 +1,34 @@
 import uuid
 
+from common import settings
 from llama_index.core.schema import Document
 from rag.ingestion.parser import parse_content
-from repository.vector.milvus_client import VectorStoreClient
 import logging
 from rag.ingestion.extractor.extractor import Extractor
 from rag.ingestion.document import RagDocument
 from rag.ingestion.parser.serializer_deserializer import serialize_documents
 from rag.ingestion.splitter.markdown_splitter import RagMarkdownSplitter
 from rag.core.embedding_service import EmbeddingService
+from rag.ingestion.file_service import FileService
+
 
 logger = logging.getLogger(__name__)
 
 
 class IngestionPipeline:
     def __init__(self):
+        self.file_service = FileService()
         self.extractor = Extractor()
         self.splitter = RagMarkdownSplitter()
         self.embedder = EmbeddingService()
-        self.vector_store = VectorStoreClient()
+        self.vector_store = settings.VECTOR_STORE
 
-    def handle_document(self, filename: str, contents: bytes, content_type: str) -> RagDocument:
+    def handle_document(self, filename: str, contents: bytes, content_type: str):
+
+        # Step 1: Save file to rdb
+        rdb_document = self.file_service.upload_file(filename, contents, content_type)
+
+        # Step 2: Parse document
         try:
             documents = parse_content(contents, filename, content_type)
         except ValueError as e:
@@ -28,14 +36,14 @@ class IngestionPipeline:
 
         rag_document = self.build_from_parsed_documents(filename, contents, content_type, documents)
 
-        # Step 2: Split document into chunks
-        chunks = self.splitter.split_document(rag_document)
+        # Step 3: Split document into chunks
+        chunks = self.splitter.split_document(rag_document, rdb_document)
         logger.info(f"Document split into {len(chunks)} chunks")
 
-        # Step 3: Embed chunks (generate vectors)
-        chunks_with_vectors = self.embedder.embed_chunks(chunks)
+        # Step 4: Embed chunks (generate vectors)
+        chunks_with_vectors = self.embedder.embed_chunks(chunks, rdb_document)
 
-        # Step 4: Prepare data for Milvus
+        # Step 5: Prepare data for Milvus
         chunks_to_insert = []
         for chunk in chunks_with_vectors:
             chunk_metadata = chunk.get("metadata", {})
@@ -47,7 +55,7 @@ class IngestionPipeline:
                 "page_number": chunk_metadata.get("page_number", 0),
                 "prev_chunk": chunk.get("prev_chunk", None),
                 "next_chunk": chunk.get("next_chunk", None),
-                "kb_id": "default_kb",  # TODO: Support multi-KB
+                "kb_id": rdb_document.kb_name,
                 "dense_vector": chunk.get("dense_vector", []),
                 "text": chunk.get("text", ""),
                 "business_data": rag_document.business_data or {},
@@ -55,12 +63,13 @@ class IngestionPipeline:
             }
             chunks_to_insert.append(chunk_to_insert)
 
-        # Step 5: Save to Milvus
+        # Step 6: Save to Milvus
         if chunks_to_insert:
-            self.vector_store.insert(chunks_to_insert, "rag_fintech", "default_kb")
+            self.vector_store.insert(chunks_to_insert, "rag_fintech", rdb_document.kb_name)
             logger.info(f"Saved {len(chunks_to_insert)} chunks to Milvus")
 
-        return rag_document
+        # Step 7: Update doc info in rdb
+        self.file_service.update_file_info(filename, rag_document, rdb_document)
 
     def build_from_parsed_documents(
         self, filename: str, contents: bytes, content_type: str, documents: list[Document]
@@ -70,7 +79,7 @@ class IngestionPipeline:
         # import json
         # import os
 
-        # with open(f"api/db/{os.path.splitext(filename)[0]}.json", "r") as f:
+        # with open(f"repository/s3/parsed_files/{os.path.splitext(filename)[0]}.json", "r") as f:
         #     document = json.load(f)
         # pages = document["pages"]
 

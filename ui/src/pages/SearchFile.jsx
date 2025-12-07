@@ -15,10 +15,12 @@ function SearchFile({ fileInfo, onBack }) {
   const [availableFilters, setAvailableFilters] = useState([])
   const [retrievalMode, setRetrievalMode] = useState('dense') // 检索模式: dense or hybrid
 
-  // 初始化过滤器：从 summary 中提取可用的 metadata
   useEffect(() => {
-    if (fileInfo?.summary?.business_data) {
-      const business_data = fileInfo.summary.business_data
+    // Debug: 
+    console.log('SearchFile - fileInfo:', fileInfo)
+    
+    if (fileInfo?.business_data) {
+      const business_data = fileInfo.business_data
       setAvailableFilters(Object.keys(business_data))
       
       // 预填 filters 和 checkbox 状态
@@ -49,9 +51,9 @@ function SearchFile({ fileInfo, onBack }) {
       })
       
       // 添加 document_id 作为隐式过滤器（如果存在）
-      if (fileInfo.summary.document_id) {
+      if (fileInfo.document_id) {
         validKeys.unshift('doc_id') // 将 doc_id 放在最前面
-        initialFilters['doc_id'] = fileInfo.summary.document_id
+        initialFilters['doc_id'] = fileInfo.document_id
         initialSelected['doc_id'] = true // 默认选中 document_id
       }
       
@@ -79,8 +81,8 @@ function SearchFile({ fileInfo, onBack }) {
       })
 
       // 确保 document_id 总是被包含（如果存在）
-      if (fileInfo?.summary?.document_id) {
-        activeFilters['doc_id'] = fileInfo.summary.document_id
+      if (fileInfo?.document_id) {
+        activeFilters['doc_id'] = fileInfo.document_id
       }
 
       const response = await fetch(`${apiBaseUrl}/api/search`, {
@@ -141,11 +143,11 @@ function SearchFile({ fileInfo, onBack }) {
             <div className="file-name">{fileInfo?.filename || 'Unknown'}</div>
           </div>
 
-          {/* Metadata Filters */}
+          {/* Filters */}
           <details className="control-card filters-card collapsible-section">
             <summary className="collapsible-header">
               <span className="collapse-icon">▼</span>
-              <h3>🎯 Metadata Filters</h3>
+              <h3>🎯 Filters</h3>
               <span className="filter-count">{Object.values(selectedFilters).filter(Boolean).length} active</span>
             </summary>
             <div className="filters-table-container">

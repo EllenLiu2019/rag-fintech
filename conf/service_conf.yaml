@@ -1,5 +1,12 @@
 milvus:
-  host: 'localhost'
-  port: 19530
-  user: 'root'
-  password: 'Milvus'
+  host: https://in03-f663856b627ed8e.serverless.aws-eu-central-1.cloud.zilliz.com
+  token: ${RAG_MILVUS_TOKEN}
+
+postgresql:
+  host: ${RAG_RDB_HOST:-localhost}
+  port: ${RAG_RDB_PORT:-5432}
+  username: ${RAG_RDB_USERNAME:-rag}
+  password: ${RAG_RDB_PASSWORD}
+  database: ${RAG_RDB_NAME:-rag_fintech}
+  pool_size: ${RAG_RDB_POOL_SIZE:-5}
+  max_overflow: ${RAG_RDB_MAX_OVERFLOW:-10}

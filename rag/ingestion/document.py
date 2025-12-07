@@ -78,10 +78,11 @@ class RagDocument(BaseModel):
             "upload_time": self.upload_time,
         }
 
-    def get_summary(self) -> dict[str, Any]:
+    def to_parsed_file(self) -> dict[str, Any]:
 
         return {
             **self.to_document_metadata(),
+            "pages": self.pages,
             "business_data": self.business_data,
             "overall_confidence": self.confidence.get("overall_confidence"),
         }

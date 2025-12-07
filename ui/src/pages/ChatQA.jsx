@@ -42,8 +42,8 @@ function ChatQA({ fileInfo, onBack }) {
 
   // 初始化Filters（从fileInfo.summary中提取）
   useEffect(() => {
-    if (fileInfo?.summary?.business_data) {
-      const business_data = fileInfo.summary.business_data
+    if (fileInfo?.business_data) {
+      const business_data = fileInfo.business_data
       
       // 预填 filters 和 checkbox 状态
       const initialFilters = {}
@@ -73,9 +73,9 @@ function ChatQA({ fileInfo, onBack }) {
       })
       
       // 添加 document_id 作为隐式过滤器（如果存在）
-      if (fileInfo.summary.document_id) {
+      if (fileInfo.document_id) {
         validKeys.unshift('doc_id') // 将 doc_id 放在最前面
-        initialFilters['doc_id'] = fileInfo.summary.document_id
+        initialFilters['doc_id'] = fileInfo.document_id
         initialSelected['doc_id'] = true // 默认选中 document_id
       }
       
@@ -311,8 +311,8 @@ function ChatQA({ fileInfo, onBack }) {
     })
 
     // 确保 document_id 总是被包含（如果存在）
-    if (fileInfo?.summary?.document_id) {
-      activeFilters['doc_id'] = fileInfo.summary.document_id
+    if (fileInfo?.document_id) {
+      activeFilters['doc_id'] = fileInfo.document_id
     }
 
     // 构建请求体
@@ -479,8 +479,8 @@ function ChatQA({ fileInfo, onBack }) {
       })
 
       // 确保 document_id 总是被包含（如果存在）
-      if (fileInfo?.summary?.document_id) {
-        activeFilters['doc_id'] = fileInfo.summary.document_id
+      if (fileInfo?.document_id) {
+        activeFilters['doc_id'] = fileInfo.document_id
       }
 
       // 构建请求体

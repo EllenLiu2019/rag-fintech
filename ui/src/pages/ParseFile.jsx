@@ -7,7 +7,7 @@ import './ParseFile.css'
 
 function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
   const [content, setContent] = useState('')
-  const [summary, setSummary] = useState(null) // 新增 summary 状态
+  const [parsedFileInfo, setParsedFileInfo] = useState(null) 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [pdfLoadError, setPdfLoadError] = useState(false)
@@ -43,8 +43,13 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
 
         const data = await response.json()
         // 处理返回的数据：可能是 pages content/text 字符串
-        if (data.summary) {
-          setSummary(data.summary)
+        if (data.business_data) {
+          const fileInfo = {
+            business_data: data.business_data,
+            confidence: data.confidence,
+            document_id: data.document_id,
+          }
+          setParsedFileInfo(fileInfo)
         }
         
         if (data.pages && Array.isArray(data.pages)) {
@@ -96,21 +101,21 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
             </div>
 
             {/* 新增：解析结果摘要卡片 */}
-            {summary && (
+            {parsedFileInfo && (
               <div className="parsing-result-card">
                 <h2>Parsing Result</h2>
                 <div className="file-info-list">
                    <div className="file-info-item">
                     <span className="label">Confidence:</span>
                     <span className="value" style={{ color: '#00ff9d' }}>
-                      {summary.overall_confidence ? `${(summary.overall_confidence * 100).toFixed(1)}%` : 'N/A'}
+                      {parsedFileInfo.confidence ? `${(parsedFileInfo.confidence * 100).toFixed(1)}%` : 'N/A'}
                     </span>
                   </div>
                   <div className="file-info-item">
                     <span className="label">Business Data Keys:</span>
                     <div className="tags-container">
-                      {summary.business_data && Object.keys(summary.business_data).length > 0 ? (
-                        Object.keys(summary.business_data).map((key, index) => (
+                      {parsedFileInfo.business_data && Object.keys(parsedFileInfo.business_data).length > 0 ? (
+                        Object.keys(parsedFileInfo.business_data).map((key, index) => (
                           <span key={index} className="meta-tag">{key}</span>
                         ))
                       ) : (
@@ -133,10 +138,22 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
             <button className="function-button">
               Indexing with Vector Database
             </button>
-            <button className="function-button" onClick={() => onSearch({ ...fileInfo, summary })}>
+            <button 
+              className="function-button" 
+              onClick={() => onSearch({ 
+                ...fileInfo, 
+                ...parsedFileInfo  // ← 展开 parsedFileInfo，让 business_data 在顶层
+              })}
+            >
               Similarity Search
             </button>
-            <button className="function-button" onClick={() => onChat && onChat({ ...fileInfo, summary })}>
+            <button 
+              className="function-button" 
+              onClick={() => onChat && onChat({ 
+                ...fileInfo, 
+                ...parsedFileInfo  // ← 同样处理
+              })}
+            >
               Intelligent Q&A
             </button>
           </div>

@@ -9,34 +9,32 @@ logger = logging.getLogger(__name__)
 
 VECTOR_STORE = None
 RDB_CLIENT = None
+REDIS_CLIENT = None
 MILVUS = {}
 RDB = {}
 # ${VAR:-default}
 SETTING_PATTERN = r"\$\{(\w+)(?::(-[^}]*))?\}"
+REDIS = {}
 
 
 def init_settings():
 
-    global VECTOR_STORE, MILVUS, RDB_CLIENT, RDB
-    DOC_ENGINE = os.environ.get("DOC_ENGINE", "milvus")
-    RDB_TYPE = os.getenv("DB_TYPE", "postgresql")
+    global VECTOR_STORE, MILVUS, RDB_CLIENT, RDB, REDIS, REDIS_CLIENT
 
-    lower_case_doc_engine = DOC_ENGINE.lower()
-    lower_case_rdb_type = RDB_TYPE.lower()
-    if lower_case_doc_engine == "milvus":
-        MILVUS = replace_env_vars(get_base_config("milvus", {"host": "http://localhost:19530", "token": "root:Milvus"}))
+    MILVUS = replace_env_vars(get_base_config("milvus", {"host": "http://localhost:19530", "token": "root:Milvus"}))
+    RDB = replace_env_vars(get_base_config("postgresql", {}))
+    REDIS = replace_env_vars(get_base_config("redis", {}))
 
-        from repository.vector.milvus_client import VectorStoreClient
+    from repository.vector.milvus_client import VectorStoreClient
+    from repository.rdb.postgresql_client import PostgreSQLClient
 
-        VECTOR_STORE = VectorStoreClient()
-    if lower_case_rdb_type == "postgresql":
-        RDB = replace_env_vars(get_base_config("postgresql", {}))
+    VECTOR_STORE = VectorStoreClient()
+    RDB_CLIENT = PostgreSQLClient()
 
-        from repository.rdb.postgresql_client import PostgreSQLClient
+    if REDIS.get("enable", True):
+        from repository.cache.redis_client import RedisClient
 
-        RDB_CLIENT = PostgreSQLClient()
-    else:
-        raise Exception(f"Not supported vector store engine: {DOC_ENGINE}")
+        REDIS_CLIENT = RedisClient()
 
 
 def replace_env_vars(config):

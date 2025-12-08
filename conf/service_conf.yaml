@@ -3,10 +3,18 @@ milvus:
   token: ${RAG_MILVUS_TOKEN}
 
 postgresql:
-  host: ${RAG_RDB_HOST:-localhost}
-  port: ${RAG_RDB_PORT:-5432}
-  username: ${RAG_RDB_USERNAME:-rag}
+  host: localhost
+  port: 5432
+  username: rag
   password: ${RAG_RDB_PASSWORD}
-  database: ${RAG_RDB_NAME:-rag_fintech}
-  pool_size: ${RAG_RDB_POOL_SIZE:-5}
-  max_overflow: ${RAG_RDB_MAX_OVERFLOW:-10}
+  database: rag_fintech
+  pool_size: 5
+  max_overflow: 10
+
+redis:
+  host: redis-11071.c114.us-east-1-4.ec2.cloud.redislabs.com
+  port: 11071
+  decode_responses: False
+  username: default
+  password: ${RAG_REDIS_PASSWORD}
+  enable: True

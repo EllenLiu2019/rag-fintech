@@ -15,3 +15,6 @@ if "pymilvus" not in sys.modules:
 
 if "voyageai" not in sys.modules:
     sys.modules["voyageai"] = MagicMock()
+
+if "redis" not in sys.modules:
+    sys.modules["redis"] = MagicMock()

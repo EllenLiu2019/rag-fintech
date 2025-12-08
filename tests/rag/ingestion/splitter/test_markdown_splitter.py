@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import MagicMock
 from rag.ingestion.splitter.markdown_splitter import RagMarkdownSplitter
 from rag.ingestion.document import RagDocument
 
@@ -9,6 +10,18 @@ class TestRagMarkdownSplitter:
     def splitter(self):
         """Fixture for creating a RagMarkdownSplitter instance"""
         return RagMarkdownSplitter()
+
+    @pytest.fixture
+    def mock_rdb_document(self):
+        """Fixture providing a mock RDB document"""
+        mock_doc = MagicMock()
+        mock_doc.id = 1
+        mock_doc.document_id = "test-doc-001"
+        mock_doc.file_name = "test_policy.pdf"
+        mock_doc.kb_name = "default_kb"
+        mock_doc.chunk_num = 0
+        mock_doc.token_num = 0
+        return mock_doc
 
     @pytest.fixture
     def sample_rag_document(self):
@@ -45,9 +58,9 @@ class TestRagMarkdownSplitter:
             pages=[],
         )
 
-    def test_split_document_basic(self, splitter, sample_rag_document):
+    def test_split_document_basic(self, splitter, sample_rag_document, mock_rdb_document):
         """Test basic document splitting functionality"""
-        chunks = splitter.split_document(sample_rag_document)
+        chunks = splitter.split_document(sample_rag_document, mock_rdb_document)
 
         assert isinstance(chunks, list)
         assert len(chunks) > 0
@@ -61,9 +74,9 @@ class TestRagMarkdownSplitter:
             assert isinstance(chunk["text"], str)
             assert isinstance(chunk["metadata"], dict)
 
-    def test_metadata_inheritance(self, splitter, sample_rag_document):
+    def test_metadata_inheritance(self, splitter, sample_rag_document, mock_rdb_document):
         """Test that all chunks inherit metadata from parent document"""
-        chunks = splitter.split_document(sample_rag_document)
+        chunks = splitter.split_document(sample_rag_document, mock_rdb_document)
 
         for chunk in chunks:
             metadata = chunk["metadata"]
@@ -72,23 +85,23 @@ class TestRagMarkdownSplitter:
             assert metadata["document_id"] == "test-doc-001"
             assert metadata["content_type"] == "application/pdf"
 
-    def test_split_empty_document(self, splitter, empty_rag_document):
+    def test_split_empty_document(self, splitter, empty_rag_document, mock_rdb_document):
         """Test splitting an empty document"""
-        chunks = splitter.split_document(empty_rag_document)
+        chunks = splitter.split_document(empty_rag_document, mock_rdb_document)
 
         # Empty document might still produce chunks (depends on MarkdownNodeParser behavior)
         # But at least it shouldn't crash
         assert isinstance(chunks, list)
 
-    def test_split_minimal_document(self, splitter, minimal_rag_document):
+    def test_split_minimal_document(self, splitter, minimal_rag_document, mock_rdb_document):
         """Test splitting a document without markdown structure"""
-        chunks = splitter.split_document(minimal_rag_document)
+        chunks = splitter.split_document(minimal_rag_document, mock_rdb_document)
 
         assert len(chunks) > 0
         # Should have at least one chunk with the text content
         assert any("Simple text content" in chunk["text"] for chunk in chunks)
 
-    def test_metadata_none_values_filtered(self, splitter):
+    def test_metadata_none_values_filtered(self, splitter, mock_rdb_document):
         """Test that None values in metadata are filtered out"""
         doc = RagDocument(
             document_id="test-doc",
@@ -97,7 +110,7 @@ class TestRagMarkdownSplitter:
             content_type="application/pdf",
         )
 
-        chunks = splitter.split_document(doc)
+        chunks = splitter.split_document(doc, mock_rdb_document)
 
         for chunk in chunks:
             metadata = chunk["metadata"]
@@ -108,17 +121,17 @@ class TestRagMarkdownSplitter:
             assert metadata["document_id"] == "test-doc"
             assert metadata["content_type"] == "application/pdf"
 
-    def test_chunk_id_uniqueness(self, splitter, sample_rag_document):
+    def test_chunk_id_uniqueness(self, splitter, sample_rag_document, mock_rdb_document):
         """Test that each chunk has a unique chunk_id"""
-        chunks = splitter.split_document(sample_rag_document)
+        chunks = splitter.split_document(sample_rag_document, mock_rdb_document)
 
         chunk_ids = [chunk["chunk_id"] for chunk in chunks]
         # All chunk IDs should be unique
         assert len(chunk_ids) == len(set(chunk_ids))
 
-    def test_metadata_exclusion_keys(self, splitter, sample_rag_document):
+    def test_metadata_exclusion_keys(self, splitter, sample_rag_document, mock_rdb_document):
         """Test that certain metadata keys are excluded from embedding/LLM"""
-        chunks = splitter.split_document(sample_rag_document)
+        chunks = splitter.split_document(sample_rag_document, mock_rdb_document)
 
         # The excluded keys should still be in metadata (for storage)
         # but they are marked as excluded for embedding/LLM processing
@@ -129,7 +142,7 @@ class TestRagMarkdownSplitter:
             # The metadata should contain the document-level info
             assert "filename" in chunk["metadata"]
 
-    def test_multiple_sections_splitting(self, splitter):
+    def test_multiple_sections_splitting(self, splitter, mock_rdb_document):
         """Test splitting a document with multiple markdown sections"""
         doc = RagDocument(
             document_id="multi-section-doc",
@@ -142,7 +155,7 @@ class TestRagMarkdownSplitter:
             content_type="text/markdown",
         )
 
-        chunks = splitter.split_document(doc)
+        chunks = splitter.split_document(doc, mock_rdb_document)
 
         # Should create multiple chunks for different sections
         assert len(chunks) >= 2
@@ -153,7 +166,7 @@ class TestRagMarkdownSplitter:
         assert any("Subcontent" in text for text in texts)
         assert any("content 2" in text for text in texts)
 
-    def test_page_number_extraction_with_marker(self, splitter):
+    def test_page_number_extraction_with_marker(self, splitter, mock_rdb_document):
         """Test that page numbers are correctly extracted from chunks with page markers"""
         doc = RagDocument(
             document_id="page-marker-doc",
@@ -165,7 +178,7 @@ class TestRagMarkdownSplitter:
             content_type="application/pdf",
         )
 
-        chunks = splitter.split_document(doc)
+        chunks = splitter.split_document(doc, mock_rdb_document)
 
         # Verify that chunks have page_number in metadata
         for chunk in chunks:
@@ -179,7 +192,7 @@ class TestRagMarkdownSplitter:
             assert "[PAGE:" not in chunk["text"]
             assert "PAGE:" not in chunk["text"]
 
-    def test_page_number_inheritance(self, splitter):
+    def test_page_number_inheritance(self, splitter, mock_rdb_document):
         """Test that chunks without page markers inherit the last page number"""
         doc = RagDocument(
             document_id="inheritance-doc",
@@ -191,7 +204,7 @@ class TestRagMarkdownSplitter:
             content_type="application/pdf",
         )
 
-        chunks = splitter.split_document(doc)
+        chunks = splitter.split_document(doc, mock_rdb_document)
 
         # All chunks should have page_number
         for chunk in chunks:
@@ -200,7 +213,7 @@ class TestRagMarkdownSplitter:
             # (or at least the first chunk with marker should be 1, others inherit)
             assert chunk["metadata"]["page_number"] == 1
 
-    def test_multiple_pages_page_numbers(self, splitter):
+    def test_multiple_pages_page_numbers(self, splitter, mock_rdb_document):
         """Test page number assignment across multiple pages"""
         doc = RagDocument(
             document_id="multi-page-doc",
@@ -213,7 +226,7 @@ class TestRagMarkdownSplitter:
             content_type="application/pdf",
         )
 
-        chunks = splitter.split_document(doc)
+        chunks = splitter.split_document(doc, mock_rdb_document)
 
         # Verify chunks exist
         assert len(chunks) > 0
@@ -232,7 +245,7 @@ class TestRagMarkdownSplitter:
             elif "Page 3 content" in chunk["text"]:
                 assert chunk["metadata"]["page_number"] == 3
 
-    def test_page_marker_removal(self, splitter):
+    def test_page_marker_removal(self, splitter, mock_rdb_document):
         """Test that page markers are completely removed from chunk text"""
         doc = RagDocument(
             document_id="marker-removal-doc",
@@ -243,7 +256,7 @@ class TestRagMarkdownSplitter:
             content_type="application/pdf",
         )
 
-        chunks = splitter.split_document(doc)
+        chunks = splitter.split_document(doc, mock_rdb_document)
 
         # Verify no page markers remain in text
         for chunk in chunks:
@@ -254,7 +267,7 @@ class TestRagMarkdownSplitter:
             if chunk["metadata"].get("page_number", 0) > 0:
                 assert len(text.strip()) > 0 or "Some content" in text
 
-    def test_page_number_continuity(self, splitter):
+    def test_page_number_continuity(self, splitter, mock_rdb_document):
         """Test that page numbers maintain continuity across chunks from the same page"""
         doc = RagDocument(
             document_id="continuity-doc",
@@ -272,7 +285,7 @@ class TestRagMarkdownSplitter:
             content_type="application/pdf",
         )
 
-        chunks = splitter.split_document(doc)
+        chunks = splitter.split_document(doc, mock_rdb_document)
 
         # Verify all chunks have page numbers
         page_numbers = [chunk["metadata"]["page_number"] for chunk in chunks]
@@ -283,7 +296,7 @@ class TestRagMarkdownSplitter:
         # we should have valid page numbers)
         assert len(set(page_numbers)) == 2, "Should have 2 different page numbers"
 
-    def test_empty_pages_handling(self, splitter):
+    def test_empty_pages_handling(self, splitter, mock_rdb_document):
         """Test handling of documents with empty pages"""
         doc = RagDocument(
             document_id="empty-pages-doc",
@@ -296,7 +309,7 @@ class TestRagMarkdownSplitter:
             content_type="application/pdf",
         )
 
-        chunks = splitter.split_document(doc)
+        chunks = splitter.split_document(doc, mock_rdb_document)
 
         # Should still produce chunks (empty pages are skipped)
         assert isinstance(chunks, list)
@@ -312,7 +325,7 @@ class TestRagMarkdownSplitter:
             else:
                 assert chunk["metadata"]["page_number"] == 2
 
-    def test_page_number_without_metadata(self, splitter):
+    def test_page_number_without_metadata(self, splitter, mock_rdb_document):
         """Test page number extraction when page metadata doesn't have page_number"""
         doc = RagDocument(
             document_id="no-metadata-doc",
@@ -324,7 +337,7 @@ class TestRagMarkdownSplitter:
             content_type="application/pdf",
         )
 
-        chunks = splitter.split_document(doc)
+        chunks = splitter.split_document(doc, mock_rdb_document)
 
         # Should still process chunks
         assert len(chunks) > 0

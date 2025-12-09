@@ -5,11 +5,16 @@ from common.log_utils import get_logger
 
 logger = get_logger(__name__)
 
+function_mapping = {
+    "DeepSeek": DeepSeek,
+}
+
 
 class LLMService:
 
-    def __init__(self):
-        self.llm = DeepSeek()
+    def __init__(self, model: Dict[str, Any]):
+        model_name = model["models"][0]["model_name"]
+        self.llm = function_mapping[model["provider"]](model_name=model_name)
 
     def _prepare_messages(
         self,

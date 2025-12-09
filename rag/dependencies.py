@@ -10,6 +10,7 @@ from rag.generation.llm_service import LLMService
 from rag.retrieval.retriever import Retriever
 from rag.ingestion.pipeline import IngestionPipeline
 from common.log_utils import get_logger
+from common import config
 
 logger = get_logger(__name__)
 
@@ -29,7 +30,8 @@ def get_llm_service() -> LLMService:
         LLMService: Singleton instance for LLM operations
     """
     logger.info("Initializing LLMService singleton")
-    return LLMService()
+    model = config.CHAT_MODELS[0]
+    return LLMService(model)
 
 
 @lru_cache()

@@ -5,7 +5,7 @@
 SET search_path TO rag_fintech, public;
 
 -- truncate table (delete all data)
-TRUNCATE TABLE rag_fintech.llm RESTART IDENTITY CASCADE;
+TRUNCATE TABLE rag_fintech.llm;
 
 -- insert LLM configurations
 INSERT INTO rag_fintech.llm 

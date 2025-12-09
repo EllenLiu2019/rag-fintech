@@ -6,7 +6,7 @@ import inspect
 from typing import Any, Optional, Callable
 from functools import wraps
 
-from common import settings
+from common import config
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 class RedisClient:
 
     def __init__(self):
-        redis_config = settings.REDIS
+        redis_config = config.REDIS
         try:
             self.client = redis.Redis(
                 host=redis_config.get("host"),
-                port=redis_config.get("port"),
+                port=int(redis_config.get("port")),
                 decode_responses=redis_config.get("decode_responses", False),  # Must be False for pickle serialization
                 username=redis_config.get("username"),
                 password=redis_config.get("password"),
@@ -148,7 +148,7 @@ def cached(
 
         @wraps(func)
         def wrapper(*args, **kwargs):
-            redis_client = settings.REDIS_CLIENT
+            redis_client = config.REDIS_CLIENT
 
             cache_args = args[1:] if skip_first_arg else args
 
@@ -176,19 +176,3 @@ def cached(
         return wrapper
 
     return decorator
-
-
-def get_cache() -> Optional[RedisClient]:
-    """
-    Get Redis cache instance if enabled.
-
-    Returns:
-        RedisClient instance or None if cache is disabled
-    """
-    try:
-        if hasattr(settings, "REDIS_CLIENT") and settings.REDIS_CLIENT:
-            return settings.REDIS_CLIENT
-        return None
-    except Exception as e:
-        logger.warning(f"Failed to get cache instance: {e}")
-        return None

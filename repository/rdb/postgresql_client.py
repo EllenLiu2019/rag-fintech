@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker
 from typing import List, Optional, Type, TypeVar
 
 from repository.rdb.models.models import Base
-from common import settings
+from common import config
 from common.decorator import singleton
 import logging
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 @singleton
 class PostgreSQLClient:
     def __init__(self):
-        rdb_config = settings.RDB
+        rdb_config = config.RDB
         self.url = f"postgresql+psycopg://{rdb_config.get('username')}:{rdb_config.get('password')}@{rdb_config.get('host')}:{rdb_config.get('port')}/{rdb_config.get('database')}"
         self.engine = create_engine(
             self.url,
@@ -44,9 +44,9 @@ class PostgreSQLClient:
             record = session.get(model, id)
             return record
 
-    def execute_query(self, model: Type[T], name: str) -> List[int]:
+    def execute_query(self, model: Type[T], name: str) -> List[T]:
         """Execute a query to get IDs by kb_name"""
-        query = select(model.id).where(model.kb_name == name)
+        query = select(model).where(model.kb_name == name)
         with self.Session() as session:
             result = session.execute(query)
             return result.scalars().all()

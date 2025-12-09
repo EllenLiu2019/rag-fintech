@@ -88,10 +88,10 @@ class LLM(ABC):
 
 
 class DeepSeek(LLM):
-    def __init__(self):
+    def __init__(self, model_name: str):
         super().__init__(
             api_key=os.getenv("DEEPSEEK_API_KEY"),
-            model_name="deepseek-reasoner",
+            model_name=model_name,
             base_url="https://api.deepseek.com",
         )
 

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.config import settings
 from api.routers import document_api, chat_api, search_api
 from common.log_middleware import setup_request_logging_middleware
-from common.settings import init_settings
+from common.config import init_config
 
 from common.log_utils import get_logger, init_root_logger
 
@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
     Ensure initialization only happens once, even in reload mode.
     """
     try:
-        init_settings()
+        init_config()
         yield
     except Exception as e:
         logger.error(f"Error in FastAPI lifespan: {e}")

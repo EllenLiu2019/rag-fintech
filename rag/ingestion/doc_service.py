@@ -9,22 +9,20 @@ import re
 from pathlib import Path
 from typing import Optional, Dict, List
 
-from common.log_utils import get_logger
-from common.file_utils import get_project_base_directory
-from repository.rdb.models.models import Document as RdbDocument, KnowledgeBase
-from common import settings
+from common import config, file_utils, get_logger
+from repository.rdb.models.models import Document as RdbDocument, KnowledgeBase, LLM
 from rag.ingestion.document import RagDocument
 
 logger = get_logger(__name__)
 
 # Convert to Path objects for proper path operations
-ORIGINAL_FILES_DIR = Path(get_project_base_directory("repository", "s3", "original_files"))
-PARSED_FILES_DIR = Path(get_project_base_directory("repository", "s3", "parsed_files"))
+ORIGINAL_FILES_DIR = Path(file_utils.get_project_root_dir("repository", "s3", "original_files"))
+PARSED_FILES_DIR = Path(file_utils.get_project_root_dir("repository", "s3", "parsed_files"))
 
 
-class FileService:
+class DocumentService:
     def __init__(self):
-        self.rdb_client = settings.RDB_CLIENT
+        self.rdb_client = config.RDB_CLIENT
 
     def upload_file(self, filename: str, contents: bytes, content_type: str):
         logger.info(f"uploading file {filename}")
@@ -76,6 +74,14 @@ class FileService:
         logger.info(
             f"file {filename} updated in rdb: id={updated_doc.id} with parsed file location: {parsed_file_path}"
         )
+
+    def get_embedding_model(self, kb_name: str = "default_kb") -> str:
+        kb_ids = self.rdb_client.execute_query(KnowledgeBase, kb_name)
+        kb_id = kb_ids[0]
+        llm_model = self.rdb_client.select_by_id(LLM, kb_id.embed_llm_id)
+        if llm_model is None:
+            raise ValueError(f"LLM model not found for knowledge base {kb_id.kb_name}")
+        return llm_model
 
     def download_file(self, filename: str) -> bytes:
         return load_original_file(filename)

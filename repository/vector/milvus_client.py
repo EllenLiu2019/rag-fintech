@@ -6,11 +6,9 @@ from pymilvus import (
     model,
     AnnSearchRequest,
 )
-from common import settings
-from common.config_utils import load_yaml_conf
+from common import config
 from common.decorator import singleton
 from .doc_store_client import DocStoreClient, extract_entity_fields
-from common.file_utils import get_project_base_directory
 import logging
 from typing import List, Dict, Any, Optional
 
@@ -20,9 +18,8 @@ logger = logging.getLogger(__name__)
 @singleton
 class VectorStoreClient(DocStoreClient):
     def __init__(self):
-        self.milvus_mapping = load_yaml_conf(get_project_base_directory("conf", "milvus_mapping.json"))
 
-        milvus_config = settings.MILVUS
+        milvus_config = config.MILVUS
         self.uri = milvus_config.get("host", "http://localhost:19530")
         self.token = milvus_config.get("token", "root:Milvus")
 
@@ -64,7 +61,7 @@ class VectorStoreClient(DocStoreClient):
             description=f"RAGFlow collection for {collection_name}",
         )
 
-        for field_name, field_config in self.milvus_mapping["fields"].items():
+        for field_name, field_config in config.MILVUS_MAPPING["fields"].items():
             type_str = field_config["data_type"].upper()
             if not hasattr(DataType, type_str):
                 raise ValueError(f"Unsupported Milvus DataType: {type_str}")
@@ -97,7 +94,7 @@ class VectorStoreClient(DocStoreClient):
             schema.add_field(**field_kwargs)
 
         index_params = self.client.prepare_index_params()
-        for field_name, index_config in self.milvus_mapping["indexes"].items():
+        for field_name, index_config in config.MILVUS_MAPPING["indexes"].items():
             if field_name == "dense_vector":
                 field_name = f"{field_name}_{vectorSize}"
                 index_config["index_name"] = f"{index_config['index_name']}_{vectorSize}"
@@ -244,7 +241,7 @@ class VectorStoreClient(DocStoreClient):
             self.createIdx(indexName, knowledgebaseId, vector_size)
 
         data_to_insert = []
-        field_names = self.milvus_mapping["fields"].keys()
+        field_names = config.MILVUS_MAPPING["fields"].keys()
 
         embedding_to_use = [chunk.get("text", "") for chunk in chunks]
         sparse_vectors = self.bge_m3_embedding_function(embedding_to_use)

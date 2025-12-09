@@ -1,4 +1,6 @@
 from rag.core.embedding_service import EmbeddingService
+from rag.ingestion.doc_service import DocumentService
+from repository.rdb.models.models import LLM
 from repository.vector.milvus_client import VectorStoreClient
 import logging
 from typing import Optional, Dict, Any, List, Literal
@@ -15,7 +17,8 @@ class Retriever:
     """
 
     def __init__(self):
-        self.embedder = EmbeddingService()
+        self.document_service = DocumentService()
+
         self.vector_store = VectorStoreClient()
 
     @cached(prefix="search", ttl=1800)
@@ -48,7 +51,9 @@ class Retriever:
     ) -> List[Dict[str, Any]]:
         """Dense vector search."""
 
-        query_vector = self.embedder.embed_query(query)
+        llm: LLM = self.document_service.get_embedding_model()
+        embedder = EmbeddingService(provider=llm.llm_provider, model_name=llm.model_name)
+        query_vector = embedder.embed_query(query)
 
         if not query_vector:
             logger.warning("Empty query vector generated.")
@@ -79,7 +84,9 @@ class Retriever:
         filters: Optional[Dict] = None,
     ) -> List[Dict[str, Any]]:
         """Sparse vector search."""
-        query_vector = self.embedder.embed_query(query)
+        llm: LLM = self.document_service.get_embedding_model()
+        embedder = EmbeddingService(provider=llm.llm_provider, model_name=llm.model_name)
+        query_vector = embedder.embed_query(query)
 
         results = self.vector_store.hybrid_search(
             selectFields=SELECT_FIELDS,

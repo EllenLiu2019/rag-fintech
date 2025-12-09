@@ -1,11 +1,12 @@
 import os
 
-PROJECT_BASE = os.getenv("RAG_PROJECT_BASE") or os.getenv("RAG_DEPLOY_BASE")
+PROJECT_ROOT_DIR = os.getenv("RAG_PROJECT_ROOT_DIR") or os.getenv("RAG_DEPLOY_ROOT_DIR")
 
-def get_project_base_directory(*args):
-    global PROJECT_BASE
-    if PROJECT_BASE is None:
-        PROJECT_BASE = os.path.abspath(
+
+def get_project_root_dir(*args):
+    global PROJECT_ROOT_DIR
+    if PROJECT_ROOT_DIR is None:
+        PROJECT_ROOT_DIR = os.path.abspath(
             os.path.join(
                 os.path.dirname(os.path.realpath(__file__)),
                 os.pardir,
@@ -13,5 +14,5 @@ def get_project_base_directory(*args):
         )
 
     if args:
-        return os.path.join(PROJECT_BASE, *args)
-    return PROJECT_BASE
+        return os.path.join(PROJECT_ROOT_DIR, *args)
+    return PROJECT_ROOT_DIR

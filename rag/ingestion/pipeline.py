@@ -1,32 +1,32 @@
 import uuid
 
-from common import settings
 from llama_index.core.schema import Document
+
+from common.config import VECTOR_STORE
 from rag.ingestion.parser import parse_content
-import logging
 from rag.ingestion.extractor.extractor import Extractor
 from rag.ingestion.document import RagDocument
 from rag.ingestion.parser.serializer_deserializer import serialize_documents
 from rag.ingestion.splitter.markdown_splitter import RagMarkdownSplitter
 from rag.core.embedding_service import EmbeddingService
-from rag.ingestion.file_service import FileService
+from rag.ingestion.doc_service import DocumentService
 
+import logging
 
 logger = logging.getLogger(__name__)
 
 
 class IngestionPipeline:
     def __init__(self):
-        self.file_service = FileService()
+        self.document_service = DocumentService()
         self.extractor = Extractor()
         self.splitter = RagMarkdownSplitter()
-        self.embedder = EmbeddingService()
-        self.vector_store = settings.VECTOR_STORE
+        self.vector_store = VECTOR_STORE
 
     def handle_document(self, filename: str, contents: bytes, content_type: str):
 
         # Step 1: Save file to rdb
-        rdb_document = self.file_service.upload_file(filename, contents, content_type)
+        rdb_document = self.document_service.upload_file(filename, contents, content_type)
 
         # Step 2: Parse document
         try:
@@ -41,7 +41,9 @@ class IngestionPipeline:
         logger.info(f"Document split into {len(chunks)} chunks")
 
         # Step 4: Embed chunks (generate vectors)
-        chunks_with_vectors = self.embedder.embed_chunks(chunks, rdb_document)
+        llm = self.document_service.get_embedding_model()
+        embedder = EmbeddingService(provider=llm.provider, model_name=llm.model_name)
+        chunks_with_vectors = embedder.embed_chunks(chunks, rdb_document)
 
         # Step 5: Prepare data for Milvus
         chunks_to_insert = []
@@ -69,7 +71,7 @@ class IngestionPipeline:
             logger.info(f"Saved {len(chunks_to_insert)} chunks to Milvus")
 
         # Step 7: Update doc info in rdb
-        self.file_service.update_file_info(filename, rag_document, rdb_document)
+        self.document_service.update_file_info(filename, rag_document, rdb_document)
 
     def build_from_parsed_documents(
         self, filename: str, contents: bytes, content_type: str, documents: list[Document]

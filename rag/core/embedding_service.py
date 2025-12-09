@@ -1,25 +1,37 @@
 import os
-import logging
 from rag.llm.embedding_model import VoyageEmbed
-from repository.rdb.models.models import Document as RDBDocument
+from common import config, constants
+from repository.rdb.models.models import Document as RDBDocument, LLM
 from repository.cache.redis_client import cached
 import hashlib
 from typing import List
+import logging
 
 logger = logging.getLogger(__name__)
 
+function_mapping = {
+    "Voyage": VoyageEmbed,
+}
+
 
 class EmbeddingService:
-    def __init__(self):
-        self.provider = "voyage"
-
-        self.api_key = os.environ.get("VOYAGE_API_KEY")
-        self.model_name = "voyage-3.5-lite"
-
-        if self.provider == "voyage":
-            self.model = VoyageEmbed(key=self.api_key, model_name=self.model_name)
-        else:
-            raise ValueError(f"Unsupported embedding provider: {self.provider}")
+    def __init__(self, provider: str, model_name: str):
+        self.provider = provider
+        self.model_name = model_name
+        model_config = next(
+            (
+                config
+                for model in config.EMBEDDING_MODELS
+                if model["provider"] == self.provider
+                for config in model["models"]
+                if config["model_name"] == self.model_name
+            ),
+            None,
+        )
+        if not model_config:
+            raise ValueError(f"Model config not found for {self.provider} {self.model_name}")
+        api_key = os.getenv(self.provider.upper() + constants.API_KEY_SUFFIX)
+        self.model = function_mapping[self.provider](key=api_key, model_name=self.model_name)
 
     def embed_chunks(self, chunks: list[dict], rdb_document: RDBDocument) -> list[dict]:
         """
@@ -29,7 +41,7 @@ class EmbeddingService:
         if not chunks:
             return []
 
-        logger.info(f"Embedding {len(chunks)} chunks using {self.provider}...")
+        logger.info(f"Embedding {len(chunks)} chunks using {self.model_name}...")
 
         texts = [chunk["text"] for chunk in chunks]
 

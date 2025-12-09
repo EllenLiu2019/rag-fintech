@@ -1,0 +1,38 @@
+[
+    {
+        "provider": "DeepSeek",
+        "tags": "CHAT, REASONER",
+        "models": [
+            {
+                "model_name": "deepseek-reasoner",
+                "tags": "REASONER",
+                "max_tokens": 128000,
+                "model_type": "chat"
+            }
+        ]
+    },
+    {
+        "provider": "Voyage",
+        "tags": "EMBEDDING, DENSE",
+        "models": [
+            {
+                "model_name": "voyage-3.5-lite",
+                "tags": "DENSE",
+                "max_tokens": 32000,
+                "model_type": "embedding"
+            }
+        ]
+    },
+    {
+        "provider": "BAAI",
+        "tags": "EMBEDDING, SPARSE",
+        "models": [
+            {
+                "model_name": "bge-m3",
+                "tags": "SPARSE",
+                "max_tokens": 8192,
+                "model_type": "embedding"
+            }
+        ]
+    }
+]

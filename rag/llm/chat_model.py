@@ -57,9 +57,11 @@ class LLM(ABC):
             params["max_tokens"] = max_tokens
 
         response = self.client.chat.completions.create(**params)
+        message = response.choices[0].message
+        reasoning_content = getattr(message, "reasoning_content", None)
         return (
-            response.choices[0].message.reasoning_content,
-            response.choices[0].message.content,
+            reasoning_content,
+            message.content,
             response.usage.total_tokens,
         )
 

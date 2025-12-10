@@ -1,7 +1,7 @@
 import os
 from rag.llm.embedding_model import VoyageEmbed
-from common import config, constants
-from repository.rdb.models.models import Document as RDBDocument, LLM
+from common import constants
+from rag.ingestion.document import RagDocument
 from repository.cache.redis_client import cached
 import hashlib
 from typing import List
@@ -18,22 +18,10 @@ class EmbeddingService:
     def __init__(self, provider: str, model_name: str):
         self.provider = provider
         self.model_name = model_name
-        model_config = next(
-            (
-                config
-                for model in config.EMBEDDING_MODELS
-                if model["provider"] == self.provider
-                for config in model["models"]
-                if config["model_name"] == self.model_name
-            ),
-            None,
-        )
-        if not model_config:
-            raise ValueError(f"Model config not found for {self.provider} {self.model_name}")
         api_key = os.getenv(self.provider.upper() + constants.API_KEY_SUFFIX)
         self.model = function_mapping[self.provider](key=api_key, model_name=self.model_name)
 
-    def embed_chunks(self, chunks: list[dict], rdb_document: RDBDocument) -> list[dict]:
+    def embed_chunks(self, chunks: list[dict], rag_document: RagDocument) -> list[dict]:
         """
         Embed chunks with optional batch caching.
         Note: Chunk embedding typically happens during ingestion,
@@ -51,7 +39,7 @@ class EmbeddingService:
             for i, chunk in enumerate(chunks):
                 chunk["dense_vector"] = embeddings[i].tolist()
 
-            rdb_document.token_num += total_tokens
+            rag_document.token_num += total_tokens
 
             logger.info(f"Embedding completed. Total tokens: {total_tokens}")
             return chunks

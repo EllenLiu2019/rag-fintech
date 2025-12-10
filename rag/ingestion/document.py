@@ -13,6 +13,8 @@ class RagDocument(BaseModel):
     pages: list[dict[str, Any]] = Field(default_factory=list, description="pages")
     business_data: dict[str, Any] = Field(default_factory=dict, description="business_data")
     confidence: dict[str, Any] = Field(default_factory=dict, description="extracted_data confidence")
+    token_num: int = 0
+    chunk_num: int = 0
     filename: str
     file_size: int = 0
     content_type: Optional[str] = None
@@ -44,15 +46,19 @@ class RagDocument(BaseModel):
         parsed_documents: list[dict[str, Any]],
         business_data: dict[str, Any],
         confidence: dict[str, Any],
+        token_num: int,
         filename: str,
         file_size: int,
         content_type: Optional[str] = None,
+        chunk_num: int = 0,
     ) -> "RagDocument":
         return cls(
             document_id=document_id,
             pages=parsed_documents,
             business_data=business_data,
             confidence=confidence,
+            token_num=token_num,
+            chunk_num=chunk_num,
             filename=filename,
             file_size=file_size,
             content_type=content_type,

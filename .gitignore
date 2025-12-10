@@ -33,3 +33,4 @@ docs/*
 !docs/adr/
 api/scripts/
 rag_fintech.egg-info/
+**/data/

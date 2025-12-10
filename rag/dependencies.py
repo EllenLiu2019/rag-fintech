@@ -30,8 +30,7 @@ def get_llm_service() -> LLMService:
         LLMService: Singleton instance for LLM operations
     """
     logger.info("Initializing LLMService singleton")
-    model = config.CHAT_MODELS[0]
-    return LLMService(model)
+    return LLMService(config.CHAT_MODELS[0])
 
 
 @lru_cache()
@@ -67,4 +66,4 @@ def get_ingestion_pipeline() -> IngestionPipeline:
         IngestionPipeline: Singleton instance for document ingestion operations
     """
     logger.info("Initializing IngestionPipeline singleton")
-    return IngestionPipeline()
+    return IngestionPipeline(config.CHAT_MODELS[0])

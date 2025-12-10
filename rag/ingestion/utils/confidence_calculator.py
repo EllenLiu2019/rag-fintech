@@ -1,359 +1,378 @@
 import re
+import logging
 from typing import Any, Optional
+from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class FieldConfidence:
+    """Confidence scores for a single field"""
+
+    field_key: str
+    confidence: float = 0.0
+    source_confidence: float = 0.0
+    completeness: float = 0.0
+    value_quality: float = 0.0
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ConfidenceReport:
+    """Overall confidence report"""
+
+    overall_confidence: float = 0.0
+    field_confidences: dict[str, FieldConfidence] = field(default_factory=dict)
+    schema_completeness: float = 0.0
+    warnings: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "overall_confidence": self.overall_confidence,
+            "field_confidence": {
+                k: {
+                    "confidence": v.confidence,
+                    "source_confidence": v.source_confidence,
+                    "completeness": v.completeness,
+                    "value_quality": v.value_quality,
+                    "warnings": v.warnings,
+                }
+                for k, v in self.field_confidences.items()
+            },
+            "schema_completeness": self.schema_completeness,
+            "warnings": self.warnings,
+            "errors": self.errors,
+        }
 
 
 class ConfidenceCalculator:
+    """
+    Confidence calculator for the new extraction structure.
 
-    def calculate(self, policy_result: dict, schema: dict, soups: list[Any]) -> dict[str, Any]:
-        confidence_report = {
-            "overall_confidence": 0.0,
-            "field_confidence": {},
-            "completeness": {},
-            "warnings": [],
-            "errors": [],
-        }
+    The new structure is:
+    {
+        "policy_number": {"保单号": "AO1234567890FE"},
+        "policy_holder": {"投保人": "张三", "性别": "男", ...},
+        "coverage": [{"保险名称": "...", ...}, ...],
+    }
 
-        # 1. 计算字段完整性
-        completeness_scores = self.calculate_field_completeness(policy_result, schema)
-        confidence_report["completeness"] = completeness_scores
+    Confidence dimensions:
+    1. Source confidence: How reliable is the extraction source (header match vs grid fallback)
+    2. Completeness: How many fields were extracted for this entity
+    3. Value quality: Are the values non-empty and well-formatted
+    """
 
-        # 2. 计算每个字段的置信度
-        field_confidences = {}
-        soup_texts = "" if not soups else "\n==========\n".join([str(soup) for soup in soups])
+    # Expected minimum fields for object-type entities
+    EXPECTED_FIELDS = {
+        "policy_holder": ["投保人", "性别", "出生日期", "证件号码"],
+        "insured": ["被保险人", "性别", "出生日期", "证件号码"],
+    }
 
-        for field_key, field_value in policy_result.items():
-            field_config = schema.get("fields", {}).get(field_key, {})
-            field_type = field_config.get("type", "")
+    # Field type validators
+    FIELD_VALIDATORS = {
+        "出生日期": "date",
+        "性别": "gender",
+        "证件号码": "id_number",
+        "手机号码": "phone",
+        "电子邮箱": "email",
+        "保险期间开始日期": "date",
+        "保险期间结束日期": "date",
+    }
 
-            if field_type == "object" and isinstance(field_value, dict):
-                # 对象类型：计算每个属性的置信度
-                prop_confidences = {}
-                for prop_key, prop_value in field_value.items():
-                    if isinstance(prop_value, dict):
-                        match_strategy = prop_value.get("match", {})
-                        raw_value = prop_value.get("raw_value", "")
-                        data_type = prop_value.get("type", "")
-
-                        # 匹配置信度
-                        match_conf = self.calculate_match_confidence(match_strategy, raw_value, soup_texts)
-
-                        # 数据类型验证
-                        type_conf, error_msg = self.validate_data_type(data_type, raw_value)
-
-                        # 综合置信度（加权平均）
-                        prop_confidence = match_conf * 0.6 + type_conf * 0.4
-                        prop_confidences[prop_key] = {
-                            "confidence": prop_confidence,
-                            "match_confidence": match_conf,
-                            "type_confidence": type_conf,
-                            "raw_value": raw_value,
-                            "error": error_msg if error_msg else None,
-                        }
-
-                        if prop_confidence < 0.7:
-                            confidence_report["warnings"].append(
-                                f"{field_key}.{prop_key}: 置信度较低 ({prop_confidence:.2f})"
-                            )
-                        if error_msg:
-                            confidence_report["errors"].append(f"{field_key}.{prop_key}: {error_msg}")
-
-                field_confidences[field_key] = {
-                    "confidence": (
-                        sum(p["confidence"] for p in prop_confidences.values()) / len(prop_confidences)
-                        if prop_confidences
-                        else 0.0
-                    ),
-                    "properties": prop_confidences,
-                }
-
-            elif field_type == "list" and isinstance(field_value, list):
-                # 列表类型：计算每条记录的置信度
-                list_confidences = []
-                for idx, item in enumerate(field_value):
-                    if isinstance(item, dict):
-                        item_confidences = {}
-                        for prop_key, prop_value in item.items():
-                            if isinstance(prop_value, dict):
-                                match_strategy = prop_value.get("match", {})
-                                raw_value = prop_value.get("raw_value", "")
-                                data_type = prop_value.get("type", "")
-
-                                match_conf = self.calculate_match_confidence(match_strategy, raw_value, soup_texts)
-                                type_conf, error_msg = self.validate_data_type(
-                                    data_type, raw_value, prop_value.get("transform")
-                                )
-
-                                prop_confidence = match_conf * 0.6 + type_conf * 0.4
-                                item_confidences[prop_key] = {
-                                    "confidence": prop_confidence,
-                                    "match_confidence": match_conf,
-                                    "type_confidence": type_conf,
-                                    "raw_value": raw_value,
-                                    "error": error_msg if error_msg else None,
-                                }
-
-                        item_avg_conf = (
-                            sum(p["confidence"] for p in item_confidences.values()) / len(item_confidences)
-                            if item_confidences
-                            else 0.0
-                        )
-                        list_confidences.append(
-                            {
-                                "index": idx,
-                                "confidence": item_avg_conf,
-                                "properties": item_confidences,
-                            }
-                        )
-
-                field_confidences[field_key] = {
-                    "confidence": (
-                        sum(c["confidence"] for c in list_confidences) / len(list_confidences)
-                        if list_confidences
-                        else 0.0
-                    ),
-                    "items": list_confidences,
-                }
-
-            else:
-                # 简单类型（从content提取）
-                if isinstance(field_value, dict):
-                    match_strategy = field_value.get("match", {})
-                    raw_value = field_value.get("raw_value", "")
-                    data_type = field_value.get("type", "")
-
-                    match_conf = self.calculate_match_confidence(match_strategy, raw_value, soup_texts)
-                    type_conf, error_msg = self.validate_data_type(data_type, raw_value)
-
-                    field_confidence = match_conf * 0.6 + type_conf * 0.4
-                    field_confidences[field_key] = {
-                        "confidence": field_confidence,
-                        "match_confidence": match_conf,
-                        "type_confidence": type_conf,
-                        "raw_value": raw_value,
-                        "error": error_msg if error_msg else None,
-                    }
-
-                    if field_confidence < 0.7:
-                        confidence_report["warnings"].append(f"{field_key}: 置信度较低 ({field_confidence:.2f})")
-
-        confidence_report["field_confidence"] = field_confidences
-
-        # 3. 计算总体置信度（加权平均）
-        all_confidences = []
-        for field_key, field_conf in field_confidences.items():
-            all_confidences.append(field_conf["confidence"])
-            # 考虑完整性
-            completeness = completeness_scores.get(field_key, 0.0)
-            all_confidences.append(completeness)
-
-        if all_confidences:
-            confidence_report["overall_confidence"] = sum(all_confidences) / len(all_confidences)
-
-        return confidence_report
-
-    def calculate_match_confidence(
-        self, match_strategy: dict, extracted_value: str, source_texts: list[str] = []
-    ) -> float:
-        strategy = match_strategy.get("strategy", "")
-        confidence = 0.0
-
-        if strategy == "exact":
-            # 精确匹配：置信度最高
-            values = match_strategy.get("values", [])
-            if extracted_value and any(v in source_texts for v in values):
-                confidence = 1.0
-            elif extracted_value:
-                confidence = 0.8  # 有值但无法验证匹配
-            else:
-                confidence = 0.0  # 无值
-        elif strategy == "regex":
-            # 正则匹配：根据匹配质量评分
-            regex = match_strategy.get("regex", "")
-            if not regex:
-                return 0.0
-
-            match = re.search(regex, source_texts)
-            if match and extracted_value:
-                confidence = 1.0
-            elif extracted_value:
-                confidence = 0.6  # 有值但正则未匹配
-            else:
-                confidence = 0.0
-        return confidence
-
-    def validate_data_type(
-        self, field_type: str, raw_value: str, transform: Optional[dict] = None
-    ) -> tuple[float, str]:
+    def calculate(
+        self,
+        extracted_result: dict[str, Any],
+        schema: dict[str, Any],
+        extraction_signals: dict[str, Any] = None,
+    ) -> dict[str, Any]:
         """
-        验证数据类型和格式
+        Calculate confidence scores for extraction results.
+
+        Args:
+            extracted_result: The extracted data
+            schema: The schema definition
+            extraction_signals: Optional signals from extraction process
 
         Returns:
-            (置信度, 错误信息)
+            Confidence report as dictionary
         """
-        if not raw_value or not raw_value.strip():
-            return (0.0, "值为空")
+        if extraction_signals is None:
+            extraction_signals = {}
 
-        confidence = 1.0
-        error_msg = ""
+        report = ConfidenceReport()
+        expected_fields = set(schema.get("fields", {}).keys())
 
-        if field_type == "number":
-            # 验证数字格式
-            cleaned = raw_value.replace(",", "").replace("¥", "").replace("元", "").strip()
-            try:
-                float(cleaned)
-                confidence = 1.0
-            except ValueError:
-                confidence = 0.3
-                error_msg = f"无法转换为数字: {raw_value}"
+        # Calculate confidence for each extracted field
+        for field_key, field_data in extracted_result.items():
+            field_conf = self._calculate_field_confidence(field_key, field_data, extraction_signals.get(field_key, {}))
+            report.field_confidences[field_key] = field_conf
 
-        elif field_type == "string":
-            # 字符串基本验证
-            if len(raw_value.strip()) == 0:
-                confidence = 0.0
-                error_msg = "字符串为空"
-            # elif len(raw_value.strip()) < 2:
-            #     confidence = 0.5
-            #     error_msg = "字符串过短"
+            # Collect warnings
+            if field_conf.warnings:
+                report.warnings.extend([f"{field_key}: {w}" for w in field_conf.warnings])
+
+            if field_conf.confidence < 0.7:
+                report.warnings.append(f"{field_key}: Low confidence ({field_conf.confidence:.2f})")
+
+        # Schema completeness: how many expected fields were extracted
+        extracted_keys = set(extracted_result.keys())
+        if expected_fields:
+            report.schema_completeness = len(extracted_keys & expected_fields) / len(expected_fields)
+        else:
+            report.schema_completeness = 1.0 if extracted_keys else 0.0
+
+        # Overall confidence: weighted average
+        if report.field_confidences:
+            confidence_values = [fc.confidence for fc in report.field_confidences.values()]
+            avg_confidence = sum(confidence_values) / len(confidence_values)
+            # Weight: 70% field confidence, 30% schema completeness
+            report.overall_confidence = avg_confidence * 0.7 + report.schema_completeness * 0.3
+        else:
+            report.overall_confidence = 0.0
+
+        return report.to_dict()
+
+    def _calculate_field_confidence(
+        self,
+        field_key: str,
+        field_data: Any,
+        signal: dict[str, Any],
+    ) -> FieldConfidence:
+        """
+        Calculate confidence for a single field.
+
+        Confidence = source_confidence * 0.3 + completeness * 0.3 + value_quality * 0.4
+        """
+        conf = FieldConfidence(field_key=field_key)
+
+        # 1. Source confidence (from extraction signals)
+        conf.source_confidence = self._calculate_source_confidence(signal)
+
+        # 2. Completeness and value quality depend on data type and source
+        source_type = signal.get("source", "")
+
+        if source_type == "content_regex":
+            # Content regex extracts single value: {"key_name": "value"}
+            # Completeness = 1.0 if matched, value quality based on the value
+            conf.completeness = 1.0 if signal.get("matched") else 0.0
+            if isinstance(field_data, dict) and field_data:
+                value = next(iter(field_data.values()), "")
+                conf.value_quality = 1.0 if value and str(value).strip() else 0.0
             else:
-                confidence = 1.0
+                conf.value_quality = 0.0
 
-        elif field_type == "date":
-            # 验证日期格式
+        elif isinstance(field_data, dict):
+            # Object type (policy_holder, insured, etc.)
+            conf.completeness = self._calculate_object_completeness(field_key, field_data)
+            conf.value_quality, warnings = self._calculate_object_value_quality(field_data)
+            conf.warnings.extend(warnings)
+
+        elif isinstance(field_data, list):
+            # List type (coverage, cvg_premium, etc.)
+            conf.completeness = self._calculate_list_completeness(field_data)
+            conf.value_quality, warnings = self._calculate_list_value_quality(field_data)
+            conf.warnings.extend(warnings)
+
+        else:
+            # Simple type
+            conf.completeness = 1.0 if field_data else 0.0
+            conf.value_quality = 1.0 if field_data and str(field_data).strip() else 0.0
+
+        # Combined confidence with weights
+        conf.confidence = conf.source_confidence * 0.3 + conf.completeness * 0.3 + conf.value_quality * 0.4
+
+        return conf
+
+    def _calculate_source_confidence(self, signal: dict[str, Any]) -> float:
+        """
+        Calculate confidence based on extraction source.
+
+        - table_header (exact match): 1.0
+        - content_regex (matched): 0.95
+        - grid_fallback (matched): 0.85
+        - not matched: 0.0
+        """
+        if not signal:
+            return 0.5  # No signal available, assume moderate confidence
+
+        if not signal.get("matched", False):
+            return 0.0
+
+        source = signal.get("source", "")
+
+        if source == "table_header":
+            return 1.0
+        elif source == "content_regex":
+            return 0.95
+        elif source == "grid_fallback":
+            # Grid fallback with data is still reliable
+            kv_count = signal.get("kv_count", 0)
+            if kv_count >= 3:
+                return 0.9
+            elif kv_count >= 1:
+                return 0.8
+            else:
+                return 0.6
+        else:
+            return 0.5
+
+    def _calculate_object_completeness(self, field_key: str, data: dict[str, Any]) -> float:
+        """
+        Calculate completeness for object-type fields.
+        """
+        expected = self.EXPECTED_FIELDS.get(field_key, [])
+        if not expected:
+            # No expected fields defined, use extracted count
+            return min(len(data) / 4, 1.0) if data else 0.0
+
+        extracted_keys = set(data.keys())
+        expected_keys = set(expected)
+        matched = len(extracted_keys & expected_keys)
+        return matched / len(expected_keys) if expected_keys else 0.0
+
+    def _calculate_object_value_quality(self, data: dict[str, Any]) -> tuple[float, list[str]]:
+        """
+        Calculate value quality for object-type fields.
+        Returns (quality_score, warnings)
+        """
+        if not data:
+            return 0.0, ["Empty object"]
+
+        warnings = []
+        valid_count = 0
+        total_count = len(data)
+
+        for key, value in data.items():
+            if not value or not str(value).strip():
+                warnings.append(f"Empty value for '{key}'")
+                continue
+
+            # Validate specific field types
+            validator_type = self.FIELD_VALIDATORS.get(key)
+            if validator_type:
+                is_valid, error = self._validate_value(value, validator_type)
+                if not is_valid:
+                    warnings.append(f"Invalid {key}: {error}")
+                    valid_count += 0.5  # Partial credit for having a value
+                else:
+                    valid_count += 1
+            else:
+                valid_count += 1
+
+        return valid_count / total_count if total_count > 0 else 0.0, warnings
+
+    def _calculate_list_completeness(self, data: list) -> float:
+        """
+        Calculate completeness for list-type fields.
+        """
+        if not data:
+            return 0.0
+
+        # At least one item with multiple fields is good
+        if len(data) >= 1 and isinstance(data[0], dict) and len(data[0]) >= 2:
+            return 1.0
+        elif len(data) >= 1:
+            return 0.7
+        return 0.0
+
+    def _calculate_list_value_quality(self, data: list) -> tuple[float, list[str]]:
+        """
+        Calculate value quality for list-type fields.
+        Returns (quality_score, warnings)
+        """
+        if not data:
+            return 0.0, ["Empty list"]
+
+        warnings = []
+        total_quality = 0.0
+
+        for idx, item in enumerate(data):
+            if isinstance(item, dict):
+                item_quality, item_warnings = self._calculate_object_value_quality(item)
+                total_quality += item_quality
+                warnings.extend([f"Item {idx}: {w}" for w in item_warnings])
+            elif item:
+                total_quality += 1.0
+            else:
+                warnings.append(f"Item {idx}: Empty")
+
+        avg_quality = total_quality / len(data) if data else 0.0
+        return avg_quality, warnings
+
+    def _validate_value(self, value: Any, validator_type: str) -> tuple[bool, Optional[str]]:
+        """
+        Validate a value against its expected type.
+        Returns (is_valid, error_message)
+        """
+        value_str = str(value).strip()
+
+        if validator_type == "date":
             date_patterns = [
                 r"\d{4}-\d{2}-\d{2}",
                 r"\d{4}年\d{2}月\d{2}日",
                 r"\d{4}/\d{2}/\d{2}",
             ]
-            if any(re.search(pattern, raw_value) for pattern in date_patterns):
-                confidence = 1.0
-            else:
-                confidence = 0.4
-                error_msg = f"日期格式不正确: {raw_value}"
+            if any(re.search(p, value_str) for p in date_patterns):
+                return True, None
+            return False, f"Invalid date format: {value_str}"
 
-        return (confidence, error_msg)
+        elif validator_type == "gender":
+            if value_str in ["男", "女", "M", "F", "Male", "Female"]:
+                return True, None
+            return False, f"Invalid gender: {value_str}"
 
-    def calculate_table_match_confidence(table_id: str, table_mapping_strategy: dict, matched_text: str) -> float:
-        """
-        计算表格匹配的置信度
-        """
-        if not table_id:
-            return 0.0
+        elif validator_type == "id_number":
+            # Chinese ID: 18 digits, last may be X
+            if re.match(r"^[0-9A-Z]{10,18}$", value_str):
+                return True, None
+            return False, f"Invalid ID number format: {value_str}"
 
-        strategy_info = table_mapping_strategy.get(table_id, {})
-        strategy = strategy_info.get("strategy", "")
-        values = strategy_info.get("values", [])
+        elif validator_type == "phone":
+            if re.match(r"^1[3-9]\d{9}$", value_str):
+                return True, None
+            return False, f"Invalid phone format: {value_str}"
 
-        if strategy == "exact" and matched_text in values:
-            return 1.0
-        elif strategy == "exact" and matched_text:
-            # 部分匹配或相似匹配
-            for v in values:
-                if v in matched_text or matched_text in v:
-                    return 0.7
-            return 0.3
-        else:
-            return 0.0
+        elif validator_type == "email":
+            if re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", value_str):
+                return True, None
+            return False, f"Invalid email format: {value_str}"
 
-    def calculate_field_completeness(self, policy_result: dict, schema: dict) -> dict[str, float]:
-        """
-        计算字段完整性（必需字段是否都提取到了）
-        """
-        completeness_scores = {}
-
-        for field_key, field_config in schema.get("fields", {}).items():
-            if field_key not in policy_result:
-                completeness_scores[field_key] = 0.0
-                continue
-
-            extracted = policy_result[field_key]
-
-            if field_config.get("type") == "object":
-                # 对象类型：检查所有properties是否都提取到了
-                required_props = field_config.get("properties", {}).keys()
-                if isinstance(extracted, dict):
-                    extracted_props = set(extracted.keys())
-                    required_props_set = set(required_props)
-                    if required_props_set.issubset(extracted_props):
-                        completeness_scores[field_key] = 1.0
-                    else:
-                        missing = required_props_set - extracted_props
-                        completeness_scores[field_key] = 1.0 - (len(missing) / len(required_props_set))
-                else:
-                    completeness_scores[field_key] = 0.0
-
-            elif field_config.get("type") == "list":
-                # 列表类型：检查是否至少有一条记录
-                if isinstance(extracted, list) and len(extracted) > 0:
-                    # 检查第一条记录是否包含所有必需属性
-                    first_item = extracted[0]
-                    required_props = field_config.get("properties", {}).keys()
-                    if isinstance(first_item, dict):
-                        extracted_props = set(first_item.keys())
-                        required_props_set = set(required_props)
-                        if required_props_set.issubset(extracted_props):
-                            completeness_scores[field_key] = 1.0
-                        else:
-                            missing = required_props_set - extracted_props
-                            completeness_scores[field_key] = 1.0 - (len(missing) / len(required_props_set))
-                    else:
-                        completeness_scores[field_key] = 0.5
-                else:
-                    completeness_scores[field_key] = 0.0
-
-            else:
-                # 简单类型：检查是否有值
-                if extracted and (isinstance(extracted, dict) and extracted.get("raw_value")):
-                    completeness_scores[field_key] = 1.0
-                else:
-                    completeness_scores[field_key] = 0.0
-
-        return completeness_scores
+        return True, None
 
 
 def print_confidence_report(report: dict):
     """
-    打印置信度报告
+    Print confidence report in readable format.
     """
     print("=" * 60)
-    print("数据提取置信度分析报告")
+    print("Data Extraction Confidence Report")
     print("=" * 60)
-    print(f"\n总体置信度: {report['overall_confidence']:.2%}")
-    print("字段完整性:")
-    for field, score in report["completeness"].items():
-        status = "✓" if score == 1.0 else "⚠" if score >= 0.7 else "✗"
-        print(f"  {status} {field}: {score:.2%}")
+    print(f"\nOverall Confidence: {report['overall_confidence']:.2%}")
+    print(f"Schema Completeness: {report['schema_completeness']:.2%}")
 
-    print("\n字段置信度详情:")
-    for field_key, field_info in report["field_confidence"].items():
+    print("\nField Confidence Details:")
+    for field_key, field_info in report.get("field_confidence", {}).items():
         conf = field_info["confidence"]
         status = "✓" if conf >= 0.9 else "⚠" if conf >= 0.7 else "✗"
         print(f"\n  {status} {field_key}: {conf:.2%}")
+        print(f"      Source: {field_info['source_confidence']:.2%}")
+        print(f"      Completeness: {field_info['completeness']:.2%}")
+        print(f"      Value Quality: {field_info['value_quality']:.2%}")
 
-        if "properties" in field_info:
-            for prop_key, prop_info in field_info["properties"].items():
-                prop_conf = prop_info["confidence"]
-                print(
-                    f"    - {prop_key}: {prop_conf:.2%} (匹配: {prop_info['match_confidence']:.2%}, 类型: {prop_info['type_confidence']:.2%})"
-                )
-                if prop_info.get("error"):
-                    print(f"      错误: {prop_info['error']}")
+        if field_info.get("warnings"):
+            for warning in field_info["warnings"]:
+                print(f"      ⚠ {warning}")
 
-        elif "items" in field_info:
-            for item in field_info["items"]:
-                print(f"    项目 {item['index']}: {item['confidence']:.2%}")
-                for prop_key, prop_info in item["properties"].items():
-                    prop_conf = prop_info["confidence"]
-                    print(f"      - {prop_key}: {prop_conf:.2%}")
-
-    if report["warnings"]:
-        print(f"\n⚠ 警告 ({len(report['warnings'])}):")
+    if report.get("warnings"):
+        print(f"\n⚠ Warnings ({len(report['warnings'])}):")
         for warning in report["warnings"]:
             print(f"  - {warning}")
 
-    if report["errors"]:
-        print(f"\n✗ 错误 ({len(report['errors'])}):")
+    if report.get("errors"):
+        print(f"\n✗ Errors ({len(report['errors'])}):")
         for error in report["errors"]:
             print(f"  - {error}")
 
     print("\n" + "=" * 60)
-

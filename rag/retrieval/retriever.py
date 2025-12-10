@@ -51,7 +51,7 @@ class Retriever:
     ) -> List[Dict[str, Any]]:
         """Dense vector search."""
 
-        llm: LLM = self.document_service.get_embedding_model()
+        llm: LLM = self.document_service.get_embedding_model(kb_id)
         embedder = EmbeddingService(provider=llm.llm_provider, model_name=llm.model_name)
         query_vector = embedder.embed_query(query)
 
@@ -84,7 +84,7 @@ class Retriever:
         filters: Optional[Dict] = None,
     ) -> List[Dict[str, Any]]:
         """Sparse vector search."""
-        llm: LLM = self.document_service.get_embedding_model()
+        llm: LLM = self.document_service.get_embedding_model(kb_id)
         embedder = EmbeddingService(provider=llm.llm_provider, model_name=llm.model_name)
         query_vector = embedder.embed_query(query)
 

@@ -2,7 +2,7 @@ from fastapi import APIRouter, File, UploadFile, Query, Depends
 from fastapi.responses import JSONResponse, Response
 
 from common import get_logger
-from rag.ingestion.pipeline import IngestionPipeline
+from rag.ingestion import IngestionPipeline
 from rag.dependencies import get_ingestion_pipeline
 from rag.ingestion.doc_service import (
     load_file_info,

@@ -8,6 +8,12 @@
                 "tags": "REASONER",
                 "max_tokens": 128000,
                 "model_type": "chat"
+            },
+            {
+                "model_name": "deepseek-chat",
+                "tags": "CHAT",
+                "max_tokens": 128000,
+                "model_type": "chat"
             }
         ]
     },

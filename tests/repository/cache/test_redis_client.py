@@ -77,8 +77,8 @@ def mock_redis():
     """Fixture to provide mock Redis client"""
     mock_client = MockRedisClient()
 
-    # Mock settings.REDIS_CLIENT
-    with patch("common.settings.REDIS_CLIENT", mock_client):
+    # Mock config.REDIS_CLIENT
+    with patch("common.config.REDIS_CLIENT", mock_client):
         yield mock_client
 
 

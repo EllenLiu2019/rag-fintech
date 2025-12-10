@@ -67,7 +67,8 @@ class DocumentService:
         rdb_document.upload_time = rag_document.upload_time
         rdb_document.business_data = rag_document.business_data
         rdb_document.confidence = rag_document.confidence
-
+        rdb_document.token_num += rag_document.token_num
+        rdb_document.chunk_num += rag_document.chunk_num
         # Save the updated document (merge will update existing record)
         updated_doc = self.rdb_client.save(rdb_document)
 
@@ -75,7 +76,7 @@ class DocumentService:
             f"file {filename} updated in rdb: id={updated_doc.id} with parsed file location: {parsed_file_path}"
         )
 
-    def get_embedding_model(self, kb_name: str = "default_kb") -> str:
+    def get_embedding_model(self, kb_name: str) -> str:
         kb_ids = self.rdb_client.execute_query(KnowledgeBase, kb_name)
         kb_id = kb_ids[0]
         llm_model = self.rdb_client.select_by_id(LLM, kb_id.embed_llm_id)

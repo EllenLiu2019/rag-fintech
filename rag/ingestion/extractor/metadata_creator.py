@@ -8,7 +8,7 @@ class FieldConfig(TypedDict, total=False):
     """Field configuration definition"""
 
     type: str
-    mapping: Union[str, tuple[str, ...]]  # Field mapping path
+    mapping: Union[str, tuple[str, ...]]  # Field mapping path (source_key, chinese_field_name)
 
 
 class MetadataCreator:
@@ -18,22 +18,32 @@ class MetadataCreator:
 
     @classmethod
     def _load_schema(cls) -> dict[str, FieldConfig]:
+        """
+        Schema mapping definition.
+
+        mapping format:
+        - str: direct key access, get first value from the dict
+          e.g. "policy_number" → extracted_result["policy_number"] → {"保单号": "xxx"} → "xxx"
+        - tuple: (source_key, chinese_field_name)
+          e.g. ("policy_holder", "投保人") → extracted_result["policy_holder"]["投保人"]
+        """
         return {
-            "document_id": {"type": "str", "mapping": "document_id"},
             "policy_number": {"type": "str", "mapping": "policy_number"},
-            "holder_name": {"type": "str", "mapping": ("policy_holder", "name")},
-            "hodler_gender": {"type": "str", "mapping": ("policy_holder", "gender")},
-            "hodler_birth_date": {"type": "str", "mapping": ("policy_holder", "birth_date")},
-            "hodler_id_number": {"type": "str", "mapping": ("policy_holder", "id_number")},
-            "insured_name": {"type": "str", "mapping": ("insured", "name")},
-            "insured_gender": {"type": "str", "mapping": ("insured", "gender")},
-            "insured_birth_date": {"type": "str", "mapping": ("insured", "birth_date")},
-            "insured_id_number": {"type": "str", "mapping": ("insured", "id_number")},
-            "insured_relationship_to_holder": {"type": "str", "mapping": ("insured", "relationship_to_holder")},
+            "holder_name": {"type": "str", "mapping": ("policy_holder", "投保人")},
+            "holder_gender": {"type": "str", "mapping": ("policy_holder", "性别")},
+            "holder_birth_date": {"type": "str", "mapping": ("policy_holder", "出生日期")},
+            "holder_id_number": {"type": "str", "mapping": ("policy_holder", "证件号码")},
+            "insured_name": {"type": "str", "mapping": ("insured", "被保险人")},
+            "insured_gender": {"type": "str", "mapping": ("insured", "性别")},
+            "insured_birth_date": {"type": "str", "mapping": ("insured", "出生日期")},
+            "insured_id_number": {"type": "str", "mapping": ("insured", "证件号码")},
+            "insured_relationship_to_holder": {"type": "str", "mapping": ("insured", "与投保人关系")},
             "effective_date": {"type": "str", "mapping": "effective_date"},
             "expiry_date": {"type": "str", "mapping": "expiry_date"},
-            "coverage": {"type": "list", "mapping": "coverage"},  # Preserve complex structure
+            "coverage": {"type": "list", "mapping": "coverage"},
             "cvg_premium": {"type": "list", "mapping": "cvg_premium"},
+            "total_premium": {"type": "str", "mapping": ("total_premium", "总保费")},
+            "coverage_amount": {"type": "str", "mapping": ("coverage_amount", "保险金额")},
         }
 
     def create(self, extracted_result: dict[str, Any]) -> dict[str, Any]:
@@ -44,28 +54,32 @@ class MetadataCreator:
         Args:
             extracted_result:
                 {
-                    "policy_number": {
-                        "type": "string",
-                        "raw_value": "ABC123",
-                        "convert_value": "ABC123"  # 可选
-                    },
-                    "policy_holder": {
-                        "name": {
-                            "type": "string",
-                            "raw_value": "张三"
-                        },
-                        ...
-                    },
-                    ...
+                    "policy_number": {"保单号": "AO1234567890FE"},
+                    "policy_holder": {"投保人": "张三", "性别": "男", "出生日期": "1990-01-01", "证件号码": "123456789012345678"},
+                    "insured": {"被保险人": "李四", "性别": "女", "出生日期": "1990-01-01", "证件号码": "123456789012345678"},
+                    "coverage": [{"保险名称": "个人癌症医疗保险（互联网2022版A款）", "保险责任": "恶性肿瘤质子重离子医疗保险金", "最高保险金额（元）": "2,000,000", "详细说明": "首次投保或非连续投保等待期:90天<br/>免赔额:0元/年<br/>社保目录内医疗费用赔付比例:100%<br/>社保目录外医疗费用赔付比例:100%"}, ...],
+                    "cvg_premium": [{"条款名称": "个人癌症医疗保险（互联网2022版A款）", "保险费（元）": "2,284.00"}, ...],
+                    "effective_date": {"保险期间开始日期": "2025-01-01"},
+                    "expiry_date": {"保险期间结束日期": "2026-01-01"},
                 }
 
         Returns:
             dict[str, Any]: 元数据字典，格式为：
                 {
-                    "document_id": "...",
-                    "policy_number": "ABC123",
+                    "policy_number": "AO1234567890FE",
                     "holder_name": "张三",
-                    "insured_name": "李四"
+                    "holder_gender": "男",
+                    "hodler_birth_date": "1990-01-01",
+                    "hodler_id_number": "123456789012345678",
+                    "insured_name": "李四",
+                    "insured_gender": "女",
+                    "insured_birth_date": "1990-01-01",
+                    "insured_id_number": "123456789012345678",
+                    "insured_relationship_to_holder": "父母",
+                    "effective_date": "2025-01-01",
+                    "expiry_date": "2026-01-01",
+                    "coverage": [{"保险名称": "个人癌症医疗保险（互联网2022版A款）", "保险责任": "恶性肿瘤质子重离子医疗保险金", "最高保险金额（元）": "2,000,000", "详细说明": "首次投保或非连续投保等待期:90天<br/>免赔额:0元/年<br/>社保目录内医疗费用赔付比例:100%<br/>社保目录外医疗费用赔付比例:100%"}, ...],
+                    "cvg_premium": [{"条款名称": "个人癌症医疗保险（互联网2022版A款）", "保险费（元）": "2,284.00"}, ...],
                 }
         """
         if not isinstance(extracted_result, dict):
@@ -84,12 +98,7 @@ class MetadataCreator:
                     logger.debug(f"Field '{field_name}' not found in extracted_result")
 
             logger.info(f"Created metadata with {len(metadata)} fields")
-
-            embed_parts = self._collect_embed_parts(extracted_result)
-            if embed_parts:
-                metadata["embed_metadata"] = "; ".join(embed_parts)
-
-            logger.info(f"Metadata: {metadata}")
+            logger.debug(f"Metadata: {metadata}")
             return metadata
 
         except Exception as e:
@@ -101,10 +110,10 @@ class MetadataCreator:
         从 extracted_result 中提取字段值
 
         支持：
-        - 直接字段：policy_number → extracted_result["policy_number"]
-        - 嵌套字段：holder_name → extracted_result["policy_holder"]["name"]
-        - 列表字段：coverage → extracted_result["coverage"]
-        - 列表字段：cvg_premium → extracted_result["cvg_premium"]
+        - 直接字段：policy_number → extracted_result["policy_number"] → 取第一个值
+        - 嵌套字段：holder_name → extracted_result["policy_holder"]["投保人"]
+        - 列表字段：coverage → extracted_result["coverage"] (直接返回列表)
+
         Args:
             extracted_result: 提取结果字典
             field_name: 元数据字段名
@@ -112,26 +121,37 @@ class MetadataCreator:
         Returns:
             Optional[Any]: 提取的字段值，如果不存在则返回 None
         """
-        # 获取字段配置
         field_config = self.schema.get(field_name)
         if not field_config:
             logger.warning(f"No config found for field: {field_name}")
             return None
 
-        # 获取字段映射路径
         mapping = field_config.get("mapping")
         if not mapping:
             logger.warning(f"No mapping found for field: {field_name}")
             return None
 
         try:
-            # 处理直接映射
+            # 直接映射 (str): 从 extracted_result[key] 取第一个值
             if isinstance(mapping, str):
-                return self._extract_value_from_path(extracted_result, [mapping])
+                source_data = extracted_result.get(mapping)
+                if source_data is None:
+                    return None
+                # 如果是列表，直接返回
+                if isinstance(source_data, list):
+                    return source_data
+                # 如果是字典，取第一个值
+                if isinstance(source_data, dict):
+                    return next(iter(source_data.values()), None)
+                return source_data
 
-            # 处理嵌套映射（元组）
-            elif isinstance(mapping, tuple):
-                return self._extract_value_from_path(extracted_result, list(mapping))
+            # 嵌套映射 (tuple): (source_key, chinese_field_name)
+            elif isinstance(mapping, tuple) and len(mapping) == 2:
+                source_key, field_key = mapping
+                source_data = extracted_result.get(source_key)
+                if not isinstance(source_data, dict):
+                    return None
+                return source_data.get(field_key)
 
             else:
                 logger.warning(f"Invalid mapping type for field '{field_name}': {type(mapping)}")
@@ -140,69 +160,6 @@ class MetadataCreator:
         except (KeyError, TypeError, IndexError) as e:
             logger.debug(f"Error extracting field '{field_name}': {e}")
             return None
-
-    def _collect_embed_parts(self, data: Any) -> list[str]:
-        """
-        Recursively collect embed_text and value pairs from extracted result.
-        """
-        parts = []
-        if isinstance(data, list):
-            for item in data:
-                parts.extend(self._collect_embed_parts(item))
-        elif isinstance(data, dict):
-            # Check if it's a leaf node (contains raw_value)
-            if "raw_value" in data:
-                embed_text = data.get("embed_text")
-                if embed_text:
-                    val = data.get("convert_value")
-                    if val is None:
-                        val = data.get("raw_value")
-
-                    if val is not None:
-                        parts.append(f"{embed_text}:{val}")
-            else:
-                # It's a container, recurse on values
-                for value in data.values():
-                    parts.extend(self._collect_embed_parts(value))
-        return parts
-
-    def _extract_value_from_path(self, data: dict[str, Any], path: list[str]) -> Optional[Any]:
-        """
-        从嵌套字典中按路径提取值，并递归清洗数据（剥离 type, raw_value 等元信息）
-        """
-        if not path:
-            return None
-
-        # 按路径导航到目标字段
-        current = data
-        for key in path:
-            if not isinstance(current, dict) or key not in current:
-                return None
-            current = current[key]
-
-        return self._clean_value(current)
-
-    def _clean_value(self, value: Any) -> Any:
-        """
-        递归清洗值：
-        1. 如果是包含 raw_value/convert_value 的提取对象，解包取值。
-        2. 如果是列表，递归清洗每一项。
-        3. 如果是字典，递归清洗每一个 value。
-        """
-        if isinstance(value, list):
-            return [self._clean_value(item) for item in value]
-
-        if isinstance(value, dict):
-            # Case 1: 它是一个提取对象 (包含 raw_value 或 convert_value)
-            if "raw_value" in value or "convert_value" in value:
-                if "convert_value" in value and value["convert_value"] is not None:
-                    return value["convert_value"]
-                return value.get("raw_value")
-
-            # Case 2: 普通字典，递归清洗其内容
-            return {k: self._clean_value(v) for k, v in value.items()}
-
-        return value
 
     def register_field_mapping(self, field_name: str, mapping: Union[str, tuple[str, ...]]) -> None:
         """
@@ -266,4 +223,3 @@ class MetadataCreator:
         """
         field_config = self.schema.get(field_name)
         return field_config.get("mapping") if field_config else None
-

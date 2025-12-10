@@ -11,65 +11,42 @@ class TestMetadataCreator:
 
     @pytest.fixture
     def sample_extracted_result(self):
-        """Fixture providing a sample extracted result dictionary"""
+        """
+        Fixture providing a sample extracted result dictionary.
+        Format matches RuleExtractor output:
+        - Simple fields: {"中文字段名": "值"}
+        - Nested fields: {"中文字段名": "值", ...}
+        - List fields: [{"字段1": "值1", "字段2": "值2"}, ...]
+        """
         return {
-            "document_id": {"type": "string", "raw_value": "doc_001"},
-            "policy_number": {
-                "type": "string",
-                "raw_value": "POL123456",
-                "convert_value": "POL-123-456",  # Converted value priority
-            },
+            "policy_number": {"保单号": "POL123456"},
             "policy_holder": {
-                "name": {"type": "string", "raw_value": "John Doe"},
-                "age": {"type": "number", "raw_value": "30", "convert_value": 30},
+                "投保人": "John Doe",
+                "性别": "男",
+                "出生日期": "1990-01-01",
+                "证件号码": "123456789012345678",
             },
-            "insured": {"name": {"type": "string", "raw_value": "Jane Doe"}},
-            "effective_date": {"type": "string", "raw_value": "2025-01-01"},
-            "expiry_date": {"type": "string", "raw_value": "2026-01-01"},
+            "insured": {
+                "被保险人": "Jane Doe",
+                "性别": "女",
+                "出生日期": "1985-05-15",
+                "证件号码": "987654321098765432",
+                "与投保人关系": "配偶",
+            },
+            "effective_date": {"保险期间开始日期": "2025-01-01"},
+            "expiry_date": {"保险期间结束日期": "2026-01-01"},
             "coverage": [
                 {
-                    "cvg_name": {
-                        "type": "string",
-                        "raw_value": "个人癌症医疗保险（互联网2022版A款）",
-                        "match": {"strategy": "exact", "values": ["保险名称"]},
-                        "transform": None,
-                    },
-                    "cvg_type": {
-                        "type": "string",
-                        "raw_value": "恶性肿瘤质子重离子医疗保险金",
-                        "match": {"strategy": "exact", "values": ["保险责任"]},
-                        "transform": None,
-                    },
-                    "cvg_amt": {
-                        "type": "number",
-                        "raw_value": "2,000,000'",
-                        "match": {"strategy": "exact", "values": ["最高保险金额（元）"]},
-                        "transform": {"type": ["remove_commas", "remove_currency"]},
-                        "convert_value": 2000000.0,
-                    },
-                    "description": {
-                        "type": "string",
-                        "raw_value": "次投保或非连续投保等待期:90天免赔额:0元/年社保目录内医疗费用赔付比例:100%社保目录外医疗费用赔付比例:100%",
-                        "match": {"strategy": "exact", "values": ["详细说明"]},
-                        "transform": None,
-                    },
+                    "保险名称": "个人癌症医疗保险（互联网2022版A款）",
+                    "保险责任": "恶性肿瘤质子重离子医疗保险金",
+                    "最高保险金额（元）": "2,000,000",
+                    "详细说明": "首次投保或非连续投保等待期:90天",
                 }
             ],
             "cvg_premium": [
                 {
-                    "cvg_name": {
-                        "type": "string",
-                        "raw_value": "个人癌症医疗保险（互联网2022版A款）",
-                        "match": {"strategy": "exact", "values": ["条款名称"]},
-                        "transform": None,
-                    },
-                    "premium": {
-                        "type": "number",
-                        "raw_value": "2,284.00",
-                        "match": {"strategy": "exact", "values": ["保险费（元）"]},
-                        "transform": {"type": ["remove_commas"]},
-                        "convert_value": 2284.0,
-                    },
+                    "条款名称": "个人癌症医疗保险（互联网2022版A款）",
+                    "保险费（元）": "2,284.00",
                 }
             ],
         }
@@ -77,34 +54,40 @@ class TestMetadataCreator:
     def test_default_schema_loading(self, metadata_creator):
         """Test if the default schema is loaded correctly"""
         schema = metadata_creator.schema
-        assert "document_id" in schema
+        # Check key fields exist in schema
         assert "policy_number" in schema
         assert "holder_name" in schema
         assert "insured_name" in schema
+        assert "effective_date" in schema
+        assert "coverage" in schema
 
+        # Check mapping configuration
         assert schema["policy_number"]["mapping"] == "policy_number"
-        assert schema["holder_name"]["mapping"] == ("policy_holder", "name")
+        assert schema["holder_name"]["mapping"] == ("policy_holder", "投保人")
 
     def test_create_metadata_basic(self, metadata_creator, sample_extracted_result):
         """Test basic metadata creation with default schema"""
         metadata = metadata_creator.create(sample_extracted_result)
 
-        # Check mapped fields
-        assert metadata["document_id"] == "doc_001"
-        # policy_num maps to policy_number, which has convert_value
-        assert metadata["policy_number"] == "POL-123-456"
-        # Nested mapping
+        # policy_number: direct mapping, takes first value from dict
+        assert metadata["policy_number"] == "POL123456"
+        # holder_name: nested mapping (policy_holder, 投保人)
         assert metadata["holder_name"] == "John Doe"
+        # insured_name: nested mapping (insured, 被保险人)
         assert metadata["insured_name"] == "Jane Doe"
+        # effective_date: direct mapping, takes first value
+        assert metadata["effective_date"] == "2025-01-01"
+        # coverage: list type, returns the list directly
+        assert isinstance(metadata["coverage"], list)
 
     def test_create_metadata_missing_fields(self, metadata_creator):
         """Test metadata creation when some fields are missing in extracted result"""
-        partial_result = {"document_id": {"raw_value": "doc_002"}}
+        partial_result = {"policy_number": {"保单号": "doc_002"}}
         metadata = metadata_creator.create(partial_result)
 
-        assert metadata["document_id"] == "doc_002"
-        assert "policy_number" not in metadata
+        assert metadata["policy_number"] == "doc_002"
         assert "holder_name" not in metadata
+        assert "insured_name" not in metadata
 
     def test_create_metadata_invalid_input(self, metadata_creator):
         """Test with invalid input type"""
@@ -113,19 +96,19 @@ class TestMetadataCreator:
 
     def test_register_field_mapping(self, metadata_creator, sample_extracted_result):
         """Test registering a new field mapping and updating an existing one"""
-        # Add new field
-        metadata_creator.register_field_mapping("holder_age", ("policy_holder", "age"))
+        # Add new field mapping with nested path
+        metadata_creator.register_field_mapping("holder_gender", ("policy_holder", "性别"))
 
-        # Update existing field mapping
-        metadata_creator.register_field_mapping("document_id", "simple_field")
-
-        # Prepare data that has simple_field
-        sample_extracted_result["simple_field"] = {"raw_value": "Simple Value"}
+        # Add simple field mapping
+        metadata_creator.register_field_mapping("custom_field", "simple_field")
+        sample_extracted_result["simple_field"] = {"键": "Simple Value"}
 
         metadata = metadata_creator.create(sample_extracted_result)
 
-        assert metadata["holder_age"] == 30  # Should use convert_value
-        assert metadata["document_id"] == "Simple Value"
+        # Test nested mapping
+        assert metadata["holder_gender"] == "男"
+        # Test simple mapping (takes first value from dict)
+        assert metadata["custom_field"] == "Simple Value"
 
     def test_add_schema_field(self, metadata_creator):
         """Test adding a full schema field configuration"""
@@ -135,20 +118,17 @@ class TestMetadataCreator:
         assert metadata_creator.get_field_type("new_field") == "int"
         assert metadata_creator.get_field_mapping("new_field") == "custom_path"
 
-        # Test default mapping
+        # Test default mapping (uses field_name as mapping)
         metadata_creator.add_schema_field("another_field", "str")
         assert metadata_creator.get_field_mapping("another_field") == "another_field"
 
-    def test_extract_value_priority(self, metadata_creator):
-        """Test that convert_value is prioritized over raw_value"""
-        data = {"test_field": {"raw_value": "raw", "convert_value": "converted"}}
+    def test_extract_first_value_from_dict(self, metadata_creator):
+        """Test that direct mapping extracts first value from dict"""
+        data = {"test_field": {"first_key": "first_value", "second_key": "second_value"}}
         metadata_creator.register_field_mapping("test", "test_field")
         metadata = metadata_creator.create(data)
-        assert metadata["test"] == "converted"
-
-        data_raw_only = {"test_field": {"raw_value": "raw"}}
-        metadata = metadata_creator.create(data_raw_only)
-        assert metadata["test"] == "raw"
+        # Should extract first value from the dict
+        assert metadata["test"] == "first_value"
 
     def test_extract_direct_value(self, metadata_creator):
         """Test extracting a value that is not a dictionary structure"""
@@ -162,17 +142,15 @@ class TestMetadataCreator:
         with pytest.raises(ValueError):
             metadata_creator.register_field_mapping("bad_field", 123)  # type: ignore
 
-    def test_create_metadata_with_embed_text(self, metadata_creator):
-        """Test embed_metadata generation from embed_text"""
-        data = {
-            "policy_number": {"type": "string", "raw_value": "123456", "embed_text": "Policy No"},
-            "policy_holder": {"name": {"type": "string", "raw_value": "John", "embed_text": "Holder Name"}},
-            "coverage": [{"name": {"raw_value": "Health", "embed_text": "Cvg Name"}}],
-        }
+    def test_create_metadata_with_list_field(self, metadata_creator, sample_extracted_result):
+        """Test that list fields are returned directly"""
+        metadata = metadata_creator.create(sample_extracted_result)
 
-        metadata = metadata_creator.create(data)
-        assert "embed_metadata" in metadata
-        embed_str = metadata["embed_metadata"]
-        assert "Policy No:123456" in embed_str
-        assert "Holder Name:John" in embed_str
-        assert "Cvg Name:Health" in embed_str
+        # coverage and cvg_premium are list type fields
+        assert "coverage" in metadata
+        assert isinstance(metadata["coverage"], list)
+        assert len(metadata["coverage"]) == 1
+        assert metadata["coverage"][0]["保险名称"] == "个人癌症医疗保险（互联网2022版A款）"
+
+        assert "cvg_premium" in metadata
+        assert isinstance(metadata["cvg_premium"], list)

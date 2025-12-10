@@ -4,7 +4,7 @@ FastAPI application server startup script
 """
 
 import uvicorn
-from api import app  # noqa: E402, F401
+from api import app  # noqa: F401
 
 if __name__ == "__main__":
     uvicorn.run(

@@ -4,7 +4,35 @@ Unit tests for service dependencies module.
 Tests singleton behavior and dependency injection functions.
 """
 
-from unittest.mock import patch
+import pytest
+from unittest.mock import patch, MagicMock
+
+
+# Mock configuration for tests
+# Format matches what LLMService expects: model["models"][0]["model_name"] and model["provider"]
+MOCK_CHAT_MODEL = {
+    "provider": "DeepSeek",
+    "models": [{"model_name": "deepseek-chat"}],
+    "tags": ["chat"],
+}
+
+MOCK_EMBEDDING_MODEL = {
+    "provider": "Voyage",
+    "models": [{"model_name": "voyage-3"}],
+    "tags": ["dense"],
+}
+
+
+@pytest.fixture(autouse=True)
+def mock_config():
+    """Mock configuration for all tests in this module."""
+    with (
+        patch("common.config.CHAT_MODELS", [MOCK_CHAT_MODEL]),
+        patch("common.config.EMBEDDING_MODELS", [MOCK_EMBEDDING_MODEL]),
+        patch("common.config.VECTOR_STORE", MagicMock()),
+        patch("rag.generation.llm_service.DeepSeek", MagicMock()),
+    ):
+        yield
 
 
 class TestDependencies:

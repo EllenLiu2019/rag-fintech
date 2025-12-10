@@ -1,8 +1,9 @@
 import uuid
+from typing import Any
 
 from llama_index.core.schema import Document
 
-from common.config import VECTOR_STORE
+from common import config
 from rag.ingestion.parser import parse_content
 from rag.ingestion.extractor.extractor import Extractor
 from rag.ingestion.document import RagDocument
@@ -17,11 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 class IngestionPipeline:
-    def __init__(self):
+    def __init__(self, chat_model: dict[str, Any]):
         self.document_service = DocumentService()
-        self.extractor = Extractor()
+        self.extractor = Extractor(chat_model)
         self.splitter = RagMarkdownSplitter()
-        self.vector_store = VECTOR_STORE
+        self.vector_store = config.VECTOR_STORE
 
     def handle_document(self, filename: str, contents: bytes, content_type: str):
 
@@ -37,13 +38,13 @@ class IngestionPipeline:
         rag_document = self.build_from_parsed_documents(filename, contents, content_type, documents)
 
         # Step 3: Split document into chunks
-        chunks = self.splitter.split_document(rag_document, rdb_document)
+        chunks = self.splitter.split_document(rag_document)
         logger.info(f"Document split into {len(chunks)} chunks")
 
         # Step 4: Embed chunks (generate vectors)
-        llm = self.document_service.get_embedding_model()
-        embedder = EmbeddingService(provider=llm.provider, model_name=llm.model_name)
-        chunks_with_vectors = embedder.embed_chunks(chunks, rdb_document)
+        llm = self.document_service.get_embedding_model(rdb_document.kb_name)
+        embedder = EmbeddingService(provider=llm.llm_provider, model_name=llm.model_name)
+        chunks_with_vectors = embedder.embed_chunks(chunks, rag_document)
 
         # Step 5: Prepare data for Milvus
         chunks_to_insert = []
@@ -85,13 +86,14 @@ class IngestionPipeline:
         #     document = json.load(f)
         # pages = document["pages"]
 
-        confidence, business_data = self.extractor.extract(pages)
+        confidence, business_data, tokens = self.extractor.extract(pages)
 
         rag_document = RagDocument.from_extraction_result(
             document_id=str(uuid.uuid4()),
             parsed_documents=pages,
             confidence=confidence,
             business_data=business_data,
+            token_num=tokens,
             filename=filename,
             file_size=len(contents),
             content_type=content_type,

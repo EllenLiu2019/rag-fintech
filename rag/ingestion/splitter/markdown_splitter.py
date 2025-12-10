@@ -6,7 +6,6 @@ from llama_index.core.schema import Document as LlamaDocument
 from rag.ingestion.document import RagDocument
 from rag.ingestion.splitter.base import BaseSplitter
 import logging
-from repository.rdb.models.models import Document as RdbDocument
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ class RagMarkdownSplitter(BaseSplitter):
             callback_manager=CallbackManager([LlamaDebugHandler()]),
         )
 
-    def split_document(self, doc: RagDocument, rdb_document: RdbDocument) -> list[dict[str, Any]]:
+    def split_document(self, doc: RagDocument) -> list[dict[str, Any]]:
 
         doc_metadata = {k: v for k, v in doc.to_document_metadata().items() if v is not None}
 
@@ -94,7 +93,7 @@ class RagMarkdownSplitter(BaseSplitter):
 
             chunks.append(chunk)
 
-        rdb_document.chunk_num += len(chunks)
+        doc.chunk_num += len(chunks)
 
         return chunks
 

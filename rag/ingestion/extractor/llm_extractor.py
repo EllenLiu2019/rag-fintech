@@ -1,6 +1,7 @@
 import json
 from typing import Any
 from rag.llm.chat_model import DeepSeek
+from common.prompt_manager import get_prompt_manager
 
 function_mapping = {
     "DeepSeek": DeepSeek,
@@ -9,34 +10,28 @@ function_mapping = {
 
 class LLMExtractor:
 
-    def __init__(self, chat_model: dict[str, Any]):
-        model_name = chat_model["models"][1]["model_name"]
-        self.llm = function_mapping[chat_model["provider"]](model_name=model_name)
+    def __init__(self, model: dict[str, Any]):
+        self.llm = function_mapping[model["provider"]](model_name=model["model_name"])
+        self.prompt_manager = get_prompt_manager()
 
     def extract(self, content: str, hints: dict = None) -> dict:
 
-        prompt = f"""
-        你是保险合同信息提取专家。请从以下文本中提取信息：
+        fields = {
+            "total_premium": {"总保费": ""},
+            "coverage_amount": {"保险金额": ""},
+            "confidence": 0.95,
+        }
 
-        已知信息（规则提取结果）：
-        {json.dumps(hints, ensure_ascii=False)}
+        prompt = self.prompt_manager.get(
+            "insurance_extraction",
+            hints=json.dumps(hints or {}, ensure_ascii=False),
+            content=content,
+            fields=json.dumps(fields, ensure_ascii=False),
+        )
 
-        文本内容：
-        {content} 
-
-        请提取以下字段并以JSON格式返回，不要携带 "```json" 和 "```" 标签：
-        {{
-            "total_premium": {{'总保费': ''}},
-            "coverage_amount": {{'保险金额': ''}},
-            "confidence": 0.95
-        }}
-
-        要求：
-        1. 如果字段不确定，设为 null
-        2. 金额必须转为数字
-        3. 日期统一为 YYYY-MM-DD 格式
-        4. 为每个字段评估置信度
-        """
-
-        reasoning, content, tokens = self.llm.generate(prompt=prompt, temperature=0)
-        return {"content": content, "reasoning": reasoning, "tokens": tokens}
+        _, content, tokens = self.llm.generate(prompt=prompt, temperature=0)
+        content = json.loads(content.replace("```json", "").replace("```", ""))
+        return {
+            "content": content,
+            "tokens": tokens,
+        }

@@ -129,3 +129,12 @@ class DeepSeek(LLM):
                 total_tokens = chunk.usage.total_tokens
 
         yield {"type": "metadata", "content": "", "tokens": total_tokens}
+
+
+class Google(LLM):
+    def __init__(self, model_name: str):
+        super().__init__(
+            api_key=os.getenv("GEMINI_API_KEY"),
+            model_name=model_name,
+            base_url="https://generativelanguage.googleapis.com/v1beta/",
+        )

@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 class IngestionPipeline:
-    def __init__(self, chat_model: dict[str, Any]):
+    def __init__(self, model: dict[str, Any]):
         self.document_service = DocumentService()
-        self.extractor = Extractor(chat_model)
+        self.extractor = Extractor(model)
         self.splitter = RagMarkdownSplitter()
         self.vector_store = config.VECTOR_STORE
 

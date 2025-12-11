@@ -6,31 +6,53 @@ Tests singleton behavior and dependency injection functions.
 
 import pytest
 from unittest.mock import patch, MagicMock
+from common.model_registry import ModelConfig
 
 
-# Mock configuration for tests
-# Format matches what LLMService expects: model["models"][0]["model_name"] and model["provider"]
-MOCK_CHAT_MODEL = {
-    "provider": "DeepSeek",
-    "models": [{"model_name": "deepseek-chat"}],
-    "tags": ["chat"],
-}
+# Mock model configs for tests
+MOCK_QA_REASONER = ModelConfig(
+    provider="DeepSeek",
+    model_name="deepseek-reasoner",
+    max_tokens=128000,
+    description="Test reasoner model",
+)
 
-MOCK_EMBEDDING_MODEL = {
-    "provider": "Voyage",
-    "models": [{"model_name": "voyage-3"}],
-    "tags": ["dense"],
-}
+MOCK_QA_LITE = ModelConfig(
+    provider="DeepSeek",
+    model_name="deepseek-chat",
+    max_tokens=128000,
+    description="Test lite model",
+)
+
+MOCK_QUERY_LITE = ModelConfig(
+    provider="Google",
+    model_name="gemini-2.5-flash-lite",
+    max_tokens=1048576,
+    description="Test query model",
+)
+
+
+class MockModelRegistry:
+    """Mock ModelRegistry for testing."""
+
+    def get_chat_model(self, purpose: str) -> ModelConfig:
+        models = {
+            "qa_reasoner": MOCK_QA_REASONER,
+            "qa_lite": MOCK_QA_LITE,
+            "query_lite": MOCK_QUERY_LITE,
+        }
+        return models.get(purpose, MOCK_QA_LITE)
 
 
 @pytest.fixture(autouse=True)
 def mock_config():
     """Mock configuration for all tests in this module."""
+    mock_registry = MockModelRegistry()
     with (
-        patch("common.config.CHAT_MODELS", [MOCK_CHAT_MODEL]),
-        patch("common.config.EMBEDDING_MODELS", [MOCK_EMBEDDING_MODEL]),
+        patch("rag.dependencies.get_model_registry", return_value=mock_registry),
         patch("common.config.VECTOR_STORE", MagicMock()),
         patch("rag.generation.llm_service.DeepSeek", MagicMock()),
+        patch("rag.generation.llm_service.Google", MagicMock()),
     ):
         yield
 
@@ -277,3 +299,27 @@ class TestDependencies:
         # (This verifies that caching works correctly after concurrency)
         service_after = get_llm_service()
         assert isinstance(service_after, type(services[0]))
+
+
+class TestModelRegistry:
+    """Test ModelRegistry functionality"""
+
+    def test_get_chat_model_valid_purpose(self):
+        """Test getting chat model with valid purpose"""
+        registry = MockModelRegistry()
+        model = registry.get_chat_model("qa_reasoner")
+        assert model.provider == "DeepSeek"
+        assert model.model_name == "deepseek-reasoner"
+
+    def test_model_config_to_dict(self):
+        """Test ModelConfig to_dict method"""
+        config = ModelConfig(
+            provider="Test",
+            model_name="test-model",
+            max_tokens=1000,
+            description="Test description",
+        )
+        result = config.to_dict()
+        assert result["provider"] == "Test"
+        assert result["model_name"] == "test-model"
+        assert result["max_tokens"] == 1000

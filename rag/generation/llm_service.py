@@ -13,8 +13,7 @@ function_mapping = {
 class LLMService:
 
     def __init__(self, model: Dict[str, Any]):
-        model_name = model["models"][0]["model_name"]
-        self.llm = function_mapping[model["provider"]](model_name=model_name)
+        self.llm = function_mapping[model["provider"]](model_name=model["model_name"])
 
     def _prepare_messages(
         self,

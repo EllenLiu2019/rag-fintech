@@ -19,7 +19,7 @@ class PostgreSQLClient:
         self.url = f"postgresql+psycopg://{rdb_config.get('username')}:{rdb_config.get('password')}@{rdb_config.get('host')}:{rdb_config.get('port')}/{rdb_config.get('database')}"
         self.engine = create_engine(
             self.url,
-            echo=True,
+            echo=False,
             isolation_level="READ COMMITTED",
             pool_size=int(rdb_config.get("pool_size", 5)),
             max_overflow=int(rdb_config.get("max_overflow", 10)),

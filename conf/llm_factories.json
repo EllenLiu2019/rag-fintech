@@ -1,44 +1,43 @@
-[
-    {
-        "provider": "DeepSeek",
-        "tags": "CHAT, REASONER",
-        "models": [
-            {
-                "model_name": "deepseek-reasoner",
-                "tags": "REASONER",
-                "max_tokens": 128000,
-                "model_type": "chat"
-            },
-            {
-                "model_name": "deepseek-chat",
-                "tags": "CHAT",
-                "max_tokens": 128000,
-                "model_type": "chat"
-            }
-        ]
+{
+    "chat_models": {
+        "qa_reasoner": {
+            "provider": "DeepSeek",
+            "model_name": "deepseek-reasoner",
+            "max_tokens": 128000,
+            "description": "Deep reasoning model for complex QA tasks"
+        },
+        "qa_lite": {
+            "provider": "DeepSeek",
+            "model_name": "deepseek-chat",
+            "max_tokens": 128000,
+            "description": "Fast chat model for general QA"
+        },
+        "query_lite": {
+            "provider": "Google",
+            "model_name": "gemini-2.5-flash-lite",
+            "max_tokens": 1048576,
+            "description": "Lightweight model for query rewriting"
+        },
+        "query_reasoner": {
+            "provider": "Google",
+            "model_name": "gemini-2.5-flash",
+            "max_tokens": 1048576,
+            "description": "Powerful model for complex query understanding"
+        }
     },
-    {
-        "provider": "Voyage",
-        "tags": "EMBEDDING, DENSE",
-        "models": [
-            {
-                "model_name": "voyage-3.5-lite",
-                "tags": "DENSE",
-                "max_tokens": 32000,
-                "model_type": "embedding"
-            }
-        ]
-    },
-    {
-        "provider": "BAAI",
-        "tags": "EMBEDDING, SPARSE",
-        "models": [
-            {
-                "model_name": "bge-m3",
-                "tags": "SPARSE",
-                "max_tokens": 8192,
-                "model_type": "embedding"
-            }
-        ]
+    "embedding_models": {
+        "dense": {
+            "provider": "Voyage",
+            "model_name": "voyage-3.5-lite",
+            "max_tokens": 32000,
+            "dimensions": 1024,
+            "description": "Dense embedding model for semantic search"
+        },
+        "sparse": {
+            "provider": "BAAI",
+            "model_name": "bge-m3",
+            "max_tokens": 8192,
+            "description": "Sparse embedding model for keyword matching"
+        }
     }
-]
+}

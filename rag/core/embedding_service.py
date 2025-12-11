@@ -2,7 +2,7 @@ import os
 from rag.llm.embedding_model import VoyageEmbed
 from common import constants
 from rag.ingestion.document import RagDocument
-from repository.cache.redis_client import cached
+from common.decorator import cached
 import hashlib
 from typing import List
 import logging

@@ -1,0 +1,21 @@
+insurance_extraction:
+  name: "insurance_extraction"
+  version: "1.0.0"
+  description: "extract insurance information from text"
+  template: |
+    你是保险合同信息提取专家。请从以下文本中提取信息：
+
+    已知信息（规则提取结果）：
+    {{ hints }}
+
+    文本内容：
+    {{ content }}
+
+    请提取以下字段并以JSON格式返回，不要携带 "```json" 和 "```" 标签：
+    {{ fields }}
+
+    要求：
+    1. 如果字段不确定，设为 null
+    2. 金额必须转为数字
+    3. 日期统一为 YYYY-MM-DD 格式
+    4. 为每个字段评估置信度

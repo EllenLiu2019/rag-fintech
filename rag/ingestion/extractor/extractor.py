@@ -18,8 +18,8 @@ class Extractor:
     - LLM-based extraction: Complex fields
     """
 
-    def __init__(self, chat_model: dict[str, Any]) -> None:
-        self.llm_extractor: LLMExtractor = LLMExtractor(chat_model)
+    def __init__(self, model: dict[str, Any]) -> None:
+        self.llm_extractor: LLMExtractor = LLMExtractor(model)
         self.rule_extractor: RuleExtractor = RuleExtractor()
         self.confidence_calculator: ConfidenceCalculator = ConfidenceCalculator()
         self.metadata_creator = MetadataCreator()
@@ -49,16 +49,13 @@ class Extractor:
             )
             metadata = self.metadata_creator.create(self.rule_extractor.extracted_result)
 
-            tokens = 0
             if confidence_result.get("overall_confidence", 0.0) < 0.8:
                 logger.warning(f"Low confidence detected: {confidence_result.get('overall_confidence')}. ")
                 llm_results = self._fallback_to_llm_extraction(documents, metadata)
-                llm_content = json.loads(llm_results["content"].replace("```json", "").replace("```", ""))
-                tokens = llm_results["tokens"]
-                metadata_llm = self.metadata_creator.create(llm_content)
+                metadata_llm = self.metadata_creator.create(llm_results["content"])
                 metadata.update(metadata_llm)
 
-            return confidence_result, metadata, tokens
+            return confidence_result, metadata, llm_results["tokens"] if llm_results else 0
 
         except Exception as e:
             logger.error(f"Extraction pipeline failed: {e}", exc_info=True)

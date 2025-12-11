@@ -10,7 +10,7 @@ from rag.generation.llm_service import LLMService
 from rag.retrieval.retriever import Retriever
 from rag.ingestion.pipeline import IngestionPipeline
 from common.log_utils import get_logger
-from common import config
+from common.model_registry import get_model_registry
 
 logger = get_logger(__name__)
 
@@ -18,52 +18,34 @@ logger = get_logger(__name__)
 @lru_cache()
 def get_llm_service() -> LLMService:
     """
-    Get singleton LLM Service instance.
-
-    Equivalent to:
-        @Bean
-        public LLMService llmService() {
-            return new LLMService();
-        }
-
-    Returns:
-        LLMService: Singleton instance for LLM operations
+    Get singleton LLM Service instance for QA tasks.
+    Uses the "qa_reasoner" model for deep reasoning capabilities.
     """
     logger.info("Initializing LLMService singleton")
-    return LLMService(config.CHAT_MODELS[0])
+    registry = get_model_registry()
+    model_config = registry.get_chat_model("qa_reasoner")
+    return LLMService(model_config.to_dict())
 
 
 @lru_cache()
 def get_retriever() -> Retriever:
     """
-    Get singleton Retriever instance (default: dense mode).
-
-    Equivalent to:
-        @Bean
-        public Retriever retriever() {
-            return new Retriever();
-        }
-
-    Returns:
-        Retriever: Singleton instance for vector search operations
+    Get singleton Retriever instance.
+    Uses the "query_lite" model for fast query optimization.
     """
-    logger.info("Initializing Retriever singleton (dense mode)")
-    return Retriever()
+    logger.info("Initializing Retriever singleton")
+    registry = get_model_registry()
+    model_config = registry.get_chat_model("query_lite")
+    return Retriever(model_config.to_dict())
 
 
 @lru_cache()
 def get_ingestion_pipeline() -> IngestionPipeline:
     """
     Get singleton IngestionPipeline instance.
-
-    Equivalent to:
-        @Bean
-        public IngestionPipeline ingestionPipeline() {
-            return new IngestionPipeline();
-        }
-
-    Returns:
-        IngestionPipeline: Singleton instance for document ingestion operations
+    Uses the "qa_lite" model for document processing.
     """
     logger.info("Initializing IngestionPipeline singleton")
-    return IngestionPipeline(config.CHAT_MODELS[0])
+    registry = get_model_registry()
+    model_config = registry.get_chat_model("qa_lite")
+    return IngestionPipeline(model_config.to_dict())

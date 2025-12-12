@@ -2,7 +2,7 @@ import json
 import re
 from typing import Dict, Any, List, Literal
 
-from rag.llm.chat_model import Google
+from rag.llm.chat_model import chat_model
 from common.log_utils import get_logger
 from common.prompt_manager import get_prompt_manager
 
@@ -10,8 +10,8 @@ logger = get_logger(__name__)
 
 
 class BaseRewriter:
-    def __init__(self, model_name: str = "gemini-2.5-flash-lite", temperature: float = 0.0):
-        self.llm = Google(model_name=model_name)
+    def __init__(self, model: dict[str, Any], temperature: float = 0.0):
+        self.llm = chat_model[model["provider"]](model_name=model["model_name"])
         self.temperature = temperature
         self.prompt_manager = get_prompt_manager()
 
@@ -43,11 +43,11 @@ class UnifiedRewriter(BaseRewriter):
 
     def __init__(
         self,
-        model_name: str = "gemini-2.5-flash-lite",
+        model: dict[str, Any],
         temperature: float = 0.0,
         history_max_length: int = 10,
     ):
-        super().__init__(model_name=model_name, temperature=temperature)
+        super().__init__(model=model, temperature=temperature)
         self.history_max_length = history_max_length
         self.histories: List[str] = []
 
@@ -89,8 +89,8 @@ class UnifiedRewriter(BaseRewriter):
 
 
 class HyDERewriter(BaseRewriter):
-    def __init__(self, model_name: str = "gemini-2.5-flash-lite", temperature: float = 0.3):
-        super().__init__(model_name=model_name, temperature=temperature)
+    def __init__(self, model: dict[str, Any], temperature: float = 0.3):
+        super().__init__(model=model, temperature=temperature)
 
     def _build_prompt(self) -> str:
         return self.prompt_manager.get("hyde_rewrite")
@@ -142,9 +142,10 @@ class GlossaryInjector:
 
 class QueryOptimizer:
 
-    def __init__(self, model_name: str = "gemini-2.5-flash-lite"):
-        self.unified_rewriter = UnifiedRewriter(model_name=model_name)
-        self.hyde_rewriter = HyDERewriter(model_name=model_name)
+    def __init__(self, model: dict[str, Any]):
+        self.model = model
+        self.unified_rewriter = UnifiedRewriter(model=model)
+        self.hyde_rewriter = HyDERewriter(model=model)
         self.glossary_injector = GlossaryInjector()
 
     def optimize(self, query: str, mode: Literal["unified", "hyde"] = "unified") -> Dict[str, Any]:

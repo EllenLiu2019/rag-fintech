@@ -138,3 +138,10 @@ class Google(LLM):
             model_name=model_name,
             base_url="https://generativelanguage.googleapis.com/v1beta/",
         )
+
+
+# Provider -> Class mapping
+chat_model = {
+    "DeepSeek": DeepSeek,
+    "Google": Google,
+}

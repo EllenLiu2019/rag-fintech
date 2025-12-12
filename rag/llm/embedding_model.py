@@ -59,3 +59,9 @@ class VoyageEmbed(Base):
             return np.array(res.embeddings)[0], res.total_tokens
         except Exception as _e:
             log_exception(_e, res)
+
+
+# Provider -> Class mapping
+embedding_model = {
+    "Voyage": VoyageEmbed,
+}

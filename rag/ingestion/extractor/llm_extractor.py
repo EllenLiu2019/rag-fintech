@@ -1,17 +1,13 @@
 import json
 from typing import Any
-from rag.llm.chat_model import DeepSeek
+from rag.llm.chat_model import llm_model
 from common.prompt_manager import get_prompt_manager
-
-function_mapping = {
-    "DeepSeek": DeepSeek,
-}
 
 
 class LLMExtractor:
 
     def __init__(self, model: dict[str, Any]):
-        self.llm = function_mapping[model["provider"]](model_name=model["model_name"])
+        self.llm = llm_model[model["provider"]](model_name=model["model_name"])
         self.prompt_manager = get_prompt_manager()
 
     def extract(self, content: str, hints: dict = None) -> dict:

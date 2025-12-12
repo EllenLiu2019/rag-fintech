@@ -1,19 +1,15 @@
-from rag.llm.chat_model import DeepSeek
+from rag.llm.chat_model import chat_model
 from typing import List, Optional, Dict, Any, AsyncIterator
 import json
 from common.log_utils import get_logger
 
 logger = get_logger(__name__)
 
-function_mapping = {
-    "DeepSeek": DeepSeek,
-}
-
 
 class LLMService:
 
     def __init__(self, model: Dict[str, Any]):
-        self.llm = function_mapping[model["provider"]](model_name=model["model_name"])
+        self.llm = chat_model[model["provider"]](model_name=model["model_name"])
 
     def _prepare_messages(
         self,

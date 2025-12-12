@@ -20,7 +20,7 @@ class Retriever:
     def __init__(self, model: dict[str, Any]):
         self.document_service = DocumentService()
         self.vector_store = VectorStoreClient()
-        self.query_optimizer = QueryOptimizer(model_name=model["model_name"])
+        self.query_optimizer = QueryOptimizer(model=model)
 
     @cached(prefix="search", ttl=1800)
     def search(

@@ -1,14 +1,9 @@
-from fastapi import APIRouter, File, UploadFile, Query, Depends
+from fastapi import APIRouter, File, UploadFile, Query
 from fastapi.responses import JSONResponse, Response
 
 from common import get_logger
-from rag.ingestion import IngestionPipeline
-from rag.dependencies import get_ingestion_pipeline
-from rag.ingestion.doc_service import (
-    load_file_info,
-    list_stored_files,
-    load_original_file,
-)
+from repository.s3 import s3_client
+from rag.ingestion.pipeline import ingestion_pipeline
 
 logger = get_logger(__name__)
 
@@ -22,7 +17,6 @@ router = APIRouter(
 @router.post("/process")
 async def upload_file(
     file: UploadFile = File(...),
-    ingestion_pipeline: IngestionPipeline = Depends(get_ingestion_pipeline),
 ):
 
     try:
@@ -60,13 +54,13 @@ async def get_original_file(filename: str = Query(..., description="文件名"))
         logger.info(f"received original file request, filename: {filename}")
 
         # Load original file from disk
-        file_contents = load_original_file(filename)
+        file_contents = s3_client.load_original_file(filename)
         if file_contents is None:
             logger.warning(f"original file '{filename}' not found")
             return JSONResponse(status_code=404, content={"message": f"文件 '{filename}' 未找到"})
 
         # Get file info to determine content_type
-        file_info = load_file_info(filename)
+        file_info = s3_client.load_file_info(filename)
         content_type = (
             file_info.get("content_type", "application/octet-stream") if file_info else "application/octet-stream"
         )
@@ -98,10 +92,10 @@ async def get_file_parsed(filename: str = Query(..., description="文件名")):
     - **filename**: Name of the file to retrieve
     """
     try:
-        stored_files = list_stored_files()
+        stored_files = s3_client.list_stored_files()
         logger.info(f"received file content request, " f"filename: {filename}; " f"stored files: {stored_files}")
 
-        file_info = load_file_info(filename)
+        file_info = s3_client.load_file_info(filename)
         if file_info is None:
             logger.warning(f"file '{filename}' not found")
             return JSONResponse(status_code=404, content={"message": f"文件 '{filename}' 未找到"})

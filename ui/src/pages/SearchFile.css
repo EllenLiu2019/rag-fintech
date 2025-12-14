@@ -457,11 +457,29 @@
 
 .result-header {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
   margin-bottom: 1rem;
   font-size: 0.8rem;
   border-bottom: 1px solid #eee;
   padding-bottom: 0.5rem;
+}
+
+.result-rank {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  min-width: 32px;
+  text-align: center;
+}
+
+.result-scores {
+  display: flex;
+  gap: 0.5rem;
+  flex: 1;
 }
 
 .result-score {
@@ -470,6 +488,16 @@
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
   font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.result-rerank-score {
+  background: #fff3e6;
+  color: #e67700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.75rem;
 }
 
 .result-tag {

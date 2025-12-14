@@ -5,9 +5,9 @@ from llama_index.core.node_parser import MarkdownNodeParser
 from llama_index.core.schema import Document as LlamaDocument
 from rag.ingestion.document import RagDocument
 from rag.ingestion.splitter.base import BaseSplitter
-import logging
+from common import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Build page markers: insert page markers between pages to track page numbers
 PAGE_MARKER = "[PAGE:"

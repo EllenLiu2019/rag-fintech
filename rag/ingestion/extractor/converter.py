@@ -1,8 +1,9 @@
 import re
-import logging
 from typing import Any, Optional, Callable
 
-logger = logging.getLogger(__name__)
+from common import get_logger
+
+logger = get_logger(__name__)
 
 
 class FieldConvert:
@@ -205,4 +206,3 @@ class FieldConvert:
 
         self.convert_functions[field_type] = converter_func
         logger.info(f"Registered custom converter for type: {field_type}")
-

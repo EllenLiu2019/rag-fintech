@@ -1,13 +1,13 @@
 import json
 from typing import Any
-from rag.llm.chat_model import llm_model
+from rag.llm.chat_model import chat_model
 from common.prompt_manager import get_prompt_manager
 
 
 class LLMExtractor:
 
     def __init__(self, model: dict[str, Any]):
-        self.llm = llm_model[model["provider"]](model_name=model["model_name"])
+        self.llm = chat_model[model["provider"]](model_name=model["model_name"])
         self.prompt_manager = get_prompt_manager()
 
     def extract(self, content: str, hints: dict = None) -> dict:

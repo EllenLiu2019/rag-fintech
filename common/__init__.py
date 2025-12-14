@@ -13,7 +13,8 @@ from .log_utils import (
     request_id_var,
 )
 from .log_middleware import setup_request_logging_middleware, request_logging_middleware
-from . import file_utils, config, constants
+from . import file_utils, constants
+from .model_registry import get_model_registry
 
 
 __all__ = [
@@ -29,7 +30,7 @@ __all__ = [
     "setup_request_logging_middleware",
     "request_logging_middleware",
     # config
-    "config",
     "constants",
     "file_utils",
+    "get_model_registry",
 ]

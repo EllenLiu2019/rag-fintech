@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List, Optional, Literal
 
-from common.log_utils import get_logger
-from rag.retrieval.retriever import Retriever
-from rag.generation.llm_service import LLMService
-from rag.dependencies import get_retriever, get_llm_service
+from common import get_logger
+from rag.retrieval.retriever import retriever
+from rag.generation.llm_service import llm_service
 
 logger = get_logger(__name__)
 
@@ -41,8 +40,6 @@ class ChatResponse(BaseModel):
 @router.post("/chat", response_model=ChatResponse)
 async def chat_qa(
     request: ChatRequest,
-    retriever: Retriever = Depends(get_retriever),
-    llm_service: LLMService = Depends(get_llm_service),
 ):
     """
     Standard chat endpoint with dependency injection.
@@ -113,8 +110,6 @@ async def chat_qa(
 @router.post("/chat/stream")
 async def chat_qa_stream(
     request: ChatRequest,
-    retriever: Retriever = Depends(get_retriever),
-    llm_service: LLMService = Depends(get_llm_service),
 ):
     """
     Stream version of chat_qa endpoint.

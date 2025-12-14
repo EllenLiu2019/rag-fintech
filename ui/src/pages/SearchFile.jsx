@@ -264,7 +264,17 @@ function SearchFile({ fileInfo, onBack }) {
                 {results.map((result, index) => (
                   <div key={index} className="result-card">
                     <div className="result-header">
-                      <span className="result-score">Score: {result.score ? result.score.toFixed(4) : 'N/A'}</span>
+                      <span className="result-rank">#{index + 1}</span>
+                      <div className="result-scores">
+                        <span className="result-score" title="Original retrieval score">
+                          Retrieval: {result.score ? result.score.toFixed(4) : 'N/A'}
+                        </span>
+                        {result.rerank_score !== undefined && (
+                          <span className="result-rerank-score" title="Reranker score">
+                            Rerank: {result.rerank_score.toFixed(4)}
+                          </span>
+                        )}
+                      </div>
                       {result.pol_num && <span className="result-tag">Policy: {result.pol_num}</span>}
                     </div>
                     <div className="result-text">

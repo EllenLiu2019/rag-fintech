@@ -17,4 +17,4 @@ redis:
   decode_responses: False
   username: default
   password: ${RAG_REDIS_PASSWORD}
-  enable: True
+  enable: False

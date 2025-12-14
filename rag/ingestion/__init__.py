@@ -8,8 +8,7 @@ This module handles the complete document processing workflow:
 - Embedding generation
 - Storage to vector database
 """
-from .pipeline import IngestionPipeline
+
 from .document import RagDocument
 
-__all__ = ["IngestionPipeline", "RagDocument"]
-
+__all__ = ["RagDocument"]

@@ -2,7 +2,9 @@ from abc import ABC
 
 import numpy as np
 
-from common.log_utils import log_exception
+from common import get_logger
+
+logger = get_logger(__name__)
 
 
 class Base(ABC):
@@ -50,7 +52,7 @@ class VoyageEmbed(Base):
                 ress.extend(res.embeddings)
                 token_count += res.total_tokens
             except Exception as _e:
-                log_exception(_e, res)
+                logger.error(f"Failed to encode text: {_e}")
         return np.array(ress), token_count
 
     def encode_queries(self, text):
@@ -58,7 +60,7 @@ class VoyageEmbed(Base):
         try:
             return np.array(res.embeddings)[0], res.total_tokens
         except Exception as _e:
-            log_exception(_e, res)
+            logger.error(f"Failed to encode query: {_e}")
 
 
 # Provider -> Class mapping

@@ -1,20 +1,20 @@
 import os
-from rag.llm.embedding_model import embedding_model
-from common import constants
-from rag.ingestion.document import RagDocument
-from common.decorator import cached
 import hashlib
 from typing import List, Any
-import logging
-from repository.cache.redis_client import redis_client
 
-logger = logging.getLogger(__name__)
+from rag.llm.embedding_model import embedding_model
+from common import constants, get_logger
+from rag.ingestion.document import RagDocument
+from repository.cache.redis_client import cached, _get_redis_client
+
+logger = get_logger(__name__)
 
 
 class EmbeddingService:
     def __init__(self, model: dict[str, Any]):
-        api_key = os.getenv(model["provider"].upper() + constants.API_KEY_SUFFIX)
-        self.model = embedding_model[model["provider"]](key=api_key, model_name=model["model_name"])
+        api_key = os.getenv(model["llm_provider"].upper() + constants.API_KEY_SUFFIX)
+        self.model = embedding_model[model["llm_provider"]](key=api_key, model_name=model["model_name"])
+        self.redis_client = _get_redis_client()
 
     def embed_chunks(self, chunks: list[dict], rag_document: RagDocument) -> list[dict]:
         """
@@ -43,7 +43,7 @@ class EmbeddingService:
             logger.error(f"Failed to embed chunks: {e}")
             raise
 
-    @cached(prefix="embedding", ttl=3600)
+    @cached(prefix="embedding", ttl=3600, key_func=lambda self, text: self._cache_key(text))
     def embed_query(self, text: str) -> list[float]:
         """
         Embed query with caching (TTL: 1 hour).
@@ -59,20 +59,14 @@ class EmbeddingService:
             logger.error(f"Failed to embed query: {e}")
             raise
 
-    def _get_query_cache_key(self, text: str) -> str:
+    def _cache_key(self, text: str) -> str:
         """Generate cache key for query embedding."""
         text_hash = hashlib.md5(text.encode()).hexdigest()
-        return f"embedding:query:{self.model.model_name}:{text_hash}"
+        return f"query:{self.model.model_name}:{text_hash}"
 
     def embed_queries_batch(self, texts: List[str]) -> List[list[float]]:
         """
         Batch embed queries with caching.
-
-        Args:
-            texts: List of query texts
-
-        Returns:
-            List of embeddings
         """
         results = []
         uncached_texts = []
@@ -80,12 +74,13 @@ class EmbeddingService:
 
         # Check cache for each query
         for idx, text in enumerate(texts):
-            cache_key = self._get_query_cache_key(text)
-            cached_embedding = redis_client.get(cache_key)
+            if self.redis_client.redis_enabled:
+                cache_key = self._cache_key(text)
+                cached_embedding = self.redis_client.get(cache_key)
 
-            if cached_embedding is not None:
-                results.append(cached_embedding)
-                continue
+                if cached_embedding is not None:
+                    results.append(cached_embedding)
+                    continue
 
             # Mark as uncached
             results.append(None)
@@ -95,15 +90,16 @@ class EmbeddingService:
         # Batch process uncached queries
         if uncached_texts:
             try:
-                embeddings, _ = self.model.encode(uncached_texts, input_type="query")
+                embeddings, _ = self.model.encode(uncached_texts)
 
                 for i, idx in enumerate(uncached_indices):
                     embedding = embeddings[i].tolist()
                     results[idx] = embedding
 
                     # Cache the result
-                    cache_key = self._get_query_cache_key(uncached_texts[i])
-                    redis_client.set(cache_key, embedding, ttl=3600)
+                    if self.redis_client.redis_enabled:
+                        cache_key = self._cache_key(uncached_texts[i])
+                        self.redis_client.set(cache_key, embedding, ttl=3600)
 
             except Exception as e:
                 logger.error(f"Failed to batch embed queries: {e}")

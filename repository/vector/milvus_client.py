@@ -1,3 +1,4 @@
+from typing import List, Dict, Any, Optional, Union
 from pymilvus import (
     MilvusClient,
     DataType,
@@ -6,22 +7,23 @@ from pymilvus import (
     model,
     AnnSearchRequest,
 )
-from common import config
+from common import get_logger, file_utils
 from common.decorator import singleton
+from common.config_utils import get_base_config, load_yaml_conf
+from common.constants import MILVUS_MAPPING_CONF
 from .doc_store_client import DocStoreClient, extract_entity_fields
-import logging
-from typing import List, Dict, Any, Optional
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @singleton
 class VectorStoreClient(DocStoreClient):
-    def __init__(self):
-
-        milvus_config = config.MILVUS
+    def __init__(self, config: dict = None):
+        # Support both DI and standalone usage
+        milvus_config = config or get_base_config("milvus", {})
         self.uri = milvus_config.get("host", "http://localhost:19530")
         self.token = milvus_config.get("token", "root:Milvus")
+        self.milvus_mapping = load_yaml_conf(file_utils.get_project_root_dir("conf", MILVUS_MAPPING_CONF))
 
         logger.info(f"Use Milvus at {self.uri} as the doc engine.")
 
@@ -61,7 +63,7 @@ class VectorStoreClient(DocStoreClient):
             description=f"RAGFlow collection for {collection_name}",
         )
 
-        for field_name, field_config in config.MILVUS_MAPPING["fields"].items():
+        for field_name, field_config in self.milvus_mapping["fields"].items():
             type_str = field_config["data_type"].upper()
             if not hasattr(DataType, type_str):
                 raise ValueError(f"Unsupported Milvus DataType: {type_str}")
@@ -94,7 +96,7 @@ class VectorStoreClient(DocStoreClient):
             schema.add_field(**field_kwargs)
 
         index_params = self.client.prepare_index_params()
-        for field_name, index_config in config.MILVUS_MAPPING["indexes"].items():
+        for field_name, index_config in self.milvus_mapping["indexes"].items():
             if field_name == "dense_vector":
                 field_name = f"{field_name}_{vectorSize}"
                 index_config["index_name"] = f"{index_config['index_name']}_{vectorSize}"
@@ -127,7 +129,7 @@ class VectorStoreClient(DocStoreClient):
     def search(
         self,
         selectFields: list[str],
-        query_vector: list[float],
+        query_vectors: List[List[float]],
         limit: int,
         indexNames: str | list[str],
         knowledgebaseIds: list[str],
@@ -142,31 +144,34 @@ class VectorStoreClient(DocStoreClient):
 
         search_res = self.client.search(
             collection_name=collection_name,
-            data=[query_vector],
-            anns_field=f"dense_vector_{len(query_vector)}",
+            data=query_vectors,
+            anns_field=f"dense_vector_{len(query_vectors[0])}",
             filter=filter_expr,
             limit=limit,
             output_fields=selectFields,
             search_params={"metric_type": "COSINE"},
         )
 
-        res = [
-            {
-                "id": str(hit.id),
-                "distance": hit.distance,
-                "score": hit.score,
-                **extract_entity_fields(hit["entity"], selectFields),
-            }
-            for hits in search_res
-            for hit in hits
-        ]
-        return res
+        results = []
+        for idx, hits in enumerate(search_res):
+            results.append([])
+            for hit in hits:
+                results[idx].append(
+                    {
+                        "id": str(hit.id),
+                        "distance": hit.distance,
+                        "score": hit.score,
+                        **extract_entity_fields(hit["entity"], selectFields),
+                    }
+                )
+
+        return results
 
     def hybrid_search(
         self,
         selectFields: list[str],
-        query: str,
-        query_vector: list[float],
+        optimized_queries: List[str],
+        query_vectors: List[List[float]],
         limit: int,
         indexNames: str | list[str],
         knowledgebaseIds: list[str],
@@ -181,8 +186,8 @@ class VectorStoreClient(DocStoreClient):
 
         # Handle vector search parameters
         dense_search_params = {
-            "data": [query_vector],
-            "anns_field": f"dense_vector_{len(query_vector)}",
+            "data": query_vectors,
+            "anns_field": f"dense_vector_{len(query_vectors[0])}",
             "param": {"nprobe": 10},
             "limit": limit,
             "expr": filter_expr,
@@ -190,7 +195,7 @@ class VectorStoreClient(DocStoreClient):
         dense_request = AnnSearchRequest(**dense_search_params)
 
         sparse_search_params = {
-            "data": self.bge_m3_embedding_function([query])["sparse"],
+            "data": self.bge_m3_embedding_function(optimized_queries)["sparse"],
             "anns_field": "sparse_vector",
             "param": {"drop_ratio_search": 0.2},
             "limit": limit,
@@ -215,17 +220,20 @@ class VectorStoreClient(DocStoreClient):
             output_fields=selectFields,
         )
 
-        res = [
-            {
-                "id": str(hit.id),
-                "distance": hit.distance,
-                "score": hit.score,
-                **extract_entity_fields(hit["entity"], selectFields),
-            }
-            for hits in search_res
-            for hit in hits
-        ]
-        return res
+        results = []
+        for idx, hits in enumerate(search_res):
+            results.append([])
+            for hit in hits:
+                results[idx].append(
+                    {
+                        "id": str(hit.id),
+                        "distance": hit.distance,
+                        "score": hit.score,
+                        **extract_entity_fields(hit["entity"], selectFields),
+                    }
+                )
+
+        return results
 
     def insert(self, chunks: list[dict], indexName: str, knowledgebaseId: str = None) -> list[str]:
         collection_name = f"{indexName}_{knowledgebaseId}"
@@ -241,7 +249,7 @@ class VectorStoreClient(DocStoreClient):
             self.createIdx(indexName, knowledgebaseId, vector_size)
 
         data_to_insert = []
-        field_names = config.MILVUS_MAPPING["fields"].keys()
+        field_names = self.milvus_mapping["fields"].keys()
 
         embedding_to_use = [chunk.get("text", "") for chunk in chunks]
         sparse_vectors = self.bge_m3_embedding_function(embedding_to_use)

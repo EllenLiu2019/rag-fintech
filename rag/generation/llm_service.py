@@ -2,6 +2,7 @@ from rag.llm.chat_model import chat_model
 from typing import List, Optional, Dict, Any, AsyncIterator
 import json
 from common.log_utils import get_logger
+from common import get_model_registry
 
 logger = get_logger(__name__)
 
@@ -130,3 +131,18 @@ class LLMService:
 
         # Send done signal with tokens information
         yield f"data: {json.dumps({'type': 'done', 'data': {'answer': answer_buffer, 'tokens': total_tokens}}, ensure_ascii=False)}\n\n"
+
+
+def _create_llm_service() -> LLMService:
+    """
+    Create LLMService instance at module load time.
+    """
+    registry = get_model_registry()
+    model_config = registry.get_chat_model("qa_reasoner")
+    llm_service = LLMService(model=model_config.to_dict())
+
+    logger.info("Initialized LLMService singleton")
+    return llm_service
+
+
+llm_service = _create_llm_service()

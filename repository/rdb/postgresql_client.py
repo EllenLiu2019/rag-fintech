@@ -3,19 +3,21 @@ from sqlalchemy.orm import sessionmaker
 from typing import List, Optional, Type, TypeVar
 
 from repository.rdb.models.models import Base
-from common import config
+
 from common.decorator import singleton
-import logging
+from common.config_utils import get_base_config
+from common import get_logger
 
 T = TypeVar("T", bound=Base)
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @singleton
 class PostgreSQLClient:
-    def __init__(self):
-        rdb_config = config.RDB
+    def __init__(self, config: dict = None):
+        # Support both DI and standalone usage
+        rdb_config = config or get_base_config("postgresql", {})
         self.url = f"postgresql+psycopg://{rdb_config.get('username')}:{rdb_config.get('password')}@{rdb_config.get('host')}:{rdb_config.get('port')}/{rdb_config.get('database')}"
         self.engine = create_engine(
             self.url,

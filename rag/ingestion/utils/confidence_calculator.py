@@ -1,9 +1,9 @@
 import re
-import logging
 from typing import Any, Optional
 from dataclasses import dataclass, field
 
-logger = logging.getLogger(__name__)
+from common import get_logger
+logger = get_logger(__name__)
 
 
 @dataclass

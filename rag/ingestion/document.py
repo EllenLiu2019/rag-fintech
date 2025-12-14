@@ -1,10 +1,11 @@
-import logging
+import uuid
 from typing import Any, Optional
 from pydantic import BaseModel, Field, field_validator
 from datetime import datetime, timezone
-import uuid
 
-logger = logging.getLogger(__name__)
+from common import get_logger
+
+logger = get_logger(__name__)
 
 
 class RagDocument(BaseModel):

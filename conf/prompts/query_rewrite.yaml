@@ -1,9 +1,9 @@
 # Query Rewrite Prompts
-# Version: 1.0.0
+# Version: 0.0.1
 
 unified_rewrite:
   name: "unified_rewrite"
-  version: "1.0.0"
+  version: "0.0.1"
   description: "rewrite the user question to a query for vector retrieval"
   template: |
     你是一个专业的保险领域问题改写助手。你的任务是将用户问题改写为适合向量检索的查询语句。
@@ -45,7 +45,7 @@ unified_rewrite:
 
 hyde_rewrite:
   name: "hypothetical_document_generation"
-  version: "1.0.0"
+  version: "0.0.1"
   description: "generate a hypothetical insurance contract text fragment for retrieval"
   template: |
     你是一个保险合同文档生成助手。你的任务是根据用户问题，生成一段**假设性的保险合同文本片段**，该片段应模拟真实保险合同的写作风格和内容结构。
@@ -75,3 +75,56 @@ hyde_rewrite:
 
     用户: 买了保险多久生效？
     输出: 合同生效与等待期：本合同自投保人缴纳首期保险费且保险公司同意承保后生效。本合同设有等待期，等待期内发生的保险事故，保险公司不承担保险责任。等待期自合同生效日起计算。
+
+multi_query_rewrite:
+  name: "multi_query_rewrite"
+  version: "0.0.1"
+  description: "rewrite the user question to multiple queries from different perspectives for better recall"
+  template: |
+    你是一个专业的保险领域问题改写助手。你的任务是将用户问题从 3 个不同角度改写，生成多个向量检索查询，以提高召回率。
+
+    ## 改写角度说明
+    1. **核心语义**：直接回答问题所需的信息（What）
+    2. **相关条件**：触发该信息的前提条件或适用场景（When/Where）
+    3. **关联概念**：与问题相关的上下游概念或对比信息（Related）
+
+    ## 改写规则
+    - 使用保险领域专业术语
+    - 每个查询 10-20 字，简洁明了
+    - 三个查询之间应有明显差异，避免重复
+    - 将疑问句转换为描述目标信息的陈述句
+
+    ## 输出格式
+    返回 3 行文本，每行一个改写后的查询，不要包含序号或其他标记。
+
+    ## 示例
+
+    用户: 如果我发生意外，保险公司会赔多少钱？
+    输出:
+    意外险保险金给付金额
+    意外伤害认定标准及理赔条件
+    意外险赔付比例与免赔额
+
+    用户: 重疾险保哪些病？
+    输出:
+    重大疾病保险责任病种范围
+    重疾险轻症中症保障内容
+    重大疾病定义及诊断标准
+
+    用户: 什么情况下不赔？
+    输出:
+    保险责任免除条款
+    不承担保险责任的情形
+    免责事由与除外责任
+
+    用户: 买了保险多久生效？
+    输出:
+    保险合同生效日期
+    等待期与观察期规定
+    犹豫期与合同解除
+
+    用户: 保费怎么交？
+    输出:
+    保险费缴纳方式及期限
+    续期保费扣款与宽限期
+    保费逾期未缴的合同效力

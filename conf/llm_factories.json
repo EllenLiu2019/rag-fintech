@@ -39,5 +39,29 @@
             "max_tokens": 8192,
             "description": "Sparse embedding model for keyword matching"
         }
+    },
+    "reranker_models": {
+        "qwen": {
+            "provider": "QWen",
+            "model_name": "gte-rerank-v2",
+            "description": "Alibaba DashScope reranker API"
+        },
+        "default": {
+            "provider": "Jina",
+            "model_name": "jina-reranker-v3",
+            "base_url": "https://api.jina.ai/v1/rerank",
+            "description": "Jina AI reranker, based on Qwen3-0.6B"
+        },
+        "dev": {
+            "provider": "FlagEmbedding",
+            "model_name": "BAAI/bge-reranker-v2-m3",
+            "description": "Development reranker (in-process)"
+        },
+        "prod": {
+            "provider": "TEI",
+            "model_name": "BAAI/bge-reranker-v2-m3",
+            "base_url": "http://127.0.0.1:8080",
+            "description": "Production reranker via TEI service"
+        }
     }
 }

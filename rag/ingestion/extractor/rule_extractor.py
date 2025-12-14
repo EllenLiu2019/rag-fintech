@@ -1,12 +1,11 @@
 import re
 import json
-import logging
 from bs4 import BeautifulSoup, Tag
 from typing import Optional, Any
 from rag.ingestion.extractor.html_table_grid import HtmlTableGrid
+from common import get_logger
 
-
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 IGNORE_KEYWORDS = frozenset({"Text", "Date", "Number", "Date Range", "SPAN"})
 HEADER_IDENTIFIER = "th"

@@ -21,6 +21,7 @@ llama-index-core>=0.10.0
 beautifulsoup4>=4.12.2
 pymilvus>=2.6.3
 openai==2.8.1
+dashscope==1.25.3
 
 # RDB
 SQLAlchemy>=2.0.0

@@ -1,21 +1,29 @@
 import redis
 import hashlib
 import pickle
-import inspect
-
 from typing import Any, Optional, Callable
 from functools import wraps
+import inspect
 
-from common import config
-import logging
+from common.decorator import singleton
+from common.config_utils import get_base_config
 
-logger = logging.getLogger(__name__)
+from common import get_logger
+
+logger = get_logger(__name__)
 
 
+@singleton
 class RedisClient:
 
-    def __init__(self):
-        redis_config = config.REDIS
+    def __init__(self, config: dict = None):
+        # Support both DI and standalone usage
+        redis_config = config or get_base_config("redis", {})
+        self.redis_enabled = redis_config.get("enable", True)
+        if not self.redis_enabled:
+            logger.info("Redis is disabled. Skipping Redis client initialization.")
+            return
+
         try:
             self.client = redis.Redis(
                 host=redis_config.get("host"),
@@ -115,3 +123,72 @@ class RedisClient:
             }
         except Exception as e:
             return {"type": "redis", "status": "red", "error": str(e)}
+
+
+def cached(
+    prefix: str,
+    ttl: Optional[int] = None,
+    key_func: Optional[Callable] = None,
+):
+    """
+    Decorator for caching function results.
+
+    Args:
+        prefix: Cache key prefix
+        ttl: Time to live in seconds
+        key_func: Optional function to generate cache key from arguments
+
+    Example:
+        @cached(prefix="embedding", ttl=3600)
+        def embed_text(text: str):
+            return expensive_embedding_call(text)
+    """
+
+    def decorator(func: Callable) -> Callable:
+        sig = inspect.signature(func)
+        params = list(sig.parameters.keys())
+        skip_first_arg = len(params) > 0 and params[0] in ("self", "cls")
+        if skip_first_arg:
+            logger.debug(
+                f"Detected method '{func.__name__}' with '{params[0]}' parameter. "
+                f"Will skip it when generating cache key."
+            )
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            redis_client = _get_redis_client()
+            if not redis_client.redis_enabled:
+                logger.info("Redis is disabled. Skipping cache.")
+                return func(*args, **kwargs)
+
+            cache_args = args[1:] if skip_first_arg else args
+
+            # Generate cache key
+            if key_func:
+                # Pass full args to key_func (including self for methods)
+                cache_key = f"{prefix}:{key_func(*args, **kwargs)}"
+            else:
+                cache_key = redis_client._generate_key(prefix, *cache_args, **kwargs)
+
+            # Try to get from cache
+            cached_value = redis_client.get(cache_key)
+            if cached_value is not None:
+                logger.info(f"Cache hit: {cache_key}")
+                return cached_value
+
+            # Cache miss - call function
+            logger.info(f"Cache miss: {cache_key}")
+            result = func(*args, **kwargs)
+
+            # Store in cache
+            redis_client.set(cache_key, result, ttl=ttl)
+
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+def _get_redis_client():
+    return RedisClient()

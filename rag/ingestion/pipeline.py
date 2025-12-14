@@ -3,26 +3,27 @@ from typing import Any
 
 from llama_index.core.schema import Document
 
-from common import config
 from rag.ingestion.parser import parse_content
 from rag.ingestion.extractor.extractor import Extractor
 from rag.ingestion.document import RagDocument
 from rag.ingestion.parser.serializer_deserializer import serialize_documents
 from rag.ingestion.splitter.markdown_splitter import RagMarkdownSplitter
 from rag.core.embedding_service import EmbeddingService
-from rag.ingestion.doc_service import DocumentService
+from rag.core.doc_service import DocumentService
+from repository.vector.milvus_client import VectorStoreClient
 
-import logging
+from common import get_logger, get_model_registry
+from repository.rdb.models.models import LLM
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class IngestionPipeline:
     def __init__(self, model: dict[str, Any]):
         self.document_service = DocumentService()
+        self.vector_store = VectorStoreClient()
         self.extractor = Extractor(model)
         self.splitter = RagMarkdownSplitter()
-        self.vector_store = config.VECTOR_STORE
 
     def handle_document(self, filename: str, contents: bytes, content_type: str):
 
@@ -42,8 +43,8 @@ class IngestionPipeline:
         logger.info(f"Document split into {len(chunks)} chunks")
 
         # Step 4: Embed chunks (generate vectors)
-        llm = self.document_service.get_embedding_model(rdb_document.kb_name)
-        embedder = EmbeddingService(provider=llm.llm_provider, model_name=llm.model_name)
+        llm: LLM = self.document_service.get_embedding_model(rdb_document.kb_name)
+        embedder = EmbeddingService(model=llm.to_dict())
         chunks_with_vectors = embedder.embed_chunks(chunks, rag_document)
 
         # Step 5: Prepare data for Milvus
@@ -106,3 +107,18 @@ class IngestionPipeline:
         )
 
         return rag_document
+
+
+def _create_ingestion_pipeline() -> IngestionPipeline:
+    """
+    Create IngestionPipeline instance at module load time.
+    """
+    registry = get_model_registry()
+    model_config = registry.get_chat_model("qa_lite")
+    ingestion_pipeline = IngestionPipeline(model=model_config.to_dict())
+
+    logger.info("Initialized IngestionPipeline singleton")
+    return ingestion_pipeline
+
+
+ingestion_pipeline = _create_ingestion_pipeline()

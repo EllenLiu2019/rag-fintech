@@ -2,6 +2,9 @@ from abc import ABC
 import os
 from typing import List, Dict, Optional, AsyncIterator, Any
 from openai import OpenAI, AsyncOpenAI
+from common import get_logger
+
+logger = get_logger(__name__)
 
 
 class LLM(ABC):

@@ -1,7 +1,8 @@
 from bs4 import Tag
-import logging
 
-logger = logging.getLogger(__name__)
+from common import get_logger
+
+logger = get_logger(__name__)
 
 
 class HtmlTableGrid:

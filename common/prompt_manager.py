@@ -2,9 +2,9 @@ import yaml
 from typing import Dict, Any
 from pathlib import Path
 from jinja2 import Template
-from common import file_utils
+
+from common import file_utils, get_logger
 from common.decorator import singleton
-from common.log_utils import get_logger
 
 logger = get_logger(__name__)
 

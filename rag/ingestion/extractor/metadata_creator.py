@@ -1,7 +1,8 @@
-import logging
 from typing import Any, Optional, Union, TypedDict
 
-logger = logging.getLogger(__name__)
+from common import get_logger
+
+logger = get_logger(__name__)
 
 
 class FieldConfig(TypedDict, total=False):

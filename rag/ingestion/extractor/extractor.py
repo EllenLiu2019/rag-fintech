@@ -1,5 +1,3 @@
-import logging
-import json
 from typing import Any, Optional
 from copy import deepcopy
 
@@ -7,8 +5,9 @@ from rag.ingestion.extractor.rule_extractor import RuleExtractor
 from rag.ingestion.extractor.llm_extractor import LLMExtractor
 from rag.ingestion.utils.confidence_calculator import ConfidenceCalculator
 from rag.ingestion.extractor.metadata_creator import MetadataCreator
+from common import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Extractor:
@@ -49,13 +48,16 @@ class Extractor:
             )
             metadata = self.metadata_creator.create(self.rule_extractor.extracted_result)
 
+            llm_tokens = 0
             if confidence_result.get("overall_confidence", 0.0) < 0.8:
                 logger.warning(f"Low confidence detected: {confidence_result.get('overall_confidence')}. ")
                 llm_results = self._fallback_to_llm_extraction(documents, metadata)
-                metadata_llm = self.metadata_creator.create(llm_results["content"])
-                metadata.update(metadata_llm)
+                if llm_results:
+                    metadata_llm = self.metadata_creator.create(llm_results["content"])
+                    metadata.update(metadata_llm)
+                    llm_tokens = llm_results.get("tokens", 0)
 
-            return confidence_result, metadata, llm_results["tokens"] if llm_results else 0
+            return confidence_result, metadata, llm_tokens
 
         except Exception as e:
             logger.error(f"Extraction pipeline failed: {e}", exc_info=True)

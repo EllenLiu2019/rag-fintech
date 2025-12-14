@@ -1,33 +1,18 @@
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# Initialize logging FIRST, before any other imports that might log
 from api.config import settings
-from api.routers import document_api, chat_api, search_api
-from common.log_middleware import setup_request_logging_middleware
-from common.config import init_config
-
-from common.log_utils import get_logger, init_root_logger
+from common import get_logger, init_root_logger, setup_request_logging_middleware
 
 init_root_logger(level=settings.LOG_LEVEL, format_str=settings.LOG_FORMAT)
 logger = get_logger(__name__)
 
+# Initialize app context (creates all services) before routers
+from common.app_context import context  # noqa: E402, F401
+from api.routers import document_api, chat_api, search_api  # noqa: E402
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Ensure initialization only happens once, even in reload mode.
-    """
-    try:
-        init_config()
-        yield
-    except Exception as e:
-        logger.error(f"Error in FastAPI lifespan: {e}")
-        raise
-    finally:
-        # TODO: shutdown cleanup if needed
-        logger.info("FastAPI lifespan completed")
-
+logger.info("FastAPI application initialized")
 
 app = FastAPI(
     title=settings.API_TITLE,
@@ -35,7 +20,6 @@ app = FastAPI(
     version=settings.API_VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
-    lifespan=lifespan,
 )
 
 # Configure CORS middleware (using configuration)

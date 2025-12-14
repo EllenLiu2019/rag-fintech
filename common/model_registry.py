@@ -1,9 +1,8 @@
 import json
 from typing import Dict, Any, Optional, Literal
 from dataclasses import dataclass
-from common import file_utils
+from common import file_utils, get_logger
 from common.constants import LLM_FACTORIES_CONF
-from common.log_utils import get_logger
 from common.decorator import singleton
 
 logger = get_logger(__name__)
@@ -11,6 +10,7 @@ logger = get_logger(__name__)
 # Type definitions for model purposes
 ChatModelPurpose = Literal["qa_reasoner", "qa_lite", "query_lite", "query_reasoner"]
 EmbeddingModelPurpose = Literal["dense", "sparse"]
+RerankerModelPurpose = Literal["default", "dev", "qwen", "jina"]
 
 
 @dataclass
@@ -18,18 +18,22 @@ class ModelConfig:
 
     provider: str
     model_name: str
-    max_tokens: int
+    max_tokens: int = 0
     description: str = ""
     dimensions: Optional[int] = None  # For embedding models
+    base_url: Optional[str] = None  # For service-based models (TEI, etc.)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        result = {
             "provider": self.provider,
             "model_name": self.model_name,
             "max_tokens": self.max_tokens,
             "description": self.description,
             "dimensions": self.dimensions,
         }
+        if self.base_url:
+            result["base_url"] = self.base_url
+        return result
 
 
 @singleton
@@ -37,6 +41,7 @@ class ModelRegistry:
     def __init__(self):
         self._chat_models: Dict[str, ModelConfig] = {}
         self._embedding_models: Dict[str, ModelConfig] = {}
+        self._reranker_models: Dict[str, ModelConfig] = {}
         self._load_config()
 
     def _load_config(self) -> None:
@@ -64,7 +69,20 @@ class ModelRegistry:
                     dimensions=model_conf.get("dimensions"),
                 )
 
-            logger.info(f"Loaded {len(self._chat_models)} chat models, {len(self._embedding_models)} embedding models")
+            # Load reranker models
+            for purpose, model_conf in config.get("reranker_models", {}).items():
+                self._reranker_models[purpose] = ModelConfig(
+                    provider=model_conf["provider"],
+                    model_name=model_conf["model_name"],
+                    description=model_conf.get("description", ""),
+                    base_url=model_conf.get("base_url"),
+                )
+
+            logger.info(
+                f"Loaded {len(self._chat_models)} chat models, "
+                f"{len(self._embedding_models)} embedding models, "
+                f"{len(self._reranker_models)} reranker models"
+            )
 
         except FileNotFoundError:
             raise FileNotFoundError(f"Model config not found: {LLM_FACTORIES_CONF}")
@@ -82,6 +100,12 @@ class ModelRegistry:
             available = list(self._embedding_models.keys())
             raise KeyError(f"Unknown embedding model purpose: {purpose}. Available: {available}")
         return self._embedding_models[purpose]
+
+    def get_reranker_model(self, purpose: RerankerModelPurpose = "default") -> ModelConfig:
+        if purpose not in self._reranker_models:
+            available = list(self._reranker_models.keys())
+            raise KeyError(f"Unknown reranker model purpose: {purpose}. Available: {available}")
+        return self._reranker_models[purpose]
 
 
 def get_model_registry() -> ModelRegistry:

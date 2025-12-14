@@ -1,13 +1,15 @@
+from typing import Optional, Dict, Any, List, Literal
+
 from rag.core.embedding_service import EmbeddingService
-from rag.ingestion.doc_service import DocumentService
+from rag.core.doc_service import DocumentService
 from repository.rdb.models.models import LLM
 from repository.vector.milvus_client import VectorStoreClient
-import logging
-from typing import Optional, Dict, Any, List, Literal
-from common.decorator import cached
-from rag.retrieval.pre_optimizer import QueryOptimizer
+from repository.cache.redis_client import cached
+from rag.retrieval.reranker import reranker
+from common import get_logger
+from rag.retrieval.pre_optimizer import query_optimizer
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 SELECT_FIELDS = ["id", "doc_id", "text", "page_number", "prev_chunk", "next_chunk", "business_data", "upload_time"]
 
@@ -17,10 +19,9 @@ class Retriever:
     Main retriever with support for both simple dense search and hybrid search.
     """
 
-    def __init__(self, model: dict[str, Any]):
+    def __init__(self):
         self.document_service = DocumentService()
         self.vector_store = VectorStoreClient()
-        self.query_optimizer = QueryOptimizer(model=model)
 
     @cached(prefix="search", ttl=1800)
     def search(
@@ -34,20 +35,20 @@ class Retriever:
 
         logger.info(f"Searching for: '{query}' in kb: {kb_id} (mode: {mode})")
 
-        optimized_query = self.query_optimizer.optimize(query)["optimized_query"]
+        optimized_queries = query_optimizer.optimize(query)["optimized_queries"]
 
         llm: LLM = self.document_service.get_embedding_model(kb_id)
-        embedder = EmbeddingService(provider=llm.llm_provider, model_name=llm.model_name)
-        query_vector = embedder.embed_query(optimized_query)
+        embedder = EmbeddingService(model=llm.to_dict())
 
-        if not query_vector:
-            logger.warning("Empty query vector generated.")
-            return []
+        if len(optimized_queries) > 1:
+            query_vectors = embedder.embed_queries_batch(optimized_queries)
+        else:
+            query_vectors = [embedder.embed_query(optimized_queries[0])]
 
         if mode == "hybrid":
-            results = self._hybrid_search(optimized_query, kb_id, top_k, query_vector, filters)
+            results = self._hybrid_search(optimized_queries, kb_id, top_k, query_vectors, filters)
         elif mode == "dense":
-            results = self._dense_search(optimized_query, kb_id, top_k, query_vector, filters)
+            results = self._dense_search(query, kb_id, top_k, query_vectors, filters)
         else:
             raise ValueError(f"Invalid retrieval mode: {mode}")
 
@@ -60,7 +61,7 @@ class Retriever:
         query: str,
         kb_id: str,
         top_k: int,
-        query_vector: list[float],
+        query_vectors: List[List[float]],
         filters: Optional[Dict] = None,
     ) -> List[Dict[str, Any]]:
         """Dense vector search."""
@@ -68,12 +69,15 @@ class Retriever:
         try:
             results = self.vector_store.search(
                 selectFields=SELECT_FIELDS,
-                query_vector=query_vector,
+                query_vectors=query_vectors,
                 limit=top_k,
                 indexNames="rag_fintech",
                 knowledgebaseIds=[kb_id],
                 filters=filters,
             )
+
+            results = reranker.process(query, results, top_k)
+
             return self._get_relevant_chunks(results, kb_id)
 
         except Exception as e:
@@ -83,10 +87,10 @@ class Retriever:
     @cached(prefix="hybrid_search", ttl=1800)
     def _hybrid_search(
         self,
-        query: str,
+        optimized_queries: List[str],
         kb_id: str,
         top_k: int,
-        query_vector: list[float],
+        query_vectors: List[List[float]],
         filters: Optional[Dict] = None,
     ) -> List[Dict[str, Any]]:
         """Sparse vector search."""
@@ -94,13 +98,16 @@ class Retriever:
         try:
             results = self.vector_store.hybrid_search(
                 selectFields=SELECT_FIELDS,
-                query=query,
-                query_vector=query_vector,
+                optimized_queries=optimized_queries,
+                query_vectors=query_vectors,
                 limit=top_k,
                 indexNames="rag_fintech",
                 knowledgebaseIds=[kb_id],
                 filters=filters,
             )
+
+            query = optimized_queries[0]
+            results = reranker.process(query, results, top_k)
 
             return self._get_relevant_chunks(results, kb_id)
 
@@ -119,3 +126,13 @@ class Retriever:
                 result["next_chunk_text"] = self.vector_store.get(next_chunk_id, "rag_fintech", [kb_id])
 
         return results
+
+
+def _create_retriever() -> Retriever:
+    retriever = Retriever()
+
+    logger.info("Initialized Retriever singleton")
+    return retriever
+
+
+retriever = _create_retriever()

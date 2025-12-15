@@ -31,7 +31,8 @@ class VectorStoreClient(DocStoreClient):
         logger.info(f"Use Milvus at {self.uri} as the doc engine.")
 
         try:
-            self.client = MilvusClient(uri=self.uri, token=self.token)
+            self._client = None
+            self._connect()
             logger.info("Milvus client initialized successfully.")
 
             self.bge_m3_embedding_function = model.hybrid.BGEM3EmbeddingFunction(
@@ -45,6 +46,27 @@ class VectorStoreClient(DocStoreClient):
         except Exception as e:
             logger.error(f"Failed to initialize Milvus client: {e}")
             raise
+
+    def _connect(self):
+        """Create or reconnect to Milvus."""
+        try:
+            self._client = MilvusClient(uri=self.uri, token=self.token)
+            logger.info(f"Connected to Milvus at {self.uri}")
+        except Exception as e:
+            logger.error(f"Failed to connect to Milvus: {e}")
+            raise
+
+    @property
+    def client(self) -> MilvusClient:
+        """Get client with auto-reconnect on failure."""
+        try:
+            # Quick health check
+            self._client.list_collections()
+            return self._client
+        except Exception as e:
+            logger.warning(f"Milvus connection lost, reconnecting: {e}")
+            self._connect()
+            return self._client
 
     def dbType(self) -> str:
         return "milvus"

@@ -10,7 +10,10 @@ logger = get_logger(__name__)
 class LLMService:
 
     def __init__(self, model: Dict[str, Any]):
-        self.llm = chat_model[model["provider"]](model_name=model["model_name"])
+        self.llm = chat_model[model["provider"]](
+            model_name=model["model_name"],
+            base_url=model["base_url"],
+        )
 
     def _prepare_messages(
         self,

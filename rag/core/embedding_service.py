@@ -4,6 +4,8 @@ from typing import List, Any
 
 from rag.llm.embedding_model import embedding_model
 from common import constants, get_logger
+from common.exceptions import EmbeddingError
+from common.error_codes import ErrorCodes
 from rag.ingestion.document import RagDocument
 from repository.cache.redis_client import cached, _get_redis_client
 
@@ -39,9 +41,14 @@ class EmbeddingService:
             logger.info(f"Embedding completed. Total tokens: {total_tokens}")
             return chunks
 
-        except Exception as e:
-            logger.error(f"Failed to embed chunks: {e}")
+        except EmbeddingError:
             raise
+        except Exception as e:
+            raise EmbeddingError(
+                message="Failed to embed chunks",
+                code=ErrorCodes.L_EMBEDDING_001,
+                details={"chunk_count": len(chunks), "model": self.model.model_name, "error": str(e)},
+            ) from e
 
     @cached(prefix="embedding", ttl=3600, key_func=lambda self, text: self._cache_key(text))
     def embed_query(self, text: str) -> list[float]:
@@ -55,9 +62,15 @@ class EmbeddingService:
 
             logger.info(f"Embedding query: {text} completed. Total tokens: {total_tokens}")
             return embedding.tolist()
-        except Exception as e:
-            logger.error(f"Failed to embed query: {e}")
+
+        except EmbeddingError:
             raise
+        except Exception as e:
+            raise EmbeddingError(
+                message="Failed to embed query",
+                code=ErrorCodes.L_EMBEDDING_001,
+                details={"query": text[:50], "model": self.model.model_name, "error": str(e)},
+            ) from e
 
     def _cache_key(self, text: str) -> str:
         """Generate cache key for query embedding."""
@@ -101,9 +114,18 @@ class EmbeddingService:
                         cache_key = self._cache_key(uncached_texts[i])
                         self.redis_client.set(cache_key, embedding, ttl=3600)
 
+            except EmbeddingError:
+                raise
             except Exception as e:
-                logger.error(f"Failed to batch embed queries: {e}")
-                # Fill with zeros for failed embeddings
+                # For batch operations, we could either:
+                # 1. Raise exception (fail fast)
+                # 2. Fill with empty lists (graceful degradation)
+                # Current implementation uses graceful degradation
+                logger.error(
+                    f"Failed to batch embed queries: {e}",
+                    extra={"text_count": len(uncached_texts), "model": self.model.model_name},
+                )
+                # Fill with empty lists for failed embeddings (graceful degradation)
                 for idx in uncached_indices:
                     if results[idx] is None:
                         results[idx] = []

@@ -25,29 +25,37 @@ class SearchRequest(BaseModel):
 
 @router.post("/search")
 async def search_docs(request: SearchRequest):
-    try:
-        results = retriever.search(
-            query=request.query,
-            kb_id=request.kb_id,
-            top_k=request.top_k,
-            filters=request.filters,
-            mode=request.mode,
-        )
+    """
+    Search documents using vector retrieval.
 
-        formatted_results = results or []
+    - **query**: Search query string
+    - **kb_id**: Knowledge base ID
+    - **top_k**: Number of results to return
+    - **filters**: Metadata filters
+    - **mode**: Retrieval mode (dense or hybrid)
+    """
+    logger.info(f"Received search request: query='{request.query}', kb_id='{request.kb_id}', top_k={request.top_k}")
 
-        return JSONResponse(
-            status_code=200,
-            content={
+    # Let RetrievalError propagate to global handler
+    results = retriever.search(
+        query=request.query,
+        kb_id=request.kb_id,
+        top_k=request.top_k,
+        filters=request.filters,
+        mode=request.mode,
+    )
+
+    formatted_results = results or []
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {
                 "query": request.query,
                 "results": formatted_results,
                 "total": len(formatted_results),
                 "mode": request.mode,
             },
-        )
-    except Exception as e:
-        logger.error(f"Search failed: {str(e)}")
-        import traceback
-
-        logger.error(f"   error stack:\n{traceback.format_exc()}")
-        return JSONResponse(status_code=500, content={"message": f"搜索失败: {str(e)}"})
+        },
+    )

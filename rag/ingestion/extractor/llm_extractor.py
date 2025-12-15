@@ -7,7 +7,10 @@ from common.prompt_manager import get_prompt_manager
 class LLMExtractor:
 
     def __init__(self, model: dict[str, Any]):
-        self.llm = chat_model[model["provider"]](model_name=model["model_name"])
+        self.llm = chat_model[model["provider"]](
+            model_name=model["model_name"],
+            base_url=model["base_url"],
+        )
         self.prompt_manager = get_prompt_manager()
 
     def extract(self, content: str, hints: dict = None) -> dict:

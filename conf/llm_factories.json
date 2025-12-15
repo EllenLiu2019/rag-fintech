@@ -4,24 +4,28 @@
             "provider": "DeepSeek",
             "model_name": "deepseek-reasoner",
             "max_tokens": 128000,
+            "base_url": "https://api.deepseek.com",
             "description": "Deep reasoning model for complex QA tasks"
         },
         "qa_lite": {
             "provider": "DeepSeek",
             "model_name": "deepseek-chat",
             "max_tokens": 128000,
+            "base_url": "https://api.deepseek.com",
             "description": "Fast chat model for general QA"
         },
         "query_lite": {
             "provider": "Google",
             "model_name": "gemini-2.5-flash-lite",
             "max_tokens": 1048576,
+            "base_url": "https://generativelanguage.googleapis.com/v1beta/",
             "description": "Lightweight model for query rewriting"
         },
         "query_reasoner": {
             "provider": "Google",
             "model_name": "gemini-2.5-flash",
             "max_tokens": 1048576,
+            "base_url": "https://generativelanguage.googleapis.com/v1beta/",
             "description": "Powerful model for complex query understanding"
         }
     },

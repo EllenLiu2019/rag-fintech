@@ -1,6 +1,12 @@
 from typing import List
 
 from common import get_logger
+from common.exceptions import (
+    DatabaseError,
+    FileStorageError,
+    ModelNotFoundError,
+)
+from common.error_codes import ErrorCodes
 from repository.rdb.models.models import Document as RdbDocument, KnowledgeBase, LLM
 from repository.rdb.postgresql_client import PostgreSQLClient
 from rag.ingestion.document import RagDocument
@@ -14,9 +20,17 @@ class DocumentService:
         self.rdb_client = PostgreSQLClient()
 
     def upload_file(self, filename: str, contents: bytes, content_type: str):
-        logger.info(f"uploading file {filename}")
+        logger.info(f"Uploading file: {filename}")
 
-        file_path = s3_client.save_original_file(filename, contents)
+        try:
+            file_path = s3_client.save_original_file(filename, contents)
+        except Exception as e:
+            raise FileStorageError(
+                message=f"Failed to save original file: {filename}",
+                code=ErrorCodes.R_FILE_001,
+                details={"filename": filename, "error": str(e)},
+            ) from e
+
         if content_type == "application/pdf":
             kb_name = "default_kb"
         else:
@@ -34,17 +48,32 @@ class DocumentService:
             doc_status="uploaded",
             kb_name=kb_name,
         )
-        rdb_document = self.rdb_client.save(document)
 
-        logger.info(f"file {filename} saved to rdb: id={rdb_document.id} with original file location: {file_path}")
+        try:
+            rdb_document = self.rdb_client.save(document)
+        except Exception as e:
+            raise DatabaseError(
+                message=f"Failed to save document to database: {filename}",
+                code=ErrorCodes.R_DB_002,
+                details={"filename": filename, "error": str(e)},
+            ) from e
+
+        logger.info(f"File {filename} saved to RDB: id={rdb_document.id} with original file location: {file_path}")
 
         return rdb_document
 
     def update_file_info(self, filename: str, rag_document: RagDocument, rdb_document: RdbDocument):
-        logger.info(f"updating file {filename} in rdb: id={rdb_document.id}")
+        logger.info(f"Updating file {filename} in RDB: id={rdb_document.id}")
 
         parsed_file = rag_document.to_parsed_file()
-        parsed_file_path = s3_client.save_file_info(filename, parsed_file)
+        try:
+            parsed_file_path = s3_client.save_file_info(filename, parsed_file)
+        except Exception as e:
+            raise FileStorageError(
+                message=f"Failed to save parsed file info: {filename}",
+                code=ErrorCodes.R_FILE_001,
+                details={"filename": filename, "error": str(e)},
+            ) from e
 
         # Update document attributes
         rdb_document.document_id = rag_document.document_id
@@ -58,23 +87,57 @@ class DocumentService:
         rdb_document.confidence = rag_document.confidence
         rdb_document.token_num += rag_document.token_num
         rdb_document.chunk_num += rag_document.chunk_num
-        # Save the updated document (merge will update existing record)
-        updated_doc = self.rdb_client.save(rdb_document)
 
-        logger.info(
-            f"file {filename} updated in rdb: id={updated_doc.id} with parsed file location: {parsed_file_path}"
-        )
+        # Save the updated document (merge will update existing record)
+        try:
+            updated_doc = self.rdb_client.save(rdb_document)
+
+            logger.info(
+                f"File {filename} updated in RDB: id={updated_doc.id} with parsed file location: {parsed_file_path}"
+            )
+        except Exception as e:
+            raise DatabaseError(
+                message=f"Failed to update document in database: {filename}",
+                code=ErrorCodes.R_DB_002,
+                details={"filename": filename, "document_id": rdb_document.id, "error": str(e)},
+            ) from e
 
     def get_embedding_model(self, kb_name: str) -> str:
-        kb_ids = self.rdb_client.execute_query(KnowledgeBase, kb_name)
-        kb_id = kb_ids[0]
-        llm_model = self.rdb_client.select_by_id(LLM, kb_id.embed_llm_id)
-        if llm_model is None:
-            raise ValueError(f"LLM model not found for knowledge base {kb_id.kb_name}")
-        return llm_model
+        try:
+            kb_ids = self.rdb_client.execute_query(KnowledgeBase, kb_name)
+            if not kb_ids:
+                raise ModelNotFoundError(
+                    message=f"Knowledge base not found: {kb_name}",
+                    code=ErrorCodes.L_MODEL_001,
+                    details={"kb_name": kb_name},
+                )
+            kb_id = kb_ids[0]
+            llm_model = self.rdb_client.select_by_id(LLM, kb_id.embed_llm_id)
+            if llm_model is None:
+                raise ModelNotFoundError(
+                    message=f"LLM model not found for knowledge base: {kb_name}",
+                    code=ErrorCodes.L_MODEL_001,
+                    details={"kb_name": kb_name, "embed_llm_id": kb_id.embed_llm_id},
+                )
+            return llm_model
+        except ModelNotFoundError:
+            raise
+        except Exception as e:
+            raise DatabaseError(
+                message=f"Failed to query embedding model from database: {kb_name}",
+                code=ErrorCodes.R_DB_002,
+                details={"kb_name": kb_name, "error": str(e)},
+            ) from e
 
     def download_file(self, filename: str) -> bytes:
-        return s3_client.load_original_file(filename)
+        file_contents = s3_client.load_original_file(filename)
+        if file_contents is None:
+            raise FileStorageError(
+                message=f"File not found: {filename}",
+                code=ErrorCodes.R_FILE_001,
+                details={"filename": filename},
+            )
+        return file_contents
 
     def list_files(self) -> List[str]:
         return s3_client.list_stored_files()

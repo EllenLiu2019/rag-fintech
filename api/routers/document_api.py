@@ -2,6 +2,8 @@ from fastapi import APIRouter, File, UploadFile, Query
 from fastapi.responses import JSONResponse, Response
 
 from common import get_logger
+from common.exceptions import NotFoundError
+from common.error_codes import ErrorCodes
 from repository.s3 import s3_client
 from rag.ingestion.pipeline import ingestion_pipeline
 
@@ -18,29 +20,30 @@ router = APIRouter(
 async def upload_file(
     file: UploadFile = File(...),
 ):
+    """
+    Upload and process a document file.
 
-    try:
-        logger.info(f"received file uploading request, file_name: {file.filename}")
+    - **file**: The document file to upload (PDF, TXT, etc.)
+    """
+    logger.info(f"Received file upload request: {file.filename}")
 
-        contents = await file.read()
+    contents = await file.read()
 
-        ingestion_pipeline.handle_document(file.filename, contents, file.content_type)
+    # Let IngestionError propagate to global handler
+    ingestion_pipeline.handle_document(file.filename, contents, file.content_type)
 
-        return JSONResponse(
-            status_code=200,
-            content={
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {
                 "message": f"文件 '{file.filename}' 上传成功",
                 "filename": file.filename,
                 "size": len(contents),
                 "content_type": file.content_type,
             },
-        )
-    except Exception as e:
-        logger.error(f"file upload failed: {str(e)}")
-        import traceback
-
-        logger.error(f"   error stack:\n{traceback.format_exc()}")
-        return JSONResponse(status_code=500, content={"message": f"文件上传失败: {str(e)}"})
+        },
+    )
 
 
 @router.get("/file-original")
@@ -50,38 +53,34 @@ async def get_original_file(filename: str = Query(..., description="文件名"))
 
     - **filename**: Name of the file to retrieve
     """
-    try:
-        logger.info(f"received original file request, filename: {filename}")
+    logger.info(f"Received original file request: {filename}")
 
-        # Load original file from disk
-        file_contents = s3_client.load_original_file(filename)
-        if file_contents is None:
-            logger.warning(f"original file '{filename}' not found")
-            return JSONResponse(status_code=404, content={"message": f"文件 '{filename}' 未找到"})
-
-        # Get file info to determine content_type
-        file_info = s3_client.load_file_info(filename)
-        content_type = (
-            file_info.get("content_type", "application/octet-stream") if file_info else "application/octet-stream"
+    # Load original file from disk
+    file_contents = s3_client.load_original_file(filename)
+    if file_contents is None:
+        raise NotFoundError(
+            message=f"文件 '{filename}' 未找到",
+            code=ErrorCodes.A_NOTFOUND_001,
+            details={"filename": filename},
         )
 
-        logger.info(f"original file found: {filename}; size: {len(file_contents)} bytes; content_type: {content_type}")
+    # Get file info to determine content_type
+    file_info = s3_client.load_file_info(filename)
+    content_type = (
+        file_info.get("content_type", "application/octet-stream") if file_info else "application/octet-stream"
+    )
 
-        # Return file content
-        return Response(
-            content=file_contents,
-            media_type=content_type,
-            headers={
-                "Content-Disposition": f'inline; filename="{filename}"',
-                "Content-Length": str(len(file_contents)),
-            },
-        )
-    except Exception as e:
-        logger.error(f"failed to get original file: {str(e)}")
-        import traceback
+    logger.info(f"Original file found: {filename}; size: {len(file_contents)} bytes; content_type: {content_type}")
 
-        logger.error(f"   error stack:\n{traceback.format_exc()}")
-        return JSONResponse(status_code=500, content={"message": f"获取原始文件失败: {str(e)}"})
+    # Return file content
+    return Response(
+        content=file_contents,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Content-Length": str(len(file_contents)),
+        },
+    )
 
 
 @router.get("/file-parsed")
@@ -91,42 +90,42 @@ async def get_file_parsed(filename: str = Query(..., description="文件名")):
 
     - **filename**: Name of the file to retrieve
     """
-    try:
-        stored_files = s3_client.list_stored_files()
-        logger.info(f"received file content request, " f"filename: {filename}; " f"stored files: {stored_files}")
+    stored_files = s3_client.list_stored_files()
+    logger.info(f"Received file content request: filename={filename}, stored_files={stored_files}")
 
-        file_info = s3_client.load_file_info(filename)
-        if file_info is None:
-            logger.warning(f"file '{filename}' not found")
-            return JSONResponse(status_code=404, content={"message": f"文件 '{filename}' 未找到"})
-        logger.info(
-            f"file found: {file_info['filename']}; "
-            f"size: {file_info['file_size']} bytes; "
-            f"content_type: {file_info['content_type']}"
+    file_info = s3_client.load_file_info(filename)
+    if file_info is None:
+        raise NotFoundError(
+            message=f"文件 '{filename}' 未找到",
+            code=ErrorCodes.A_NOTFOUND_001,
+            details={"filename": filename},
         )
 
-        pages = file_info["pages"]
-        business_data = file_info.get("business_data", {})
-        confidence = file_info.get("overall_confidence", 0)
-        document_id = file_info.get("document_id")  # Extract document_id
+    logger.info(
+        f"File found: {file_info['filename']}; "
+        f"size: {file_info['file_size']} bytes; "
+        f"content_type: {file_info['content_type']}"
+    )
 
-        logger.info(f"documents: {len(pages)} pages, document_id: {document_id}")
+    pages = file_info["pages"]
+    business_data = file_info.get("business_data", {})
+    confidence = file_info.get("overall_confidence", 0)
+    document_id = file_info.get("document_id")
 
-        return JSONResponse(
-            status_code=200,
-            content={
+    logger.info(f"Documents: {len(pages)} pages, document_id: {document_id}")
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {
                 "filename": file_info["filename"],
                 "pages": pages,
                 "business_data": business_data,
                 "confidence": confidence,
-                "document_id": document_id,  # Include document_id in response
+                "document_id": document_id,
                 "size": file_info["file_size"],
                 "content_type": file_info["content_type"],
             },
-        )
-    except Exception as e:
-        logger.error(f"failed to get file content: {str(e)}")
-        import traceback
-
-        logger.error(f"   error stack:\n{traceback.format_exc()}")
-        return JSONResponse(status_code=500, content={"message": f"获取文件内容失败: {str(e)}"})
+        },
+    )

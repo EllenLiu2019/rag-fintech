@@ -6,6 +6,8 @@ from rag.ingestion.extractor.llm_extractor import LLMExtractor
 from rag.ingestion.utils.confidence_calculator import ConfidenceCalculator
 from rag.ingestion.extractor.metadata_creator import MetadataCreator
 from common import get_logger
+from common.exceptions import ExtractionError
+from common.error_codes import ErrorCodes
 
 logger = get_logger(__name__)
 
@@ -32,7 +34,11 @@ class Extractor:
             tuple[dict[str, Any], dict[str, Any]]: confidence_result, metadata
         """
         if not isinstance(documents, list) or not all(isinstance(doc, dict) for doc in documents):
-            raise ValueError("documents must be a list of dict objects")
+            raise ExtractionError(
+                message="Invalid input: documents must be a list of dict objects",
+                code=ErrorCodes.S_INGESTION_003,
+                details={"input_type": type(documents).__name__},
+            )
 
         try:
             logger.info("Starting rule-based extraction")
@@ -59,9 +65,16 @@ class Extractor:
 
             return confidence_result, metadata, llm_tokens
 
-        except Exception as e:
-            logger.error(f"Extraction pipeline failed: {e}", exc_info=True)
+        except ExtractionError:
+            # Re-raise ExtractionError as-is
             raise
+        except Exception as e:
+            # Wrap other exceptions
+            raise ExtractionError(
+                message=f"Extraction pipeline failed: {str(e)}",
+                code=ErrorCodes.S_INGESTION_003,
+                details={"error": str(e)},
+            ) from e
 
     def _fallback_to_llm_extraction(
         self, documents: list[dict[str, Any]], metadata: dict[str, Any]

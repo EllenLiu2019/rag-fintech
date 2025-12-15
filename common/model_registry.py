@@ -56,6 +56,7 @@ class ModelRegistry:
                     provider=model_conf["provider"],
                     model_name=model_conf["model_name"],
                     max_tokens=model_conf.get("max_tokens", 4096),
+                    base_url=model_conf.get("base_url"),
                     description=model_conf.get("description", ""),
                 )
 

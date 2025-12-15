@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional
 from pymilvus import (
     MilvusClient,
     DataType,
@@ -6,12 +6,15 @@ from pymilvus import (
     FunctionType,
     model,
     AnnSearchRequest,
+    MilvusException,
 )
 from common import get_logger, file_utils
 from common.decorator import singleton
 from common.config_utils import get_base_config, load_yaml_conf
 from common.constants import MILVUS_MAPPING_CONF
 from .doc_store_client import DocStoreClient, extract_entity_fields
+from common.exceptions import ConnectionError, VectorStoreError
+from common.error_codes import ErrorCodes
 
 logger = get_logger(__name__)
 
@@ -142,15 +145,29 @@ class VectorStoreClient(DocStoreClient):
 
         filter_expr = self._build_filter_expr(filters)
 
-        search_res = self.client.search(
-            collection_name=collection_name,
-            data=query_vectors,
-            anns_field=f"dense_vector_{len(query_vectors[0])}",
-            filter=filter_expr,
-            limit=limit,
-            output_fields=selectFields,
-            search_params={"metric_type": "COSINE"},
-        )
+        try:
+            search_res = self.client.search(
+                collection_name=collection_name,
+                data=query_vectors,
+                anns_field=f"dense_vector_{len(query_vectors[0])}",
+                filter=filter_expr,
+                limit=limit,
+                output_fields=selectFields,
+                search_params={"metric_type": "COSINE"},
+            )
+
+        except MilvusException as e:
+            if "connection" in str(e).lower():
+                raise ConnectionError(
+                    message="Failed to connect to Milvus",
+                    code=ErrorCodes.R_VECTOR_001,
+                    details={"uri": self.uri},
+                )
+            raise VectorStoreError(
+                message="Milvus search failed",
+                code=ErrorCodes.R_VECTOR_002,
+                details={"collection": collection_name, "error": str(e)},
+            )
 
         results = []
         for idx, hits in enumerate(search_res):
@@ -211,14 +228,27 @@ class VectorStoreClient(DocStoreClient):
             params={"reranker": "rrf", "k": 60},
         )
 
-        search_res = self.client.hybrid_search(
-            collection_name=collection_name,
-            reqs=requests,
-            ranker=ranker,
-            filters=filter_expr,
-            limit=limit,
-            output_fields=selectFields,
-        )
+        try:
+            search_res = self.client.hybrid_search(
+                collection_name=collection_name,
+                reqs=requests,
+                ranker=ranker,
+                filters=filter_expr,
+                limit=limit,
+                output_fields=selectFields,
+            )
+        except MilvusException as e:
+            if "connection" in str(e).lower():
+                raise ConnectionError(
+                    message="Failed to connect to Milvus",
+                    code=ErrorCodes.R_VECTOR_001,
+                    details={"uri": self.uri},
+                )
+            raise VectorStoreError(
+                message="Milvus search failed",
+                code=ErrorCodes.R_VECTOR_002,
+                details={"collection": collection_name, "error": str(e)},
+            )
 
         results = []
         for idx, hits in enumerate(search_res):

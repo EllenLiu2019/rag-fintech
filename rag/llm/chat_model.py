@@ -3,6 +3,8 @@ import os
 from typing import List, Dict, Optional, AsyncIterator, Any
 from openai import OpenAI, AsyncOpenAI
 from common import get_logger
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from common.exceptions import ModelRateLimitError
 
 logger = get_logger(__name__)
 
@@ -13,6 +15,11 @@ class LLM(ABC):
         self.async_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.model_name = model_name
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(ModelRateLimitError),
+    )
     def generate(
         self,
         messages: Optional[List[Dict[str, str]]] = None,
@@ -68,6 +75,11 @@ class LLM(ABC):
             response.usage.total_tokens,
         )
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(ModelRateLimitError),
+    )
     async def stream_generate(
         self,
         messages: List[Dict[str, str]],
@@ -93,13 +105,18 @@ class LLM(ABC):
 
 
 class DeepSeek(LLM):
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, base_url: str = "https://api.deepseek.com"):
         super().__init__(
             api_key=os.getenv("DEEPSEEK_API_KEY"),
             model_name=model_name,
-            base_url="https://api.deepseek.com",
+            base_url=base_url,
         )
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(ModelRateLimitError),
+    )
     async def stream_generate(
         self,
         messages: List[Dict[str, str]],
@@ -135,11 +152,11 @@ class DeepSeek(LLM):
 
 
 class Google(LLM):
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, base_url: str = "https://generativelanguage.googleapis.com/v1beta/"):
         super().__init__(
             api_key=os.getenv("GEMINI_API_KEY"),
             model_name=model_name,
-            base_url="https://generativelanguage.googleapis.com/v1beta/",
+            base_url=base_url,
         )
 
 

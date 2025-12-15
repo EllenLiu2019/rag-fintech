@@ -11,7 +11,10 @@ logger = get_logger(__name__)
 
 class BaseRewriter:
     def __init__(self, model: dict[str, Any], temperature: float = 0.0):
-        self.llm = chat_model[model["provider"]](model_name=model["model_name"])
+        self.llm = chat_model[model["provider"]](
+            model_name=model["model_name"],
+            base_url=model["base_url"],
+        )
         self.temperature = temperature
         self.prompt_manager = get_prompt_manager()
 

@@ -14,6 +14,14 @@ from repository.vector.milvus_client import VectorStoreClient
 
 from common import get_logger, get_model_registry
 from repository.rdb.models.models import LLM
+from common.exceptions import (
+    ParsingError,
+    ExtractionError,
+    ChunkingError,
+    EmbeddingError,
+    VectorStoreError,
+)
+from common.error_codes import ErrorCodes
 
 logger = get_logger(__name__)
 
@@ -34,18 +42,38 @@ class IngestionPipeline:
         try:
             documents = parse_content(contents, filename, content_type)
         except ValueError as e:
-            raise ValueError(f"file parsing failed: {str(e)}")
+            raise ParsingError(
+                message=f"Failed to parse document: {filename}",
+                code=ErrorCodes.S_INGESTION_002,
+                details={"filename": filename, "content_type": content_type, "reason": str(e)},
+            )
 
         rag_document = self.build_from_parsed_documents(filename, contents, content_type, documents)
 
         # Step 3: Split document into chunks
-        chunks = self.splitter.split_document(rag_document)
-        logger.info(f"Document split into {len(chunks)} chunks")
+        try:
+            chunks = self.splitter.split_document(rag_document)
+            logger.info(f"Document split into {len(chunks)} chunks")
+        except Exception as e:
+            raise ChunkingError(
+                message=f"Failed to split document into chunks: {filename}",
+                code=ErrorCodes.S_INGESTION_004,
+                details={"filename": filename, "error": str(e)},
+            )
 
         # Step 4: Embed chunks (generate vectors)
-        llm: LLM = self.document_service.get_embedding_model(rdb_document.kb_name)
-        embedder = EmbeddingService(model=llm.to_dict())
-        chunks_with_vectors = embedder.embed_chunks(chunks, rag_document)
+        try:
+            llm: LLM = self.document_service.get_embedding_model(rdb_document.kb_name)
+            embedder = EmbeddingService(model=llm.to_dict())
+            chunks_with_vectors = embedder.embed_chunks(chunks, rag_document)
+        except Exception as e:
+            if isinstance(e, EmbeddingError):
+                raise
+            raise EmbeddingError(
+                message=f"Failed to embed document chunks: {filename}",
+                code=ErrorCodes.L_EMBEDDING_001,
+                details={"filename": filename, "chunk_count": len(chunks), "error": str(e)},
+            )
 
         # Step 5: Prepare data for Milvus
         chunks_to_insert = []
@@ -69,11 +97,22 @@ class IngestionPipeline:
 
         # Step 6: Save to Milvus
         if chunks_to_insert:
-            self.vector_store.insert(chunks_to_insert, "rag_fintech", rdb_document.kb_name)
-            logger.info(f"Saved {len(chunks_to_insert)} chunks to Milvus")
+            try:
+                self.vector_store.insert(chunks_to_insert, "rag_fintech", rdb_document.kb_name)
+                logger.info(f"Saved {len(chunks_to_insert)} chunks to Milvus")
+            except Exception as e:
+                raise VectorStoreError(
+                    message=f"Failed to save chunks to vector store: {filename}",
+                    code=ErrorCodes.R_VECTOR_002,
+                    details={"filename": filename, "chunk_count": len(chunks_to_insert), "error": str(e)},
+                )
 
         # Step 7: Update doc info in rdb
-        self.document_service.update_file_info(filename, rag_document, rdb_document)
+        try:
+            self.document_service.update_file_info(filename, rag_document, rdb_document)
+        except Exception as e:
+            # Log but don't fail the entire ingestion if RDB update fails
+            logger.warning(f"Failed to update document info in RDB: {e}", exc_info=True)
 
     def build_from_parsed_documents(
         self, filename: str, contents: bytes, content_type: str, documents: list[Document]
@@ -87,7 +126,14 @@ class IngestionPipeline:
         #     document = json.load(f)
         # pages = document["pages"]
 
-        confidence, business_data, tokens = self.extractor.extract(pages)
+        try:
+            confidence, business_data, tokens = self.extractor.extract(pages)
+        except Exception as e:
+            raise ExtractionError(
+                message=f"Failed to extract metadata from document: {filename}",
+                code=ErrorCodes.S_INGESTION_003,
+                details={"filename": filename, "error": str(e)},
+            )
 
         rag_document = RagDocument.from_extraction_result(
             document_id=str(uuid.uuid4()),

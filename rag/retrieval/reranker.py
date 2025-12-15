@@ -4,6 +4,8 @@ import numpy as np
 from rag.llm.rerank_model import rerank_model
 from common import constants, get_model_registry
 from common.log_utils import get_logger
+from common.exceptions import RerankError, ModelNotFoundError
+from common.error_codes import ErrorCodes
 
 logger = get_logger(__name__)
 
@@ -13,7 +15,11 @@ class Reranker:
         provider = model["provider"]
         if provider not in rerank_model:
             available = list(rerank_model.keys())
-            raise ValueError(f"Unknown reranker provider: {provider}. Available: {available}")
+            raise ModelNotFoundError(
+                message=f"Unknown reranker provider: {provider}",
+                code=ErrorCodes.L_MODEL_001,
+                details={"provider": provider, "available": available},
+            )
 
         # Get API key if needed (for API-based providers)
         api_key = os.getenv(provider.upper() + constants.API_KEY_SUFFIX)
@@ -21,7 +27,7 @@ class Reranker:
         self.model = rerank_model[provider](
             key=api_key,
             model_name=model["model_name"],
-            base_url=model.get("base_url"),
+            base_url=model["base_url"],
         )
         self.provider = provider
         self.model_name = model["model_name"]
@@ -53,8 +59,20 @@ class Reranker:
         texts = [doc.get(text_key, "") for doc in unique_docs]
 
         # Compute relevance scores
-        scores, token_count = self.model.similarity(query, texts)
-        logger.info(f"Reranked {len(unique_docs)} docs, tokens used: {token_count}")
+        try:
+            scores, token_count = self.model.similarity(query, texts)
+            logger.info(f"Reranked {len(unique_docs)} docs, tokens used: {token_count}")
+        except Exception as e:
+            raise RerankError(
+                message="Failed to compute rerank scores",
+                code=ErrorCodes.S_RETRIEVAL_002,
+                details={
+                    "query": query[:50],
+                    "document_count": len(unique_docs),
+                    "provider": self.provider,
+                    "error": str(e),
+                },
+            ) from e
 
         # Add scores to documents and sort
         scored_docs = []

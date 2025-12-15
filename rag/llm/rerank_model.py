@@ -6,7 +6,9 @@ Supports multiple backends: FlagEmbedding (dev), TEI (prod), QWen API, etc.
 from abc import ABC, abstractmethod
 import numpy as np
 
-from common.log_utils import log_exception
+from common.exceptions import ModelRateLimitError, RerankError
+from common.error_codes import ErrorCodes
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 
 class BaseReranker(ABC):
@@ -56,6 +58,11 @@ class FlagEmbeddingRerank(BaseReranker):
         self.model_name = model_name
         self.model = FlagReranker(model_name, use_fp16=use_fp16, device=device)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(ModelRateLimitError),
+    )
     def similarity(self, query: str, texts: list[str]) -> tuple[np.ndarray, int]:
         if not texts:
             return np.array([]), 0
@@ -68,8 +75,11 @@ class FlagEmbeddingRerank(BaseReranker):
                 scores = [scores]
             return np.array(scores), self._estimate_tokens(query, texts)
         except Exception as e:
-            log_exception(e, f"FlagEmbedding rerank failed for query: {query[:50]}...")
-            raise
+            raise RerankError(
+                message=f"FlagEmbedding rerank failed for query: {query[:50]}...",
+                code=ErrorCodes.S_RETRIEVAL_002,
+                details={"model": self.model_name, "error": str(e)},
+            )
 
 
 class TEIRerank(BaseReranker):
@@ -102,6 +112,11 @@ class TEIRerank(BaseReranker):
         self.batch_size = batch_size
         self._session = requests.Session()
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(ModelRateLimitError),
+    )
     def similarity(self, query: str, texts: list[str]) -> tuple[np.ndarray, int]:
         if not texts:
             return np.array([]), 0
@@ -132,8 +147,11 @@ class TEIRerank(BaseReranker):
                 token_count += self._estimate_tokens(query, batch_texts)
 
             except Exception as e:
-                log_exception(e, f"TEI rerank request failed: {self.base_url}")
-                raise
+                raise RerankError(
+                    message=f"TEI rerank failed for query: {query[:50]}...",
+                    code=ErrorCodes.S_RETRIEVAL_002,
+                    details={"query": query[:50], "error": str(e)},
+                )
 
         return scores, token_count
 
@@ -157,6 +175,11 @@ class QWenRerank(BaseReranker):
         self.api_key = key
         self.model_name = model_name if model_name else dashscope.TextReRank.Models.gte_rerank
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(ModelRateLimitError),
+    )
     def similarity(self, query: str, texts: list[str]) -> tuple[np.ndarray, int]:
         from http import HTTPStatus
         import dashscope
@@ -183,8 +206,11 @@ class QWenRerank(BaseReranker):
                 raise ValueError(f"QWen API error: {resp.status_code} - {resp.message}")
 
         except Exception as e:
-            log_exception(e, f"QWen rerank failed for query: {query[:50]}...")
-            raise
+            raise RerankError(
+                message=f"QWen rerank failed for query: {query[:50]}...",
+                code=ErrorCodes.S_RETRIEVAL_002,
+                details={"query": query[:50], "error": str(e)},
+            )
 
 
 class JinaRerank(BaseReranker):
@@ -210,6 +236,11 @@ class JinaRerank(BaseReranker):
             "Authorization": f"Bearer {key}",
         }
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(ModelRateLimitError),
+    )
     def similarity(self, query: str, texts: list[str]) -> tuple[np.ndarray, int]:
         if not texts:
             return np.array([]), 0
@@ -238,8 +269,11 @@ class JinaRerank(BaseReranker):
             return scores, token_count
 
         except Exception as e:
-            log_exception(e, f"Jina rerank failed for query: {query[:50]}...")
-            raise
+            raise RerankError(
+                message=f"Jina rerank failed for query: {query[:50]}...",
+                code=ErrorCodes.S_RETRIEVAL_002,
+                details={"query": query[:50], "error": str(e)},
+            )
 
 
 class CohereRerank(BaseReranker):
@@ -262,6 +296,11 @@ class CohereRerank(BaseReranker):
         self.client = cohere.Client(api_key=key)
         self.model_name = model_name
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(ModelRateLimitError),
+    )
     def similarity(self, query: str, texts: list[str]) -> tuple[np.ndarray, int]:
         if not texts:
             return np.array([]), 0
@@ -282,8 +321,11 @@ class CohereRerank(BaseReranker):
             return scores, self._estimate_tokens(query, texts)
 
         except Exception as e:
-            log_exception(e, f"Cohere rerank failed for query: {query[:50]}...")
-            raise
+            raise RerankError(
+                message=f"Cohere rerank failed for query: {query[:50]}...",
+                code=ErrorCodes.S_RETRIEVAL_002,
+                details={"query": query[:50], "error": str(e)},
+            )
 
 
 # Provider -> Class mapping

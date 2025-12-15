@@ -11,6 +11,13 @@ logger = get_logger(__name__)
 # Initialize app context (creates all services) before routers
 from common.app_context import context  # noqa: E402, F401
 from api.routers import document_api, chat_api, search_api  # noqa: E402
+from fastapi.exceptions import RequestValidationError  # noqa: E402
+from api.exception_handlers import (  # noqa: E402
+    rag_exception_handler,
+    generic_exception_handler,
+    validation_exception_handler,
+)
+from common.exceptions import RagBaseException  # noqa: E402
 
 logger.info("FastAPI application initialized")
 
@@ -38,3 +45,8 @@ setup_request_logging_middleware(app)
 app.include_router(document_api.router)
 app.include_router(chat_api.router)
 app.include_router(search_api.router)
+
+# Register exception handlers (order matters: specific -> generic)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(RagBaseException, rag_exception_handler)
+app.add_exception_handler(Exception, generic_exception_handler)

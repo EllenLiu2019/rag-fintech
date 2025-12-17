@@ -28,7 +28,7 @@ class LLM(Base):
     __table_args__ = {"schema": "rag_fintech"}
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    llm_provider: Mapped[str] = mapped_column(String(60), nullable=False)
+    provider: Mapped[str] = mapped_column(String(60), nullable=False)
     model_name: Mapped[str] = mapped_column(String(60), nullable=False)
     model_type: Mapped[str] = mapped_column(String(60), nullable=False)
     max_tokens: Mapped[int] = mapped_column(Integer, nullable=False)

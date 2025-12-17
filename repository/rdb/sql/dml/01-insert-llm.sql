@@ -9,7 +9,7 @@ TRUNCATE TABLE rag_fintech.llm;
 
 -- insert LLM configurations
 INSERT INTO rag_fintech.llm 
-(llm_provider, model_name, model_type, max_tokens, max_tokens_context, created_time, description) 
+(provider, model_name, model_type, max_tokens, max_tokens_context, created_time, description) 
 VALUES 
 ('DeepSeek', 'deepseek-reasoner', 'reasoner', 64000, 128000, CURRENT_TIMESTAMP, 'model: DeepSeek-V3.2'),
 ('Voyage', 'voyage-3-lite', 'embedding', 32000, NULL, CURRENT_TIMESTAMP, 'dimension: 512'),

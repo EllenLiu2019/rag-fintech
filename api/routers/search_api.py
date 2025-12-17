@@ -50,12 +50,11 @@ async def search_docs(request: SearchRequest):
     return JSONResponse(
         status_code=200,
         content={
-            "success": True,
-            "data": {
-                "query": request.query,
-                "results": formatted_results,
-                "total": len(formatted_results),
-                "mode": request.mode,
-            },
+            "query": request.query,
+            "results": formatted_results["results"],
+            "query_to_use": formatted_results["query_to_use"],
+            "snomed_entities": formatted_results["snomed_entities"],
+            "total": len(formatted_results["results"]),
+            "mode": request.mode,
         },
     )

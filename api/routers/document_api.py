@@ -35,13 +35,10 @@ async def upload_file(
     return JSONResponse(
         status_code=200,
         content={
-            "success": True,
-            "data": {
-                "message": f"文件 '{file.filename}' 上传成功",
-                "filename": file.filename,
-                "size": len(contents),
-                "content_type": file.content_type,
-            },
+            "message": f"文件 '{file.filename}' 上传成功",
+            "filename": file.filename,
+            "size": len(contents),
+            "content_type": file.content_type,
         },
     )
 
@@ -117,15 +114,12 @@ async def get_file_parsed(filename: str = Query(..., description="文件名")):
     return JSONResponse(
         status_code=200,
         content={
-            "success": True,
-            "data": {
-                "filename": file_info["filename"],
-                "pages": pages,
-                "business_data": business_data,
-                "confidence": confidence,
-                "document_id": document_id,
-                "size": file_info["file_size"],
-                "content_type": file_info["content_type"],
-            },
+            "filename": file_info["filename"],
+            "pages": pages,
+            "business_data": business_data,
+            "confidence": confidence,
+            "document_id": document_id,
+            "size": file_info["file_size"],
+            "content_type": file_info["content_type"],
         },
     )

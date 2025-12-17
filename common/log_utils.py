@@ -11,6 +11,19 @@ from typing import Optional, Union
 # 创建上下文变量来存储请求 ID
 request_id_var: ContextVar[str] = ContextVar("request_id", default="N/A")
 
+# third party libraries logger names and default log levels
+THIRD_PARTY_LOGGERS = {
+    "pymilvus": logging.WARNING,
+    "transformers": logging.WARNING,
+    "transformers.modeling_utils": logging.ERROR,
+    "accelerate": logging.WARNING,
+    "httpx": logging.WARNING,
+    "httpcore": logging.WARNING,
+    "urllib3": logging.WARNING,
+    "asyncio": logging.WARNING,
+    "filelock": logging.WARNING,
+}
+
 
 class RequestIDFormatter(logging.Formatter):
     """自定义日志格式化器，自动从上下文获取 request_id"""
@@ -21,7 +34,12 @@ class RequestIDFormatter(logging.Formatter):
         return super().format(record)
 
 
-def init_root_logger(level: Union[int, str] = logging.INFO, format_str: Optional[str] = None) -> None:
+def init_root_logger(
+    level: Union[int, str] = logging.INFO,
+    format_str: Optional[str] = None,
+    capture_warnings: bool = True,
+    configure_third_party: bool = True,
+) -> None:
     """
     初始化根日志记录器，配置请求 ID 格式化
     """
@@ -40,11 +58,58 @@ def init_root_logger(level: Union[int, str] = logging.INFO, format_str: Optional
     handler = logging.StreamHandler()
 
     if not format_str:
-        format_str = "%(asctime)s - [%(request_id)s] - %(name)s - %(levelname)s  - %(message)s"
+        format_str = "%(asctime)s - [%(request_id)s] - %(name)s - %(levelname)s - %(message)s"
 
     formatter = RequestIDFormatter(fmt=format_str, datefmt="%Y-%m-%d %H:%M:%S")
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)
+
+    # redirect Python warnings to logging system
+    if capture_warnings:
+        logging.captureWarnings(True)
+        # warnings will be sent to 'py.warnings' logger
+        warnings_logger = logging.getLogger("py.warnings")
+        warnings_logger.setLevel(logging.WARNING)
+
+    # configure third party libraries log levels
+    if configure_third_party:
+        _configure_transformers_logging()
+        _configure_third_party_loggers()
+
+
+def _configure_third_party_loggers() -> None:
+    for logger_name, log_level in THIRD_PARTY_LOGGERS.items():
+        third_party_logger = logging.getLogger(logger_name)
+        third_party_logger.setLevel(log_level)
+        # 移除第三方库自己的 handler，让它使用 root logger
+        third_party_logger.handlers.clear()
+        # 确保日志传播到 root logger
+        third_party_logger.propagate = True
+
+
+def _configure_transformers_logging() -> None:
+    try:
+        import transformers
+
+        # 禁用 transformers 的默认 handler，让它使用 root logger
+        transformers.logging.disable_default_handler()
+        # 设置日志级别
+        transformers.logging.set_verbosity_warning()
+        # 重置格式，使用我们的格式
+        transformers.logging.reset_format()
+
+        # 确保 transformers 的所有 logger 都使用 root logger
+        transformers_logger = logging.getLogger("transformers")
+        transformers_logger.handlers.clear()
+        transformers_logger.propagate = True
+    except ImportError:
+        pass  # transformers not installed, skip
+
+
+def set_third_party_log_level(logger_name: str, level: Union[int, str]) -> None:
+    if isinstance(level, str):
+        level = getattr(logging, level.upper(), logging.INFO)
+    logging.getLogger(logger_name).setLevel(level)
 
 
 def get_logger(name: str) -> logging.Logger:

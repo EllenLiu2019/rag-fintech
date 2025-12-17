@@ -158,20 +158,27 @@ class VectorStoreClient(DocStoreClient):
         limit: int,
         indexNames: str | list[str],
         knowledgebaseIds: list[str],
-        filters: Optional[Dict] = None,
+        filters: Optional[Dict | str] = None,
     ) -> List[Dict[str, Any]]:
         if isinstance(indexNames, str):
             indexNames = indexNames.split(",")
 
         collection_name = f"{indexNames[0]}_{knowledgebaseIds[0]}"
 
-        filter_expr = self._build_filter_expr(filters)
+        if isinstance(filters, dict):
+            filter_expr = self._build_filter_expr(filters)
+        elif isinstance(filters, str):
+            filter_expr = filters
+        else:
+            raise ValueError(f"Invalid filters type: {type(filters)}")
 
         try:
             search_res = self.client.search(
                 collection_name=collection_name,
                 data=query_vectors,
-                anns_field=f"dense_vector_{len(query_vectors[0])}",
+                anns_field=(
+                    f"dense_vector_{len(query_vectors[0])}" if knowledgebaseIds[0] == "default_kb" else "dense_vector"
+                ),
                 filter=filter_expr,
                 limit=limit,
                 output_fields=selectFields,
@@ -214,19 +221,26 @@ class VectorStoreClient(DocStoreClient):
         limit: int,
         indexNames: str | list[str],
         knowledgebaseIds: list[str],
-        filters: Optional[Dict] = None,
+        filters: Optional[Dict | str] = None,
     ) -> List[Dict[str, Any]]:
         if isinstance(indexNames, str):
             indexNames = indexNames.split(",")
 
         collection_name = f"{indexNames[0]}_{knowledgebaseIds[0]}"
 
-        filter_expr = self._build_filter_expr(filters)
+        if isinstance(filters, dict):
+            filter_expr = self._build_filter_expr(filters)
+        elif isinstance(filters, str):
+            filter_expr = filters
+        else:
+            raise ValueError(f"Invalid filters type: {type(filters)}")
 
         # Handle vector search parameters
         dense_search_params = {
             "data": query_vectors,
-            "anns_field": f"dense_vector_{len(query_vectors[0])}",
+            "anns_field": (
+                f"dense_vector_{len(query_vectors[0])}" if knowledgebaseIds[0] == "default_kb" else "dense_vector"
+            ),
             "param": {"nprobe": 10},
             "limit": limit,
             "expr": filter_expr,

@@ -3,6 +3,7 @@ from typing import List, Optional, Dict, Any, AsyncIterator
 import json
 from common.log_utils import get_logger
 from common import get_model_registry
+from common.prompt_manager import get_prompt_manager
 
 logger = get_logger(__name__)
 
@@ -14,6 +15,7 @@ class LLMService:
             model_name=model["model_name"],
             base_url=model["base_url"],
         )
+        self.prompt_manager = get_prompt_manager()
 
     def _prepare_messages(
         self,
@@ -22,16 +24,6 @@ class LLMService:
         conversation_history: Optional[List[Dict[str, str]]] = None,
     ) -> List[Dict[str, str]]:
         conversation_history = conversation_history or []
-
-        # system prompt
-        system_prompt = """你是一个专业的保险领域智能问答助手。请遵循以下规则：
-
-        1. **基于上下文回答**：严格根据提供的上下文信息回答问题，不要使用先验知识
-        2. **明确投被保人信息**：根据保险合同信息明确投保人、被保险人信息
-        3. **验证投被保人**：验证问题中指代的投保人和被保险人是否在合同中存在，如果不存在或不正确，请明确说明无法验证
-        4. **引用来源**：在回答中使用 [1][2] 等标注引用来源（对应上下文中的编号）
-        5. **简洁准确**：只回答问题中提到的内容，不要添加无关信息
-        """
 
         # format context, add reference annotation
         context_parts = []
@@ -54,16 +46,15 @@ class LLMService:
             history_text = "\n\n".join(history_parts)
 
         # user message with context and current question
-        user_content_parts = [
-            f"### 对话历史（仅供理解用户意图）\n{history_text}\n",
-            f"### 参考信息（用于回答[用户当前问题]）\n{context_str}\n",
-            f"### [用户当前问题]\n{question}\n",
-            "### 回答要求\n请根据参考信息回答[用户当前问题]，并在答案中使用 [1][2] 等标注引用来源。",
-        ]
-        user_content = "\n".join(user_content_parts)
+        user_content = self.prompt_manager.get(
+            "QA_user_prompt",
+            history_text=history_text,
+            context_str=context_str,
+            question=question,
+        )
 
         messages = [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": self.prompt_manager.get("QA_system_prompt")},
             {"role": "user", "content": user_content},
         ]
         return messages

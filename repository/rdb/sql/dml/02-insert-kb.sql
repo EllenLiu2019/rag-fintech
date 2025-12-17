@@ -11,4 +11,5 @@ TRUNCATE TABLE rag_fintech.knowledgebase;
 INSERT INTO rag_fintech.knowledgebase 
 (kb_name, embed_llm_id, update_time, description) 
 VALUES 
-('default_kb', 3, CURRENT_TIMESTAMP, 'Default knowledge base using voyage-3-lite embedding');
+('default_kb', 3, CURRENT_TIMESTAMP, 'Default knowledge base using voyage-3-lite embedding'),
+('snomed_kb', 3, CURRENT_TIMESTAMP, 'SNOMED CT knowledge base using voyage-3.5-lite embedding');

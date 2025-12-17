@@ -39,3 +39,6 @@ hiredis==3.3.0
 
 # formatting
 black>=24.0.0
+
+# progress bar
+tqdm>=4.66.0

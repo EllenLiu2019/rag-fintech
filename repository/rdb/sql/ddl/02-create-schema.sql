@@ -2,7 +2,7 @@
 \c rag_fintech;
 
 -- create schema (if not exists)
-DROP SCHEMA IF EXISTS rag_fintech CASCADE;
+DROP SCHEMA IF EXISTS rag_fintech;
 CREATE SCHEMA rag_fintech AUTHORIZATION rag;
 
 -- set default search path

@@ -5,6 +5,9 @@ from typing import Dict, Any, List, Literal
 from rag.llm.chat_model import chat_model
 from common import get_logger, get_model_registry
 from common.prompt_manager import get_prompt_manager
+from rag.core.embedding_service import EmbeddingService
+from repository.vector.milvus_client import VectorStoreClient
+from rag.retrieval.ner_service import ner_service
 
 logger = get_logger(__name__)
 
@@ -51,7 +54,6 @@ class BaseRewriter:
 
 
 class UnifiedRewriter(BaseRewriter):
-
     def __init__(
         self,
         model: dict[str, Any],
@@ -62,26 +64,45 @@ class UnifiedRewriter(BaseRewriter):
         self.history_max_length = history_max_length
         self.histories: List[str] = []
 
-    def _build_prompt(self) -> str:
+    def _build_prompt(self, required_entities: List[str] = None) -> str:
         history_str = json.dumps(self.histories[-self.history_max_length :], ensure_ascii=False)
-        return self.prompt_manager.get("unified_rewrite", histories=history_str)
 
-    def rewrite(self, query: str) -> Dict[str, Any]:
+        # Build required entities section if entities exist
+        if required_entities:
+            entities_str = "、".join(required_entities)
+            required_section = f"\n    ### 4. 必须包含的医疗词汇\n    以下词汇已通过 NER 识别，必须在改写结果中保留：【{entities_str}】\n"
+        else:
+            required_section = ""
+
+        return self.prompt_manager.get("unified_rewrite", histories=history_str, required_entities=required_section)
+
+    def rewrite(self, query: str, medical_entities: List[str]) -> Dict[str, Any]:
         try:
+
             reasoning, content, tokens = self.llm.generate(
                 messages=[
-                    {"role": "system", "content": self._build_prompt()},
+                    {"role": "system", "content": self._build_prompt(medical_entities)},
                     {"role": "user", "content": query},
                 ],
                 temperature=self.temperature,
             )
 
             rewritten = self._clean_response(content)
+
+            if medical_entities:
+                missing = [ent for ent in medical_entities if ent not in rewritten]
+                if missing:
+                    logger.warning(f"Missing entities in rewritten query: {missing}")
+                    # Append missing entities to the rewritten query
+                    rewritten = rewritten + " " + " ".join(missing)
+                    logger.info(f"Appended missing entities: '{rewritten}'")
+
             self.histories.append(query)
 
             logger.info(f"Query rewritten: '{query}' -> '{rewritten}'")
             return {
                 "rewritten_query": rewritten,
+                "medical_entities": medical_entities,
                 "tokens": tokens,
             }
 
@@ -89,6 +110,7 @@ class UnifiedRewriter(BaseRewriter):
             logger.error(f"Query rewrite failed: {e}", exc_info=True)
             return {
                 "rewritten_query": query,
+                "medical_entities": [],
                 "tokens": 0,
             }
 
@@ -165,51 +187,197 @@ class MiltiQueryOptimizer(BaseRewriter):
 
 class GlossaryInjector:
 
-    def __init__(self):
-        self.glossary = {
-            "保险费": "保费",
-            "保险金": "保额",
-            "赔钱": "理赔",
-            "交钱": "缴费",
-            "买保险": "投保",
-            "退保险": "退保",
-        }
+    select_fields = ["concept_name", "domain_id", "concept_class_id"]
 
-    def inject(self, query: str) -> str:
+    def __init__(self, embedding_model: dict[str, Any]):
+        self.embedder = EmbeddingService(model=embedding_model)
+        self.vector_store = VectorStoreClient()
+
+    def inject(self, query: str) -> Dict[str, Dict[str, Any]]:
+        """
+        Extract entities from query and standardize them using SNOMED.
+
+        Returns:
+            Dict mapping original words to standardized SNOMED concepts:
+            {
+                "原始词": {
+                    "concept_names": "标准化概念名1; 标准化概念名2",
+                    "start": int,
+                    "end": int
+                }
+            }
+        """
+        entities = ner_service.get_entities(query)
+        combined_results = ner_service.combine_entities(entities, query)
+        words_to_search = []
+        entities_to_search = []
+        for ent in combined_results:
+            if float(ent["score"]) > 0.5 or ent["entity_group"] == "COMBINED_BIO_SYMPTOM":
+                words_to_search.append(ent["word"])
+                entities_to_search.append(ent)
+
+        word_embeddings = self.embedder.embed_queries_batch(words_to_search)
+
+        snomed_entities = {}
+        for entity, word_embedding in zip(entities_to_search, word_embeddings):
+            filter_expr = ""
+            if entity["domain_id"] and entity["concept_class_id"]:
+                domain_ids = entity["domain_id"].split(";")
+                concept_class_ids = entity["concept_class_id"].split(";")
+                filter_expr = f"domain_id in {domain_ids} or concept_class_id in {concept_class_ids}"
+            search_result = self.vector_store.search(
+                self.select_fields,
+                [word_embedding],
+                limit=2,
+                indexNames="rag_fintech",
+                knowledgebaseIds=["snomed_kb"],
+                filters=filter_expr,
+            )
+            if search_result and search_result[0]:
+                concept_names = []
+                for res in search_result[0]:
+                    concept_name = res["concept_name"]
+                    if concept_name not in concept_names:
+                        concept_names.append(concept_name)
+
+                snomed_entities[entity["word"]] = {
+                    "concept_names": "; ".join(concept_names),
+                    "start": entity["start"],
+                    "end": entity["end"],
+                }
+
+        return snomed_entities
+
+    def inject_with_concepts(self, query: str, snomed_entities: Dict[str, Dict[str, Any]]) -> str:
+        """
+        Replace original words in query with standardized SNOMED concepts.
+
+        Args:
+            query: Original query string
+            snomed_entities: Result from inject() method
+
+        Returns:
+            Query with original words replaced by standardized concepts
+        """
+        if not snomed_entities:
+            return query
+
+        # Sort by start position (descending) to replace from end to start
+        sorted_entities = sorted(snomed_entities.items(), key=lambda x: x[1]["start"], reverse=True)
+
         result = query
-        for colloquial, professional in self.glossary.items():
-            result = result.replace(colloquial, professional)
+        for original_word, entity_info in sorted_entities:
+            end = entity_info["end"]
+            first_concept = f"(SNOMED:{entity_info['concept_names']})"
+            result = result[:end] + first_concept + result[end:]
+
         return result
+
+    def get_concept_terms(self, snomed_entities: Dict[str, Dict[str, Any]]) -> List[str]:
+        """
+        Extract all standardized concept names as a list of terms.
+
+        Args:
+            snomed_entities: Result from inject() method
+
+        Returns:
+            List of standardized concept names
+        """
+        concept_terms = []
+        for entity_info in snomed_entities.values():
+            concept_names = entity_info["concept_names"]
+            # Split by semicolon and add each concept
+            for concept in concept_names.split(";"):
+                concept = concept.strip()
+                if concept and concept not in concept_terms:
+                    concept_terms.append(concept)
+        return concept_terms
+
+    def enhance_query(self, query: str, snomed_entities: Dict[str, Dict[str, Any]]) -> str:
+        """
+        Enhance query by appending standardized concepts.
+
+        Args:
+            query: Original query string
+            snomed_entities: Result from inject() method
+
+        Returns:
+            Enhanced query with standardized concepts appended
+        """
+        if not snomed_entities:
+            return query
+
+        concept_terms = self.get_concept_terms(snomed_entities)
+        if concept_terms:
+            enhanced = f"{query} {' '.join(concept_terms)}"
+            logger.info(f"Enhanced query with concepts: '{query}' -> '{enhanced}'")
+            return enhanced
+        return query
 
 
 class QueryOptimizer:
 
-    def __init__(self, model: dict[str, Any]):
+    def __init__(self, model: dict[str, Any], embedding_model: dict[str, Any]):
         self.model = model
+        self.glossary_injector = GlossaryInjector(embedding_model=embedding_model)
         self.unified_rewriter = UnifiedRewriter(model=model)
         self.hyde_rewriter = HyDERewriter(model=model)
-        self.glossary_injector = GlossaryInjector()
         self.multi_query_rewriter = MiltiQueryOptimizer(model=model)
 
-    def optimize(self, query: str, mode: Literal["unified", "hyde", "multi"] = "unified") -> Dict[str, Any]:
+    def optimize(
+        self, query: str, mode: Literal["unified", "hyde", "multi"] = "unified", use_snomed_enhancement: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Optimize query with optional SNOMED entity enhancement.
+
+        Args:
+            query: Original query string
+            mode: Optimization mode ("unified", "hyde", or "multi")
+            use_snomed_enhancement: If True, enhance query with standardized SNOMED concepts
+
+        Returns:
+            Dict containing:
+            - snomed_entities: Dict of recognized and standardized entities
+            - optimized_queries: List of optimized query strings
+            - tokens: Total tokens used
+        """
+        query_to_use = query
         optimized_queries = []
+        tokens = 0
+        snomed_entities = {}
+
         if mode == "unified":
-            rewrite_result = self.unified_rewriter.rewrite(query)
-            rewritten_query = rewrite_result["rewritten_query"]
-            optimized_queries.append(self.glossary_injector.inject(rewritten_query))
+            # Extract and standardize entities using SNOMED
+            snomed_entities = self.glossary_injector.inject(query)
+            if use_snomed_enhancement:
+                query_to_use = self.glossary_injector.inject_with_concepts(query, snomed_entities)
+
+            # Rewrite query with entity constraints
+            rewritten_query = self.unified_rewriter.rewrite(query, snomed_entities.keys())
+            optimized_queries.append(rewritten_query["rewritten_query"])
+            tokens += rewritten_query["tokens"]
+
+            # Log recognized entities
+            if snomed_entities:
+                logger.info(f"Recognized {len(snomed_entities)} entities: {list(snomed_entities.keys())}")
+
         elif mode == "hyde":
-            rewrite_result = self.hyde_rewriter.rewrite(query)
-            optimized_queries.append(rewrite_result["rewritten_query"])
+            rewritten_query = self.hyde_rewriter.rewrite(query)
+            optimized_queries.append(rewritten_query["rewritten_query"])
+            tokens += rewritten_query["tokens"]
         elif mode == "multi":
             optimized_queries.append(query)
-            rewrite_result = self.multi_query_rewriter.rewrite(query)
-            optimized_queries.extend(rewrite_result["rewritten_query"])
+            rewritten_query = self.multi_query_rewriter.rewrite(query)
+            optimized_queries.append(rewritten_query["rewritten_query"])
+            tokens += rewritten_query["tokens"]
         else:
             raise ValueError(f"Invalid optimization mode: {mode}")
 
         return {
+            "query_to_use": query_to_use,
+            "snomed_entities": snomed_entities,
             "optimized_queries": optimized_queries,
-            "tokens": rewrite_result.get("tokens", 0),
+            "tokens": tokens,
         }
 
     def clear_history(self) -> None:
@@ -222,7 +390,8 @@ class QueryOptimizer:
 def _create_query_optimizer() -> QueryOptimizer:
     registry = get_model_registry()
     model_config = registry.get_chat_model("query_lite")
-    query_optimizer = QueryOptimizer(model=model_config.to_dict())
+    embedding_model_config = registry.get_embedding_model("dense")
+    query_optimizer = QueryOptimizer(model=model_config.to_dict(), embedding_model=embedding_model_config.to_dict())
 
     logger.info("Initialized QueryOptimizer singleton")
     return query_optimizer

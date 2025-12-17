@@ -42,24 +42,27 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
         }
 
         const data = await response.json()
-        // 处理返回的数据：可能是 pages content/text 字符串
-        if (data.business_data) {
-          const fileInfo = {
-            business_data: data.business_data,
+        
+        // 处理解析结果的元信息
+        if (data.business_data || data.confidence || data.document_id) {
+          setParsedFileInfo({
+            business_data: data.business_data || {},
             confidence: data.confidence,
             document_id: data.document_id,
-          }
-          setParsedFileInfo(fileInfo)
+          })
         }
         
+        // 处理页面内容
         if (data.pages && Array.isArray(data.pages)) {
           // 如果是 Document 对象数组，提取文本内容
           const textContent = data.pages
             .map(doc => (typeof doc === 'string' ? doc : doc.text || doc.content || ''))
             .join('\n\n')
           setContent(textContent || '文件内容为空')
+        } else if (data.content || data.text) {
+          setContent(data.content || data.text)
         } else {
-          setContent(data.content || data.text || data.pages || '文件内容为空')
+          setContent('文件内容为空')
         }
       } catch (err) {
         console.error('获取文件内容失败:', err)

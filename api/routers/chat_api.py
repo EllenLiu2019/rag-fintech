@@ -51,7 +51,7 @@ async def chat_qa(
 
     logger.info(f"Retrieving top {top_k} chunks with filters: {filters}")
     # Let RetrievalError propagate
-    retrieved_chunks = retriever.search(
+    retrieved_res = retriever.search(
         query=request.query,
         kb_id=request.kb_id,
         top_k=top_k,
@@ -59,9 +59,9 @@ async def chat_qa(
         mode=request.mode,
     )
 
-    logger.info(f"Retrieved {len(retrieved_chunks)} chunks")
+    logger.info(f"Retrieved {len(retrieved_res['results'])} chunks")
 
-    if retrieved_chunks:
+    if retrieved_res["results"]:
         generation_config = request.generation_config or {}
         temperature = generation_config.get("temperature", 0.7)
         max_tokens = generation_config.get("max_tokens")
@@ -69,8 +69,8 @@ async def chat_qa(
         logger.info(f"Generating answer with temperature={temperature}, max_tokens={max_tokens}")
         # Let GenerationError propagate
         llm_result = llm_service.answer_question(
-            question=request.query,
-            context=retrieved_chunks,
+            question=retrieved_res["query_to_use"],
+            context=retrieved_res["results"],
             conversation_history=request.conversation_history,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -87,7 +87,7 @@ async def chat_qa(
     return ChatResponse(
         answer=answer,
         reasoning=reasoning,
-        sources=retrieved_chunks,
+        sources=retrieved_res["results"],
         tokens=tokens,
         mode=request.mode,
     )
@@ -114,7 +114,7 @@ async def chat_qa_stream(
             filters = request.filters or {}
 
             logger.info(f"Retrieving top {top_k} chunks with filters: {filters}")
-            retrieved_chunks = retriever.search(
+            retrival_res = retriever.search(
                 query=request.query,
                 kb_id=request.kb_id,
                 top_k=top_k,
@@ -123,8 +123,8 @@ async def chat_qa_stream(
             )
 
             # 2. Send chunks
-            if retrieved_chunks:
-                yield f"data: {json.dumps({'type': 'chunks', 'data': retrieved_chunks}, ensure_ascii=False)}\n\n"
+            if retrival_res:
+                yield f"data: {json.dumps({'type': 'chunks', 'data': retrival_res['results']}, ensure_ascii=False)}\n\n"
             else:
                 # No chunks found
                 yield f"data: {json.dumps({'type': 'error', 'data': {'message': '抱歉，没有找到相关的文档片段来回答您的问题。'}}, ensure_ascii=False)}\n\n"
@@ -137,8 +137,8 @@ async def chat_qa_stream(
             max_tokens = generation_config.get("max_tokens")
 
             async for event in llm_service.stream_answer_question(
-                question=request.query,
-                context=retrieved_chunks,
+                question=retrival_res["query_to_use"],
+                context=retrival_res["results"],
                 conversation_history=request.conversation_history,
                 temperature=temperature,
                 max_tokens=max_tokens,

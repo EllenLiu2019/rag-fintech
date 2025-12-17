@@ -9,6 +9,7 @@ from .log_utils import (
     set_request_id,
     get_request_id,
     generate_request_id,
+    set_third_party_log_level,
     RequestIDFormatter,
     request_id_var,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "set_request_id",
     "get_request_id",
     "generate_request_id",
+    "set_third_party_log_level",
     "RequestIDFormatter",
     "request_id_var",
     # 中间件

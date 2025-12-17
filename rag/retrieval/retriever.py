@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, List, Literal
+from typing import Optional, Dict, Any, List, Literal, Union
 
 from rag.core.embedding_service import EmbeddingService
 from rag.core.doc_service import DocumentService
@@ -40,7 +40,8 @@ class Retriever:
         top_k: int = 5,
         filters: Optional[Dict] = None,
         mode: Literal["dense", "hybrid"] = "dense",
-    ) -> List[Dict[str, Any]]:
+        return_metadata: bool = True,
+    ) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
 
         logger.info(f"Searching for: '{query}' in kb: {kb_id} (mode: {mode})")
 
@@ -49,7 +50,8 @@ class Retriever:
             return []
 
         try:
-            optimized_queries = query_optimizer.optimize(query)["optimized_queries"]
+            optimization_result = query_optimizer.optimize(query)
+            optimized_queries = optimization_result["optimized_queries"]
         except Exception as e:
             raise RetrievalError(
                 message="Failed to optimize query",
@@ -86,6 +88,15 @@ class Retriever:
             )
 
         logger.info(f"Found {len(results) if results else 0} results.")
+
+        # Return with metadata if requested
+        if return_metadata:
+            return {
+                "results": results,
+                "query_to_use": optimization_result["query_to_use"],
+                "snomed_entities": optimization_result.get("snomed_entities", {}),
+            }
+
         return results
 
     @cached(prefix="dense_search", ttl=1800)

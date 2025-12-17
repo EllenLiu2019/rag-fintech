@@ -14,8 +14,8 @@ logger = get_logger(__name__)
 
 class EmbeddingService:
     def __init__(self, model: dict[str, Any]):
-        api_key = os.getenv(model["llm_provider"].upper() + constants.API_KEY_SUFFIX)
-        self.model = embedding_model[model["llm_provider"]](key=api_key, model_name=model["model_name"])
+        api_key = os.getenv(model["provider"].upper() + constants.API_KEY_SUFFIX)
+        self.model = embedding_model[model["provider"]](key=api_key, model_name=model["model_name"])
         self.redis_client = _get_redis_client()
 
     def embed_chunks(self, chunks: list[dict], rag_document: RagDocument) -> list[dict]:

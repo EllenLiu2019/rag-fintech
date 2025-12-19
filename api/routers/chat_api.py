@@ -123,7 +123,7 @@ async def chat_qa_stream(
             )
 
             # 2. Send chunks
-            if retrival_res:
+            if retrival_res["results"]:
                 yield f"data: {json.dumps({'type': 'chunks', 'data': retrival_res['results']}, ensure_ascii=False)}\n\n"
             else:
                 # No chunks found

@@ -27,6 +27,7 @@ function ChatQA({ fileInfo, onBack }) {
   const [model, setModel] = useState('DeepSeek-R1')
   const [temperature, setTemperature] = useState(0.7)
   const [maxTokens, setMaxTokens] = useState(2000)
+  const [topK, setTopK] = useState(5) // Top K 结果数量
   const [streamOutput, setStreamOutput] = useState(true) // 默认启用流式输出
   const [enableReasoning, setEnableReasoning] = useState(true)
   const [retrievalMode, setRetrievalMode] = useState('hybrid') // 检索模式: dense or hybrid，默认 hybrid
@@ -327,7 +328,7 @@ function ChatQA({ fileInfo, onBack }) {
       mode: retrievalMode,
       stream: true,
       generation_config: {
-        top_k: 5,
+        top_k: topK,
         temperature: temperature,
         max_tokens: maxTokens
       }
@@ -495,7 +496,7 @@ function ChatQA({ fileInfo, onBack }) {
         mode: retrievalMode,
         stream: false, // 暂时使用非流式，后续可以实现流式
         generation_config: {
-          top_k: 5, // 可以从 UI 配置中获取
+          top_k: topK,
           temperature: temperature,
           max_tokens: maxTokens
         }
@@ -773,15 +774,34 @@ function ChatQA({ fileInfo, onBack }) {
 
               <div className="setting-item">
                 <label>Temperature: {temperature}</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={temperature}
-                  onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                  className="temperature-slider"
-                />
+                <div className="slider-container">
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={temperature}
+                    onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                    className="temperature-slider"
+                  />
+                  <span className="slider-max-value">1</span>  
+                </div>
+              </div>
+
+              <div className="setting-item">
+                <label>Top K: {topK}</label>
+                <div className="slider-container">
+                  <input
+                    type="range"
+                    min="1"
+                    max="20"
+                    step="1"
+                    value={topK}
+                    onChange={(e) => setTopK(parseInt(e.target.value))}
+                    className="temperature-slider"
+                  />
+                  <span className="slider-max-value">20</span>
+                </div>
               </div>
 
               <div className="setting-item">

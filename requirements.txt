@@ -22,6 +22,11 @@ beautifulsoup4>=4.12.2
 pymilvus>=2.6.3
 openai==2.8.1
 dashscope==1.25.3
+transformers==4.57.3
+langchain==1.1.0
+langchain-huggingface==1.2.0
+langchain-deepseek==1.0.1
+langchain-anthropic==1.3.0
 
 # RDB
 SQLAlchemy>=2.0.0

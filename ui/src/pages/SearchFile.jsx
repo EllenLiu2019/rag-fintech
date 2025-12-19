@@ -13,7 +13,8 @@ function SearchFile({ fileInfo, onBack }) {
   const [filters, setFilters] = useState({}) // 存储筛选值
   const [selectedFilters, setSelectedFilters] = useState({}) // 存储用户勾选的 filters 状态
   const [availableFilters, setAvailableFilters] = useState([])
-  const [retrievalMode, setRetrievalMode] = useState('dense') // 检索模式: dense or hybrid
+  const [retrievalMode, setRetrievalMode] = useState('hybrid') // 检索模式: dense or hybrid，默认 hybrid
+  const [topK, setTopK] = useState(5) // Top K 结果数量
 
   useEffect(() => {
     // Debug: 
@@ -91,7 +92,7 @@ function SearchFile({ fileInfo, onBack }) {
         body: JSON.stringify({
           query: query,
           kb_id: "default_kb", // TODO: 动态获取或配置
-          top_k: 5,
+          top_k: topK,
           filters: activeFilters,
           mode: retrievalMode
         })
@@ -201,34 +202,60 @@ function SearchFile({ fileInfo, onBack }) {
             </div>
           </details>
 
-          {/* Retrieval Strategy */}
-          <div className="control-card strategy-card">
-            <h3>Retrieval Strategy</h3>
-            <div className="strategy-option">
-              <label>
-                <input 
-                  type="radio" 
-                  name="strategy" 
-                  value="dense" 
-                  checked={retrievalMode === 'dense'}
-                  onChange={(e) => setRetrievalMode(e.target.value)}
-                />
-                Dense Vector Search
-              </label>
-              <p className="strategy-description">Semantic search using dense embeddings</p>
-            </div>
-            <div className="strategy-option">
-              <label>
-                <input 
-                  type="radio" 
-                  name="strategy" 
-                  value="hybrid" 
-                  checked={retrievalMode === 'hybrid'}
-                  onChange={(e) => setRetrievalMode(e.target.value)}
-                />
-                Hybrid Search
-              </label>
-              <p className="strategy-description">Combines dense vectors + sparse with RRF reranking</p>
+          {/* Advanced Settings */}
+          <div className="control-card model-settings-section">
+            <h3>⚙️ Advanced Settings</h3>
+            <div className="settings-content">
+              {/* Retrieval Strategy */}
+              <div className="setting-group">
+                <label className="setting-group-label">🔎 Retrieval Strategy</label>
+                <div className="strategy-options">
+                  <div className="strategy-radio-item">
+                    <input 
+                      type="radio" 
+                      id="strategy-hybrid"
+                      name="retrieval-strategy" 
+                      value="hybrid" 
+                      checked={retrievalMode === 'hybrid'}
+                      onChange={(e) => setRetrievalMode(e.target.value)}
+                    />
+                    <label htmlFor="strategy-hybrid">
+                      <span className="strategy-name">Hybrid Search</span>
+                      <span className="strategy-desc">Dense + Sparse with RRF</span>
+                    </label>
+                  </div>
+                  <div className="strategy-radio-item">
+                    <input 
+                      type="radio" 
+                      id="strategy-dense"
+                      name="retrieval-strategy" 
+                      value="dense" 
+                      checked={retrievalMode === 'dense'}
+                      onChange={(e) => setRetrievalMode(e.target.value)}
+                    />
+                    <label htmlFor="strategy-dense">
+                      <span className="strategy-name">Dense Vector</span>
+                      <span className="strategy-desc">Semantic embedding search</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="setting-item">
+                <label>Top K: {topK}</label>
+                <div className="slider-container">
+                  <input
+                    type="range"
+                    min="1"
+                    max="20"
+                    step="1"
+                    value={topK}
+                    onChange={(e) => setTopK(parseInt(e.target.value))}
+                    className="temperature-slider"
+                  />
+                  <span className="slider-max-value">20</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

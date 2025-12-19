@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 from transformers import pipeline
 
 from common import get_logger
@@ -15,6 +15,7 @@ class NERService:
         "DIAGNOSTIC_PROCEDURE": ("Procedure", "Procedure"),
         "THERAPEUTIC_PROCEDURE": ("Procedure", "Procedure"),
         "BIOLOGICAL_STRUCTURE": ("Specimen; Spec Anatomic Site", "Body structure"),
+        "DETAILED_DESCRIPTION": ("disease", "Disorder"),
     }
     COMBINED_GROUPS = ["SIGN_SYMPTOM", "DISEASE_DISORDER", "BIOLOGICAL_STRUCTURE"]
 
@@ -52,21 +53,21 @@ class NERService:
                 skip_next = False
                 continue
 
-            if entity["entity_group"] in ["SIGN_SYMPTOM", "DISEASE_DISORDER"]:
-                if i < len(entities) - 1 and entities[i + 1]["entity_group"] == "BIOLOGICAL_STRUCTURE":
-                    entities[i + 1]["score"] = float(entities[i + 1]["score"])
-                    combined_results.append(self._create_combined_entity(entity, entities[i + 1], query))
-                    skip_next = True
-                    continue
-            elif entity["entity_group"] == "BIOLOGICAL_STRUCTURE":
-                if i < len(entities) - 1 and entities[i + 1]["entity_group"] in ["SIGN_SYMPTOM", "DISEASE_DISORDER"]:
-                    entities[i + 1]["score"] = float(entities[i + 1]["score"])
-                    combined_results.append(self._create_combined_entity(entity, entities[i + 1], query))
-                    skip_next = True
-                    continue
+            if i < len(entities) - 1 and self._should_combine(entity, entities[i + 1]):
+                entities[i + 1]["score"] = float(entities[i + 1]["score"])
+                combined_results.append(self._create_combined_entity(entity, entities[i + 1], query))
+                skip_next = True
+                continue
             combined_results.append(entity)
 
         return self._remove_overlapping_entities(combined_results)
+
+    def _should_combine(self, entity1: Dict[str, Any], entity2: Dict[str, Any]) -> bool:
+        return (
+            entity1["entity_group"] in ["BIOLOGICAL_STRUCTURE", "DETAILED_DESCRIPTION"]
+            and entity2["entity_group"] in ["SIGN_SYMPTOM", "DISEASE_DISORDER"]
+            and entity1["end"] == entity2["start"]
+        )
 
     def _create_combined_entity(self, entity1: Dict[str, Any], entity2: Dict[str, Any], text: str) -> Dict[str, Any]:
         start = min(entity1["start"], entity2["start"])

@@ -120,7 +120,7 @@ class DeepSeek(LLM):
     async def stream_generate(
         self,
         messages: List[Dict[str, str]],
-        temperature: float = 0.7,
+        temperature: float = 1.0,
         max_tokens: Optional[int] = None,
     ) -> AsyncIterator[Dict[str, Any]]:
         params = {

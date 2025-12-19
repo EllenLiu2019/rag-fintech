@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Dict, Any, List, Literal
+from typing import Dict, Any, List, Literal, Optional
 
 from rag.llm.chat_model import chat_model
 from common import get_logger, get_model_registry
@@ -64,7 +64,7 @@ class UnifiedRewriter(BaseRewriter):
         self.history_max_length = history_max_length
         self.histories: List[str] = []
 
-    def _build_prompt(self, required_entities: List[str] = None) -> str:
+    def _build_prompt(self, required_entities: Optional[List[str]] = None) -> str:
         history_str = json.dumps(self.histories[-self.history_max_length :], ensure_ascii=False)
 
         # Build required entities section if entities exist
@@ -76,7 +76,7 @@ class UnifiedRewriter(BaseRewriter):
 
         return self.prompt_manager.get("unified_rewrite", histories=history_str, required_entities=required_section)
 
-    def rewrite(self, query: str, medical_entities: List[str]) -> Dict[str, Any]:
+    def rewrite(self, query: str, medical_entities: Optional[List[str]] = None) -> Dict[str, Any]:
         try:
 
             reasoning, content, tokens = self.llm.generate(
@@ -89,13 +89,13 @@ class UnifiedRewriter(BaseRewriter):
 
             rewritten = self._clean_response(content)
 
-            if medical_entities:
-                missing = [ent for ent in medical_entities if ent not in rewritten]
-                if missing:
-                    logger.warning(f"Missing entities in rewritten query: {missing}")
-                    # Append missing entities to the rewritten query
-                    rewritten = rewritten + " " + " ".join(missing)
-                    logger.info(f"Appended missing entities: '{rewritten}'")
+            # if medical_entities:
+            #     missing = [ent for ent in medical_entities if ent not in rewritten]
+            #     if missing:
+            #         logger.warning(f"Missing entities in rewritten query: {missing}")
+            #         # Append missing entities to the rewritten query
+            #         rewritten = rewritten + " " + " ".join(missing)
+            #         logger.info(f"Appended missing entities: '{rewritten}'")
 
             self.histories.append(query)
 
@@ -188,12 +188,13 @@ class MiltiQueryOptimizer(BaseRewriter):
 class GlossaryInjector:
 
     select_fields = ["concept_name", "domain_id", "concept_class_id"]
+    threshold = 0.4
 
     def __init__(self, embedding_model: dict[str, Any]):
         self.embedder = EmbeddingService(model=embedding_model)
         self.vector_store = VectorStoreClient()
 
-    def inject(self, query: str) -> Dict[str, Dict[str, Any]]:
+    def ner(self, query: str) -> Dict[str, Dict[str, Any]]:
         """
         Extract entities from query and standardize them using SNOMED.
 
@@ -207,21 +208,26 @@ class GlossaryInjector:
                 }
             }
         """
+        snomed_entities = {}
         entities = ner_service.get_entities(query)
+        if not entities:
+            return snomed_entities
         combined_results = ner_service.combine_entities(entities, query)
         words_to_search = []
         entities_to_search = []
         for ent in combined_results:
-            if float(ent["score"]) > 0.5 or ent["entity_group"] == "COMBINED_BIO_SYMPTOM":
+            if float(ent["score"]) >= self.threshold or ent["entity_group"] == "COMBINED_BIO_SYMPTOM":
                 words_to_search.append(ent["word"])
                 entities_to_search.append(ent)
 
+        if not words_to_search:
+            return snomed_entities
+
         word_embeddings = self.embedder.embed_queries_batch(words_to_search)
 
-        snomed_entities = {}
         for entity, word_embedding in zip(entities_to_search, word_embeddings):
             filter_expr = ""
-            if entity["domain_id"] and entity["concept_class_id"]:
+            if entity["entity_group"] not in ["COMBINED_BIO_SYMPTOM"]:
                 domain_ids = entity["domain_id"].split(";")
                 concept_class_ids = entity["concept_class_id"].split(";")
                 filter_expr = f"domain_id in {domain_ids} or concept_class_id in {concept_class_ids}"
@@ -248,7 +254,7 @@ class GlossaryInjector:
 
         return snomed_entities
 
-    def inject_with_concepts(self, query: str, snomed_entities: Dict[str, Dict[str, Any]]) -> str:
+    def inject(self, query: str, snomed_entities: Dict[str, Dict[str, Any]]) -> str:
         """
         Replace original words in query with standardized SNOMED concepts.
 
@@ -271,6 +277,7 @@ class GlossaryInjector:
             first_concept = f"(SNOMED:{entity_info['concept_names']})"
             result = result[:end] + first_concept + result[end:]
 
+        logger.info("Glossary Injected, result: %s", result)
         return result
 
     def get_concept_terms(self, snomed_entities: Dict[str, Dict[str, Any]]) -> List[str]:
@@ -348,12 +355,16 @@ class QueryOptimizer:
 
         if mode == "unified":
             # Extract and standardize entities using SNOMED
-            snomed_entities = self.glossary_injector.inject(query)
-            if use_snomed_enhancement:
-                query_to_use = self.glossary_injector.inject_with_concepts(query, snomed_entities)
+            snomed_entities = self.glossary_injector.ner(query)
+            if use_snomed_enhancement and snomed_entities:
+                query_to_use = self.glossary_injector.inject(query, snomed_entities)
 
             # Rewrite query with entity constraints
-            rewritten_query = self.unified_rewriter.rewrite(query, snomed_entities.keys())
+            if snomed_entities:
+                entities = snomed_entities.keys()
+            else:
+                entities = []
+            rewritten_query = self.unified_rewriter.rewrite(query, entities)
             optimized_queries.append(rewritten_query["rewritten_query"])
             tokens += rewritten_query["tokens"]
 
@@ -389,7 +400,7 @@ class QueryOptimizer:
 
 def _create_query_optimizer() -> QueryOptimizer:
     registry = get_model_registry()
-    model_config = registry.get_chat_model("query_lite")
+    model_config = registry.get_chat_model("query_reasoner")
     embedding_model_config = registry.get_embedding_model("dense")
     query_optimizer = QueryOptimizer(model=model_config.to_dict(), embedding_model=embedding_model_config.to_dict())
 

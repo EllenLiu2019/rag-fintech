@@ -40,7 +40,7 @@ class Retriever:
         top_k: int = 5,
         filters: Optional[Dict] = None,
         mode: Literal["dense", "hybrid"] = "dense",
-        return_metadata: bool = True,
+        opt_mode: Literal["unified", "hyde", "multi"] = "unified",
     ) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
 
         logger.info(f"Searching for: '{query}' in kb: {kb_id} (mode: {mode})")
@@ -50,7 +50,7 @@ class Retriever:
             return []
 
         try:
-            optimization_result = query_optimizer.optimize(query)
+            optimization_result = query_optimizer.optimize(query, mode=opt_mode)
             optimized_queries = optimization_result["optimized_queries"]
         except Exception as e:
             raise RetrievalError(
@@ -77,9 +77,9 @@ class Retriever:
             ) from e
 
         if mode == "hybrid":
-            results = self._hybrid_search(optimized_queries, kb_id, top_k, query_vectors, filters)
+            results = self._hybrid_search(optimized_queries, kb_id, top_k, query_vectors, filters, opt_mode)
         elif mode == "dense":
-            results = self._dense_search(query, kb_id, top_k, query_vectors, filters)
+            results = self._dense_search(query, kb_id, top_k, query_vectors, filters, opt_mode)
         else:
             raise ValidationError(
                 message=f"Invalid retrieval mode: {mode}",
@@ -90,14 +90,11 @@ class Retriever:
         logger.info(f"Found {len(results) if results else 0} results.")
 
         # Return with metadata if requested
-        if return_metadata:
-            return {
-                "results": results,
-                "query_to_use": optimization_result["query_to_use"],
-                "snomed_entities": optimization_result.get("snomed_entities", {}),
-            }
-
-        return results
+        return {
+            "results": results,
+            "query_to_use": optimization_result["query_to_use"],
+            "snomed_entities": optimization_result.get("snomed_entities", {}),
+        }
 
     @cached(prefix="dense_search", ttl=1800)
     def _dense_search(
@@ -107,6 +104,7 @@ class Retriever:
         top_k: int,
         query_vectors: List[List[float]],
         filters: Optional[Dict] = None,
+        opt_mode: Literal["unified", "hyde", "multi"] = "unified",
     ) -> List[Dict[str, Any]]:
         """Dense vector search."""
 
@@ -130,16 +128,19 @@ class Retriever:
                 details={"kb_id": kb_id, "top_k": top_k, "error": str(e)},
             ) from e
 
-        try:
-            results = reranker.process(query, results, top_k)
-        except RerankError:
-            raise
-        except Exception as e:
-            raise RerankError(
-                message="Reranking failed",
-                code=ErrorCodes.S_RETRIEVAL_002,
-                details={"query": query[:50], "result_count": len(results), "error": str(e)},
-            ) from e
+        if opt_mode == "multi":
+            try:
+                results = reranker.process(query, results, top_k)
+            except RerankError:
+                raise
+            except Exception as e:
+                raise RerankError(
+                    message="Reranking failed",
+                    code=ErrorCodes.S_RETRIEVAL_002,
+                    details={"query": query[:50], "result_count": len(results), "error": str(e)},
+                ) from e
+        else:
+            results = results[0]
 
         try:
             return self._get_relevant_chunks(results, kb_id)
@@ -156,6 +157,7 @@ class Retriever:
         top_k: int,
         query_vectors: List[List[float]],
         filters: Optional[Dict] = None,
+        opt_mode: Literal["unified", "hyde", "multi"] = "unified",
     ) -> List[Dict[str, Any]]:
         """Hybrid search (dense + sparse)."""
 
@@ -180,17 +182,20 @@ class Retriever:
                 details={"kb_id": kb_id, "top_k": top_k, "error": str(e)},
             ) from e
 
-        query = optimized_queries[0]
-        try:
-            results = reranker.process(query, results, top_k)
-        except RerankError:
-            raise
-        except Exception as e:
-            raise RerankError(
-                message="Reranking failed in hybrid search",
-                code=ErrorCodes.S_RETRIEVAL_002,
-                details={"query": query[:50], "result_count": len(results), "error": str(e)},
-            ) from e
+        if opt_mode == "multi":
+            query = optimized_queries[0]
+            try:
+                results = reranker.process(query, results, top_k)
+            except RerankError:
+                raise
+            except Exception as e:
+                raise RerankError(
+                    message="Reranking failed in hybrid search",
+                    code=ErrorCodes.S_RETRIEVAL_002,
+                    details={"query": query[:50], "result_count": len(results), "error": str(e)},
+                ) from e
+        else:
+            results = results[0]
 
         try:
             return self._get_relevant_chunks(results, kb_id)

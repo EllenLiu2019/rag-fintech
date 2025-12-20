@@ -1,8 +1,9 @@
-from .base import BaseParser
-from typing import Optional, List
-from llama_index.core.schema import Document
+from typing import Optional
 
+from rag.ingestion.parser.base import BaseParser
+from rag.ingestion.parser.parser import ParseResult
 from common import get_logger
+from common.prompt_manager import get_prompt_manager
 
 logger = get_logger(__name__)
 
@@ -12,11 +13,12 @@ class PDFParser(BaseParser):
 
     supported_extensions = [".pdf"]
     supported_mime_types = ["application/pdf"]
+    prompt_manager = get_prompt_manager()
 
     def can_parse(self, filename: str, content_type: Optional[str]) -> bool:
         return filename.lower().endswith(".pdf") or (content_type and "pdf" in content_type.lower())
 
-    def parse_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> List[Document]:
+    def parse_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> ParseResult:
         extra_info = {"file_name": filename, "content_type": content_type, "size": len(contents)}
         logger.info(f"extract document info: {extra_info}")
 
@@ -27,7 +29,7 @@ class PDFParser(BaseParser):
             llm_parser = LlamaParse(
                 api_key=os.getenv("LLAMA_CLOUD_API_KEY"),
                 parse_mode="parse_document_with_agent",
-                model="anthropic-haiku-4.5",  # anthropic-sonnet-4.5
+                model="anthropic-sonnet-4.5",
                 high_res_ocr=True,
                 adaptive_long_table=True,
                 outlined_table_extraction=True,
@@ -41,6 +43,7 @@ class PDFParser(BaseParser):
                 strict_mode_reconstruction=True,
                 strict_mode_buggy_font=True,
                 user_prompt=None,
+                system_prompt_append=self.prompt_manager.get("parse_system_prompt"),
                 hide_footers=True,
             )
 
@@ -60,7 +63,7 @@ class PDFParser(BaseParser):
             else:
                 logger.warning("no documents returned from LlamaParse")
 
-            return markdown_documents
+            return ParseResult(documents=markdown_documents, job_id=result.job_id)
         except Exception as e:
             logger.error(f"PDF parsing failed: {str(e)}")
             raise ValueError(f"PDF parsing failed: {str(e)}")

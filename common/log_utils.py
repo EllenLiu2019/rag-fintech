@@ -24,6 +24,11 @@ THIRD_PARTY_LOGGERS = {
     "filelock": logging.WARNING,
 }
 
+PRINT_REDIRECT_LIBRARIES = {
+    "llama_cloud_services": "llama_cloud_services",
+    "llama_index": "llama_index",
+}
+
 
 class RequestIDFormatter(logging.Formatter):
     """自定义日志格式化器，自动从上下文获取 request_id"""
@@ -85,6 +90,64 @@ def _configure_third_party_loggers() -> None:
         third_party_logger.handlers.clear()
         # 确保日志传播到 root logger
         third_party_logger.propagate = True
+
+    # 特殊处理：重定向使用 print() 的第三方库输出到 logging
+    _redirect_third_party_prints()
+
+
+def _redirect_third_party_prints() -> None:
+    """
+    通过替换内置 print 函数，将使用 print() 的第三方库输出重定向到 logging。
+
+    支持多个库，通过调用栈自动判断来源并路由到对应的 logger。
+    """
+    try:
+        import builtins
+        import inspect
+
+        # 为每个需要重定向的库创建 logger
+        loggers = {}
+        for lib_identifier, logger_name in PRINT_REDIRECT_LIBRARIES.items():
+            lib_logger = logging.getLogger(logger_name)
+            lib_logger.setLevel(logging.INFO)
+            lib_logger.propagate = True
+            loggers[lib_identifier] = lib_logger
+
+        # 保存原始的 print 函数
+        _original_print = builtins.print
+
+        def _logging_print(*args, **kwargs):
+            """替换的 print 函数，自动判断来源并重定向到对应的 logging"""
+            try:
+                stack = inspect.stack()
+
+                # 检查调用栈，找出是否来自需要重定向的库
+                matched_lib = None
+                for lib_identifier in PRINT_REDIRECT_LIBRARIES.keys():
+                    if any(
+                        lib_identifier in str(frame_info.filename) for frame_info in stack[1:8]  # 检查调用栈的前几层
+                    ):
+                        matched_lib = lib_identifier
+                        break
+
+                if matched_lib:
+                    # 重定向到对应的 logger
+                    message = " ".join(str(arg) for arg in args)
+                    if message.strip():
+                        loggers[matched_lib].info(message)
+                else:
+                    # 非需要重定向的库的调用，使用原始 print
+                    _original_print(*args, **kwargs)
+            except Exception:
+                # 如果检查失败，回退到原始 print
+                _original_print(*args, **kwargs)
+
+        # 替换内置的 print 函数
+        builtins.print = _logging_print
+
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to redirect third-party prints: {e}")
 
 
 def _configure_transformers_logging() -> None:

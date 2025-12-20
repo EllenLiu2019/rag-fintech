@@ -11,6 +11,7 @@ logger = get_logger(__name__)
 class RagDocument(BaseModel):
 
     document_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="document_id")
+    job_id: str = Field(default="", description="job_id")
     pages: list[dict[str, Any]] = Field(default_factory=list, description="pages")
     business_data: dict[str, Any] = Field(default_factory=dict, description="business_data")
     confidence: dict[str, Any] = Field(default_factory=dict, description="extracted_data confidence")
@@ -52,6 +53,7 @@ class RagDocument(BaseModel):
         file_size: int,
         content_type: Optional[str] = None,
         chunk_num: int = 0,
+        job_id: str = "",
     ) -> "RagDocument":
         return cls(
             document_id=document_id,
@@ -65,6 +67,7 @@ class RagDocument(BaseModel):
             content_type=content_type,
             page_count=len(parsed_documents),
             upload_time=datetime.now(tz=timezone.utc).isoformat(),
+            job_id=job_id,
         )
 
     def to_document_metadata(self) -> dict[str, Any]:
@@ -78,6 +81,7 @@ class RagDocument(BaseModel):
         """
         return {
             "document_id": self.document_id,
+            "job_id": self.job_id,
             "filename": self.filename,
             "file_size": self.file_size,
             "content_type": self.content_type,

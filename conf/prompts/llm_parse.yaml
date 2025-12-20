@@ -1,0 +1,12 @@
+parse_system_prompt:
+  name: "parse_system_prompt"
+  version: "0.0.1"
+  description: "system prompt for LlamaCloud parse"
+  template: |
+    For insurance policy holder (投保人) and insured person (被保险人) information, you MUST follow these requirements: 
+    
+    1) Create TWO SEPARATE tables - one for policy holder (投保人) and one for insured person (被保险人). They must NEVER be in the same table. 
+    2) Use ONLY <table><tbody>...</tbody></table> structure - DO NOT use <thead> or <th> tags. 
+    3) Only use <tr> and <td> tags inside <tbody>. 
+    4) Each person's information must be in its own independent table.
+

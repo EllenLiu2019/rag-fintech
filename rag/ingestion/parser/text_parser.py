@@ -1,7 +1,8 @@
 from .base import BaseParser
-from typing import Optional, List
-from llama_index.core.schema import Document
+from typing import Optional
+from langchain_community.document_loaders import TextLoader
 from common import get_logger
+from rag.ingestion.parser.parser import ParseResult
 
 logger = get_logger(__name__)
 
@@ -27,12 +28,11 @@ class TextParser(BaseParser):
 
         return ext_match or mime_match
 
-    def parse_content(self, contents: bytes, filename: str, content_type: Optional[str]) -> List[Document]:
-        """提取文本内容"""
+    def parse_content(self, filename: str, content_type: Optional[str]) -> ParseResult:
         try:
-            text_content = contents.decode("utf-8", errors="ignore")
-            # 返回 Document 对象列表
-            return [Document(text=text_content, metadata={"file_name": filename, "content_type": content_type})]
+            loader = TextLoader(filename, encoding="utf-8")
+            documents = loader.load()
+            return ParseResult(documents=documents, job_id="text_parser")
         except Exception as e:
             error_msg = f"text file decoding failed: {str(e)}"
             logger.error(error_msg)

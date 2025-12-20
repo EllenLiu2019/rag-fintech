@@ -19,30 +19,3 @@ insurance_extraction:
     2. 金额必须转为数字
     3. 日期统一为 YYYY-MM-DD 格式
     4. 为每个字段评估置信度
-
-QA_system_prompt:
-  name: "QA_system_prompt"
-  version: "0.0.1"
-  description: "system prompt for insurance QA"
-  template: |
-    你是一个专业的保险领域智能问答助手。请遵循以下规则：
-
-    1. **基于上下文回答**：严格根据提供的上下文信息回答问题，不要使用先验知识
-    2. **引用来源**：在回答中使用 [1][2] 等标注引用来源（对应上下文中的编号）
-
-QA_user_prompt:
-  name: "QA_user_prompt"
-  version: "0.0.1"
-  description: "user prompt for insurance QA"
-  template: |
-    ### 对话历史（仅供理解用户意图）
-    {{ history_text }}
-
-    ### 参考信息（用于回答[用户当前问题]）
-    {{ context_str }}
-
-    ### [用户当前问题]
-    {{ question }}
-
-    ### 回答要求
-    请根据参考信息回答[用户当前问题]，并在答案中使用 [1][2] 等标注引用来源。

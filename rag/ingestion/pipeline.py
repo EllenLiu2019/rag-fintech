@@ -6,6 +6,7 @@ from llama_index.core.schema import Document
 from rag.ingestion.parser import parse_content
 from rag.ingestion.extractor.extractor import Extractor
 from rag.ingestion.document import RagDocument
+from rag.ingestion.parser.parser import ParseResult
 from rag.ingestion.parser.serializer_deserializer import serialize_documents
 from rag.ingestion.splitter.markdown_splitter import RagMarkdownSplitter
 from rag.core.embedding_service import EmbeddingService
@@ -40,7 +41,7 @@ class IngestionPipeline:
 
         # Step 2: Parse document
         try:
-            documents = parse_content(contents, filename, content_type)
+            parse_result = parse_content(contents, filename, content_type)
         except ValueError as e:
             raise ParsingError(
                 message=f"Failed to parse document: {filename}",
@@ -48,7 +49,7 @@ class IngestionPipeline:
                 details={"filename": filename, "content_type": content_type, "reason": str(e)},
             )
 
-        rag_document = self.build_from_parsed_documents(filename, contents, content_type, documents)
+        rag_document = self.build_from_parsed_documents(filename, contents, content_type, parse_result)
 
         # Step 3: Split document into chunks
         try:
@@ -115,10 +116,10 @@ class IngestionPipeline:
             logger.warning(f"Failed to update document info in RDB: {e}", exc_info=True)
 
     def build_from_parsed_documents(
-        self, filename: str, contents: bytes, content_type: str, documents: list[Document]
+        self, filename: str, contents: bytes, content_type: str, parse_result: ParseResult
     ) -> RagDocument:
 
-        pages = serialize_documents(documents)
+        pages = serialize_documents(parse_result.documents)
         # import json
         # import os
 
@@ -144,6 +145,7 @@ class IngestionPipeline:
             filename=filename,
             file_size=len(contents),
             content_type=content_type,
+            job_id=parse_result.job_id,
         )
 
         logger.info(

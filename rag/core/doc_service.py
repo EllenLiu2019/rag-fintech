@@ -63,21 +63,22 @@ class DocumentService:
         return rdb_document
 
     def update_file_info(self, filename: str, rag_document: RagDocument, rdb_document: RdbDocument):
-        logger.info(f"Updating file {filename} in RDB: id={rdb_document.id}")
+        file_name = f"{filename}-{rag_document.job_id}"
+        logger.info(f"Updating file {file_name} in RDB: id={rdb_document.id}")
 
         parsed_file = rag_document.to_parsed_file()
         try:
-            parsed_file_path = s3_client.save_file_info(filename, parsed_file)
+            parsed_file_path = s3_client.save_file_info(file_name, parsed_file)
         except Exception as e:
             raise FileStorageError(
-                message=f"Failed to save parsed file info: {filename}",
+                message=f"Failed to save parsed file info: {file_name}",
                 code=ErrorCodes.R_FILE_001,
-                details={"filename": filename, "error": str(e)},
+                details={"filename": file_name, "error": str(e)},
             ) from e
 
         # Update document attributes
         rdb_document.document_id = rag_document.document_id
-        rdb_document.file_name = rag_document.filename
+        rdb_document.file_name = file_name
         rdb_document.doc_status = "completed"
         rdb_document.doc_location = parsed_file_path
         rdb_document.content_type = rag_document.content_type
@@ -93,13 +94,13 @@ class DocumentService:
             updated_doc = self.rdb_client.save(rdb_document)
 
             logger.info(
-                f"File {filename} updated in RDB: id={updated_doc.id} with parsed file location: {parsed_file_path}"
+                f"File {file_name} updated in RDB: id={updated_doc.id} with parsed file location: {parsed_file_path}"
             )
         except Exception as e:
             raise DatabaseError(
-                message=f"Failed to update document in database: {filename}",
+                message=f"Failed to update document in database: {file_name}",
                 code=ErrorCodes.R_DB_002,
-                details={"filename": filename, "document_id": rdb_document.id, "error": str(e)},
+                details={"filename": file_name, "document_id": rdb_document.id, "error": str(e)},
             ) from e
 
     def get_embedding_model(self, kb_name: str) -> str:

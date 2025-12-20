@@ -2,10 +2,15 @@ from typing import Optional, List
 from .registry import ParserRegistry
 from .base import BaseParser
 from llama_index.core.schema import Document
-
+from pydantic import BaseModel, Field
 from common import get_logger
 
 logger = get_logger(__name__)
+
+
+class ParseResult(BaseModel):
+    documents: List[Document] = Field(description="Parsed documents")
+    job_id: str = Field(description="Job ID")
 
 
 class ContentParser:
@@ -25,7 +30,7 @@ class ContentParser:
         self.registry.register(PDFParser)
         # 未来可以自动发现并注册
 
-    def parse(self, contents: bytes, filename: str, content_type: Optional[str] = None) -> List[Document]:
+    def parse(self, contents: bytes, filename: str, content_type: Optional[str] = None) -> ParseResult:
         logger.info("starting to extract file text content...")
 
         parser = self.registry.get_parser(filename, content_type)
@@ -34,9 +39,9 @@ class ContentParser:
             raise ValueError(f"unsupported file type: {filename} (content_type: {content_type})")
 
         try:
-            documents = parser.parse_content(contents, filename, content_type)
-            logger.info(f"length: {len(documents)} pages")
-            return documents
+            parse_result = parser.parse_content(contents, filename, content_type)
+            logger.info(f"length: {len(parse_result.documents)} pages")
+            return parse_result
         except Exception as e:
             logger.error(f"file parsing failed [{filename}]: {str(e)}")
             raise

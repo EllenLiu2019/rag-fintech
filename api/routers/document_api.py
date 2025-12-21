@@ -5,7 +5,7 @@ from common import get_logger
 from common.exceptions import NotFoundError
 from common.error_codes import ErrorCodes
 from repository.s3 import s3_client
-from rag.ingestion.pipeline import ingestion_pipeline
+from rag.ingestion import ingestion_pipeline
 
 logger = get_logger(__name__)
 

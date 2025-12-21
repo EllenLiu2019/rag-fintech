@@ -156,7 +156,7 @@ def cached(
 
         @wraps(func)
         def wrapper(*args, **kwargs):
-            redis_client = _get_redis_client()
+            redis_client = RedisClient()
             if not redis_client.redis_enabled:
                 logger.info("Redis is disabled. Skipping cache.")
                 return func(*args, **kwargs)
@@ -188,7 +188,3 @@ def cached(
         return wrapper
 
     return decorator
-
-
-def _get_redis_client():
-    return RedisClient()

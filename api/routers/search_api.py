@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Literal
 
 from common import get_logger
-from rag.retrieval.retriever import retriever
+from rag.retrieval import retriever
 
 logger = get_logger(__name__)
 

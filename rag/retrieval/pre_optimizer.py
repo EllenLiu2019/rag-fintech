@@ -5,10 +5,10 @@ from typing import Dict, Any, List, Literal, Optional
 from rag.llm.chat_model import chat_model
 from common import get_logger, get_model_registry
 from common.prompt_manager import get_prompt_manager
-from rag.core.embedding_service import embedder
+from rag.core import embedder
 from repository.vector.milvus_client import VectorStoreClient
 from rag.retrieval.ner_service import ner_service
-from repository.cache.redis_client import cached
+from repository.cache import cached
 
 logger = get_logger(__name__)
 

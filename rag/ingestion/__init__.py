@@ -10,5 +10,6 @@ This module handles the complete document processing workflow:
 """
 
 from .document import RagDocument
+from .pipeline import ingestion_pipeline
 
-__all__ = ["RagDocument"]
+__all__ = ["RagDocument", "ingestion_pipeline"]

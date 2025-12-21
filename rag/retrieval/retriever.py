@@ -1,9 +1,8 @@
 from typing import Optional, Dict, Any, List, Literal, Union
 
-from rag.core.embedding_service import embedder
-from rag.core.doc_service import DocumentService
-from repository.vector.milvus_client import VectorStoreClient
-from repository.cache.redis_client import cached
+from rag.core import embedder, DocumentService
+from repository.vector import VectorStoreClient
+from repository.cache import cached
 from rag.retrieval.reranker import reranker
 from common import get_logger
 from rag.retrieval.pre_optimizer import query_optimizer

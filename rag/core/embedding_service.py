@@ -6,8 +6,8 @@ from rag.llm.embedding_model import embedding_model
 from common import constants, get_logger, get_model_registry
 from common.exceptions import EmbeddingError
 from common.error_codes import ErrorCodes
-from rag.ingestion.document import RagDocument
-from repository.cache.redis_client import cached, _get_redis_client
+from rag.ingestion import RagDocument
+from repository.cache import RedisClient, cached
 
 logger = get_logger(__name__)
 
@@ -16,7 +16,7 @@ class EmbeddingService:
     def __init__(self, model: dict[str, Any]):
         api_key = os.getenv(model["provider"].upper() + constants.API_KEY_SUFFIX)
         self.model = embedding_model[model["provider"]](key=api_key, model_name=model["model_name"])
-        self.redis_client = _get_redis_client()
+        self.redis_client = RedisClient()
 
     def embed_chunks(self, chunks: list[dict], rag_document: RagDocument) -> list[dict]:
         """

@@ -1,18 +1,16 @@
 import uuid
 from typing import Any
+import time
 
 from rag.ingestion.parser import parse_content
 from rag.ingestion.extractor.extractor import Extractor
-from rag.ingestion.document import RagDocument
+from rag.ingestion import RagDocument
 from rag.ingestion.parser.parser import ParseResult
 from rag.ingestion.parser.serializer_deserializer import serialize_documents
 from rag.ingestion.splitter.markdown_splitter import RagMarkdownSplitter
-from rag.core.embedding_service import embedder
-from rag.core.doc_service import DocumentService
-from repository.vector.milvus_client import VectorStoreClient
-
+from rag.core import embedder, DocumentService
+from repository.vector import VectorStoreClient
 from common import get_logger, get_model_registry
-from repository.rdb.models.models import LLM
 from common.exceptions import (
     ParsingError,
     ExtractionError,
@@ -35,11 +33,17 @@ class IngestionPipeline:
     def handle_document(self, filename: str, contents: bytes, content_type: str):
 
         # Step 1: Save file to rdb
+        # I/O operation 1 sec
+        start = time.time()
         rdb_document = self.document_service.upload_file(filename, contents, content_type)
+        logger.info(f"Time taken to save file to rdb & s3: {time.time() - start} seconds")
 
         # Step 2: Parse document
+        # I/O operation 261 seconds
         try:
+            start = time.time()
             parse_result = parse_content(contents, filename, content_type)
+            logger.info(f"Time taken to parse document: {time.time() - start} seconds")
         except ValueError as e:
             raise ParsingError(
                 message=f"Failed to parse document: {filename}",
@@ -47,12 +51,18 @@ class IngestionPipeline:
                 details={"filename": filename, "content_type": content_type, "reason": str(e)},
             )
 
+        # CPU operation 0.04 s
+        start = time.time()
         rag_document = self.build_from_parsed_documents(filename, contents, content_type, parse_result)
+        logger.info(f"Time taken to build RagDocument: {time.time() - start} seconds")
 
         # Step 3: Split document into chunks
+        # CPU operation 0.025 seconds
+        start = time.time()
         try:
             chunks = self.splitter.split_document(rag_document)
             logger.info(f"Document split into {len(chunks)} chunks")
+            logger.info(f"Time taken to split document: {time.time() - start} seconds")
         except Exception as e:
             raise ChunkingError(
                 message=f"Failed to split document into chunks: {filename}",
@@ -61,8 +71,11 @@ class IngestionPipeline:
             )
 
         # Step 4: Embed chunks (generate vectors)
+        # I/O operation 12 seconds
         try:
+            start = time.time()
             chunks_with_vectors = embedder.embed_chunks(chunks, rag_document)
+            logger.info(f"Time taken to embed chunks: {time.time() - start} seconds")
         except Exception as e:
             if isinstance(e, EmbeddingError):
                 raise
@@ -93,9 +106,12 @@ class IngestionPipeline:
             chunks_to_insert.append(chunk_to_insert)
 
         # Step 6: Save to Milvus
+        # I/O operation 201 seconds
         if chunks_to_insert:
             try:
+                start = time.time()
                 self.vector_store.insert(chunks_to_insert, "rag_fintech", rdb_document.kb_name)
+                logger.info(f"Time taken to save chunks to Milvus: {time.time() - start} seconds")
                 logger.info(f"Saved {len(chunks_to_insert)} chunks to Milvus")
             except Exception as e:
                 raise VectorStoreError(
@@ -105,8 +121,11 @@ class IngestionPipeline:
                 )
 
         # Step 7: Update doc info in rdb
+        # I/O operation 0.5 seconds
         try:
+            start = time.time()
             self.document_service.update_file_info(filename, rag_document, rdb_document)
+            logger.info(f"Time taken to update document info in RDB: {time.time() - start} seconds")
         except Exception as e:
             # Log but don't fail the entire ingestion if RDB update fails
             logger.warning(f"Failed to update document info in RDB: {e}", exc_info=True)

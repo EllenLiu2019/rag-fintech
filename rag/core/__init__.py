@@ -2,6 +2,7 @@
 Core shared services used across multiple RAG stages.
 """
 
-from .embedding_service import EmbeddingService
+from .embedding_service import embedder
+from .doc_service import DocumentService
 
-__all__ = ["EmbeddingService"]
+__all__ = ["embedder", "DocumentService"]

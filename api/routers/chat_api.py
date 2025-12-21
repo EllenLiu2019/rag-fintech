@@ -3,8 +3,8 @@ from pydantic import BaseModel
 from typing import List, Optional, Literal
 
 from common import get_logger
-from rag.retrieval.retriever import retriever
-from rag.generation.llm_service import llm_service
+from rag.retrieval import retriever
+from rag.generation import llm_service
 
 logger = get_logger(__name__)
 

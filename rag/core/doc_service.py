@@ -9,7 +9,7 @@ from common.exceptions import (
 from common.error_codes import ErrorCodes
 from repository.rdb.models.models import Document as RdbDocument, KnowledgeBase, LLM
 from repository.rdb.postgresql_client import PostgreSQLClient
-from rag.ingestion.document import RagDocument
+from rag.ingestion import RagDocument
 from repository.s3 import s3_client
 
 logger = get_logger(__name__)

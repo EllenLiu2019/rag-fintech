@@ -16,7 +16,7 @@ from common.constants import MILVUS_MAPPING_CONF
 from repository.vector.doc_store_client import DocStoreClient, extract_entity_fields
 from common.exceptions import ConnectionError, VectorStoreError
 from common.error_codes import ErrorCodes
-from repository.cache.redis_client import cached
+from repository.cache import cached
 
 logger = get_logger(__name__)
 

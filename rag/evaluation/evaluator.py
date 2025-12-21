@@ -3,12 +3,12 @@ RAG Evaluator for comprehensive evaluation of retrieval and generation quality.
 Integrates custom metrics and RAGAS framework.
 """
 
-from typing import List, Dict, Any, Literal, Optional
+from typing import List, Dict, Any, Optional
 import json
 import os
+import concurrent.futures
 
 from langchain_huggingface import HuggingFaceEmbeddings
-
 from langchain_deepseek import ChatDeepSeek
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage
@@ -207,65 +207,150 @@ class RAGEvaluator:
     def generate_answer(
         self,
         eval_file: str,
-        kb_id: str = "default_kb",
-        top_k: int = 5,
-        temperature: float = 1.0,
-        mode: Literal["dense", "hybrid"] = "hybrid",
-        min_score: float = 0.0,
-    ) -> None:
+        max_workers: int = 5,
+        filters: Optional[Dict] = None,
+        timeout: int = 300,
+    ) -> Dict[str, Any]:
+        """
+        Generate answers for all samples in the evaluation file using thread pool.
 
+        Args:
+            eval_file: Path to evaluation JSON file
+            max_workers: Maximum number of worker threads (default: 5)
+            filters: Optional filters for retrieval (default: doc_id filter)
+            timeout: Timeout per task in seconds (default: 300)
+
+        Returns:
+            Statistics dictionary with processing results
+        """
         logger.info(f"Loading evaluation data from: {eval_file}")
 
-        # Read the question\ground truth answer\retrieved docs (filter by doc_id)
-        filters = {"doc_id": "7f203234-0620-4a56-a362-005d40d9fa14"}
+        # Use provided filters or default
+        filters = filters or {"doc_id": "7f203234-0620-4a56-a362-005d40d9fa14"}
         with open(eval_file, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         samples = data.get("samples", [])
-        logger.info(f"Processing {len(samples)} samples...")
-        retrieved_columns = ["text", "score"]
+        total_samples = len(samples)
 
-        # Process each sample
-        for i, sample in enumerate(samples, 1):
-            question = sample["question"]
-            logger.info(f"[{i}/{len(samples)}] Processing: {question[:50]}...")
+        if total_samples == 0:
+            logger.warning("No samples found in evaluation file")
+            return {"total": 0, "success": 0, "failed": 0, "timeout": 0}
 
-            try:
-                # Retrieve documents
-                search_result = retriever.search(query=question, kb_id=kb_id, top_k=top_k, filters=filters, mode=mode)
+        logger.info(f"Processing {total_samples} samples with {max_workers} workers")
 
-                # Update retrieved_docs
-                retrieved = search_result.get("results", [])
-                filtered_retrieved = [chunk for chunk in retrieved if chunk.get("score") > min_score]
-                retrieved_docs = []
-                for retrieved_doc in filtered_retrieved:
-                    retrieved_doc = {col: retrieved_doc.get(col, "") for col in retrieved_columns}
-                    retrieved_docs.append(retrieved_doc)
-                sample["retrieved_docs"] = retrieved_docs
-                logger.info(f"  Retrieved {len(filtered_retrieved)} validate documents")
+        # Statistics
+        stats = {
+            "total": total_samples,
+            "success": 0,
+            "failed": 0,
+            "timeout": 0,
+        }
 
-                # Generate answer
-                query_to_use = search_result.get("query_to_use", question)
-                generation_result = llm_service.answer_question(
-                    question=query_to_use, context=retrieved, temperature=temperature
-                )
-                generated = generation_result.get("answer", "")
-                sample["generated_answer"] = generated
-                logger.info(f"  Generated answer: {generated[:50]}...")
+        # Use thread pool for concurrent processing
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_sample = {
+                executor.submit(
+                    self._generate_answer,
+                    sample=sample,
+                    filters=filters,
+                    index=i + 1,
+                    total=total_samples,
+                ): (i, sample)
+                for i, sample in enumerate(samples)
+            }
 
-            except Exception as e:
-                logger.error(f"  Failed to process sample: {e}", exc_info=True)
-                sample["retrieved_docs"] = []
-                sample["generated_answer"] = ""
+            # Process completed tasks with error handling
+            from tqdm import tqdm
 
-        # Save all results once after processing all samples
+            with tqdm(total=total_samples, desc="Generating answers") as pbar:
+                for future in concurrent.futures.as_completed(future_to_sample):
+                    index, sample = future_to_sample[future]
+                    try:
+                        future.result(timeout=timeout)
+                        stats["success"] += 1
+                        pbar.set_postfix({"success": stats["success"], "failed": stats["failed"]})
+                    except concurrent.futures.TimeoutError:
+                        stats["timeout"] += 1
+                        logger.error(f"Sample {index} timed out after {timeout}s")
+                        sample["retrieved_docs"] = []
+                        sample["generated_answer"] = ""
+                    except Exception as e:
+                        stats["failed"] += 1
+                        logger.error(f"Sample {index} failed: {e}", exc_info=True)
+                        # Ensure sample has default values even if _generate_answer partially failed
+                        if "retrieved_docs" not in sample:
+                            sample["retrieved_docs"] = []
+                        if "generated_answer" not in sample:
+                            sample["generated_answer"] = ""
+                    finally:
+                        pbar.update(1)
+
         logger.info(f"Saving results to: {eval_file}")
         try:
             with open(eval_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
-            logger.info(f"Successfully saved {len(samples)} samples to {eval_file}")
+            logger.info(f"Successfully saved {total_samples} samples to {eval_file}")
         except Exception as e:
             logger.error(f"Failed to save file: {e}", exc_info=True)
+            raise
+
+        logger.info(f"Processing complete: {stats}")
+        return stats
+
+    def _generate_answer(
+        self,
+        sample: dict,
+        filters: dict = None,
+        index: int = None,
+        total: int = None,
+    ) -> None:
+        """
+        Generate answer for a single sample.
+
+        Args:
+            sample: Sample dictionary to process (modified in-place)
+            filters: Optional filters for retrieval
+            index: Optional sample index for logging
+            total: Optional total count for logging
+        """
+        question = sample["question"]
+
+        if index is not None and total is not None:
+            logger.info(f"[{index}/{total}] Processing: {question[:50]}...")
+
+        try:
+            # Retrieve documents
+            search_result = retriever.search(
+                query=question, kb_id="default_kb", top_k=5, filters=filters, mode="hybrid"
+            )
+
+            # Update retrieved_docs
+            retrieved = search_result.get("results", [])
+            filtered_retrieved = [chunk for chunk in retrieved if chunk.get("score") > 0.0]
+            retrieved_docs = []
+            for retrieved_doc in filtered_retrieved:
+                retrieved_doc = {col: retrieved_doc.get(col, "") for col in ["text", "score"]}
+                retrieved_docs.append(retrieved_doc)
+            sample["retrieved_docs"] = retrieved_docs
+
+            if index is not None:
+                logger.info(f"  [{index}/{total}] Retrieved {len(filtered_retrieved)} validate documents")
+
+            # Generate answer
+            query_to_use = search_result.get("query_to_use", question)
+            generation_result = llm_service.answer_question(question=query_to_use, context=retrieved, temperature=1.0)
+            generated = generation_result.get("answer", "")
+            sample["generated_answer"] = generated
+
+            if index is not None:
+                logger.info(f"  [{index}/{total}] Generated answer: {generated[:50]}...")
+
+        except Exception as e:
+            logger.error(f"  Failed to process sample: {e}", exc_info=True)
+            sample["retrieved_docs"] = []
+            sample["generated_answer"] = ""
             raise
 
 
@@ -273,5 +358,5 @@ if __name__ == "__main__":
     print("*****************Rag-fintech Benchmark*****************")
     evaluator = RAGEvaluator()
     eval_file = os.path.join(os.path.dirname(__file__), "golden_dataset.json")
-    # evaluator.generate_answer(eval_file)
+    evaluator.generate_answer(eval_file)
     result = evaluator(eval_file)

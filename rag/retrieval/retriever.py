@@ -1,8 +1,7 @@
 from typing import Optional, Dict, Any, List, Literal, Union
 
-from rag.core.embedding_service import EmbeddingService
+from rag.core.embedding_service import embedder
 from rag.core.doc_service import DocumentService
-from repository.rdb.models.models import LLM
 from repository.vector.milvus_client import VectorStoreClient
 from repository.cache.redis_client import cached
 from rag.retrieval.reranker import reranker
@@ -20,7 +19,7 @@ from common.error_codes import ErrorCodes
 
 logger = get_logger(__name__)
 
-SELECT_FIELDS = ["id", "doc_id", "text", "page_number", "prev_chunk", "next_chunk", "business_data", "upload_time"]
+SELECT_FIELDS = ["id", "text", "page_number"]
 
 
 class Retriever:
@@ -32,7 +31,7 @@ class Retriever:
         self.document_service = DocumentService()
         self.vector_store = VectorStoreClient()
 
-    @cached(prefix="search", ttl=1800)
+    # @cached(prefix="search", ttl=1800)
     def search(
         self,
         query: str,
@@ -41,6 +40,7 @@ class Retriever:
         filters: Optional[Dict] = None,
         mode: Literal["dense", "hybrid"] = "dense",
         opt_mode: Literal["unified", "hyde", "multi"] = "unified",
+        **params: Any,
     ) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
 
         logger.info(f"Searching for: '{query}' in kb: {kb_id} (mode: {mode})")
@@ -60,9 +60,6 @@ class Retriever:
             ) from e
 
         try:
-            llm: LLM = self.document_service.get_embedding_model(kb_id)
-            embedder = EmbeddingService(model=llm.to_dict())
-
             if len(optimized_queries) > 1:
                 query_vectors = embedder.embed_queries_batch(optimized_queries)
             else:
@@ -77,9 +74,9 @@ class Retriever:
             ) from e
 
         if mode == "hybrid":
-            results = self._hybrid_search(optimized_queries, kb_id, top_k, query_vectors, filters, opt_mode)
+            results = self._hybrid_search(optimized_queries, kb_id, top_k, query_vectors, filters, opt_mode, **params)
         elif mode == "dense":
-            results = self._dense_search(query, kb_id, top_k, query_vectors, filters, opt_mode)
+            results = self._dense_search(query, kb_id, top_k, query_vectors, filters, opt_mode, **params)
         else:
             raise ValidationError(
                 message=f"Invalid retrieval mode: {mode}",
@@ -96,7 +93,7 @@ class Retriever:
             "snomed_entities": optimization_result.get("snomed_entities", {}),
         }
 
-    @cached(prefix="dense_search", ttl=1800)
+    # @cached(prefix="dense_search", ttl=1800)
     def _dense_search(
         self,
         query: str,
@@ -105,6 +102,7 @@ class Retriever:
         query_vectors: List[List[float]],
         filters: Optional[Dict] = None,
         opt_mode: Literal["unified", "hyde", "multi"] = "unified",
+        **params: Any,
     ) -> List[Dict[str, Any]]:
         """Dense vector search."""
 
@@ -142,6 +140,10 @@ class Retriever:
         else:
             results = results[0]
 
+        get_relevant_chunks = params.pop("get_relevant_chunks", False)
+        if not get_relevant_chunks:
+            return results
+
         try:
             return self._get_relevant_chunks(results, kb_id)
         except Exception as e:
@@ -149,7 +151,7 @@ class Retriever:
             # Return results without context chunks rather than failing
             return results
 
-    @cached(prefix="hybrid_search", ttl=1800)
+    # @cached(prefix="hybrid_search", ttl=1800)
     def _hybrid_search(
         self,
         optimized_queries: List[str],
@@ -158,6 +160,7 @@ class Retriever:
         query_vectors: List[List[float]],
         filters: Optional[Dict] = None,
         opt_mode: Literal["unified", "hyde", "multi"] = "unified",
+        **params: Any,
     ) -> List[Dict[str, Any]]:
         """Hybrid search (dense + sparse)."""
 
@@ -197,11 +200,14 @@ class Retriever:
         else:
             results = results[0]
 
+        get_relevant_chunks = params.get("get_relevant_chunks", False)
+        if not get_relevant_chunks:
+            return results
+
         try:
             return self._get_relevant_chunks(results, kb_id)
         except Exception as e:
             logger.warning(f"Failed to get relevant chunks: {e}", exc_info=True)
-            # Return results without context chunks rather than failing
             return results
 
     def _get_relevant_chunks(self, results: List[Dict[str, Any]], kb_id: str) -> List[Dict[str, Any]]:

@@ -5,9 +5,10 @@ from typing import Dict, Any, List, Literal, Optional
 from rag.llm.chat_model import chat_model
 from common import get_logger, get_model_registry
 from common.prompt_manager import get_prompt_manager
-from rag.core.embedding_service import EmbeddingService
+from rag.core.embedding_service import embedder
 from repository.vector.milvus_client import VectorStoreClient
 from rag.retrieval.ner_service import ner_service
+from repository.cache.redis_client import cached
 
 logger = get_logger(__name__)
 
@@ -190,8 +191,7 @@ class GlossaryInjector:
     select_fields = ["concept_name", "domain_id", "concept_class_id"]
     threshold = 0.4
 
-    def __init__(self, embedding_model: dict[str, Any]):
-        self.embedder = EmbeddingService(model=embedding_model)
+    def __init__(self):
         self.vector_store = VectorStoreClient()
 
     def ner(self, query: str) -> Dict[str, Dict[str, Any]]:
@@ -223,7 +223,7 @@ class GlossaryInjector:
         if not words_to_search:
             return snomed_entities
 
-        word_embeddings = self.embedder.embed_queries_batch(words_to_search)
+        word_embeddings = embedder.embed_queries_batch(words_to_search)
 
         for entity, word_embedding in zip(entities_to_search, word_embeddings):
             filter_expr = ""
@@ -324,13 +324,14 @@ class GlossaryInjector:
 
 class QueryOptimizer:
 
-    def __init__(self, model: dict[str, Any], embedding_model: dict[str, Any]):
+    def __init__(self, model: dict[str, Any]):
         self.model = model
-        self.glossary_injector = GlossaryInjector(embedding_model=embedding_model)
+        self.glossary_injector = GlossaryInjector()
         self.unified_rewriter = UnifiedRewriter(model=model)
         self.hyde_rewriter = HyDERewriter(model=model)
         self.multi_query_rewriter = MiltiQueryOptimizer(model=model)
 
+    @cached(prefix="optimize", ttl=1800)
     def optimize(
         self, query: str, mode: Literal["unified", "hyde", "multi"] = "unified", use_snomed_enhancement: bool = True
     ) -> Dict[str, Any]:
@@ -355,15 +356,16 @@ class QueryOptimizer:
 
         if mode == "unified":
             # Extract and standardize entities using SNOMED
-            snomed_entities = self.glossary_injector.ner(query)
-            if use_snomed_enhancement and snomed_entities:
-                query_to_use = self.glossary_injector.inject(query, snomed_entities)
+            # snomed_entities = self.glossary_injector.ner(query)
+            # if use_snomed_enhancement and snomed_entities:
+            #     query_to_use = self.glossary_injector.inject(query, snomed_entities)
 
-            # Rewrite query with entity constraints
-            if snomed_entities:
-                entities = snomed_entities.keys()
-            else:
-                entities = []
+            # # Rewrite query with entity constraints
+            # if snomed_entities:
+            #     entities = snomed_entities.keys()
+            # else:
+            #     entities = []
+            entities = []
             rewritten_query = self.unified_rewriter.rewrite(query, entities)
             optimized_queries.append(rewritten_query["rewritten_query"])
             tokens += rewritten_query["tokens"]
@@ -400,9 +402,8 @@ class QueryOptimizer:
 
 def _create_query_optimizer() -> QueryOptimizer:
     registry = get_model_registry()
-    model_config = registry.get_chat_model("query_reasoner")
-    embedding_model_config = registry.get_embedding_model("dense")
-    query_optimizer = QueryOptimizer(model=model_config.to_dict(), embedding_model=embedding_model_config.to_dict())
+    model_config = registry.get_chat_model("query_lite")
+    query_optimizer = QueryOptimizer(model=model_config.to_dict())
 
     logger.info("Initialized QueryOptimizer singleton")
     return query_optimizer

@@ -392,11 +392,21 @@
   font-size: 0.75rem;
 }
 
+.result-meta-tags {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .result-tag {
   background: #f0f7ff;
   color: #0066cc;
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .result-text {

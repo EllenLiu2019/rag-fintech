@@ -3,7 +3,7 @@ import hashlib
 from typing import List, Any
 
 from rag.llm.embedding_model import embedding_model
-from common import constants, get_logger
+from common import constants, get_logger, get_model_registry
 from common.exceptions import EmbeddingError
 from common.error_codes import ErrorCodes
 from rag.ingestion.document import RagDocument
@@ -131,3 +131,14 @@ class EmbeddingService:
                         results[idx] = []
 
         return results
+
+
+def _create_embedder() -> EmbeddingService:
+    registry = get_model_registry()
+    model_config = registry.get_embedding_model("dense")
+    embedder = EmbeddingService(model=model_config.to_dict())
+    logger.info("Initialized embedder singleton")
+    return embedder
+
+
+embedder = _create_embedder()

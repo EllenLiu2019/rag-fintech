@@ -8,19 +8,22 @@ from pymilvus import (
     AnnSearchRequest,
     MilvusException,
 )
+
 from common import get_logger, file_utils
 from common.decorator import singleton
 from common.config_utils import get_base_config, load_yaml_conf
 from common.constants import MILVUS_MAPPING_CONF
-from .doc_store_client import DocStoreClient, extract_entity_fields
+from repository.vector.doc_store_client import DocStoreClient, extract_entity_fields
 from common.exceptions import ConnectionError, VectorStoreError
 from common.error_codes import ErrorCodes
+from repository.cache.redis_client import cached
 
 logger = get_logger(__name__)
 
 
 @singleton
 class VectorStoreClient(DocStoreClient):
+
     def __init__(self, config: dict = None):
         # Support both DI and standalone usage
         milvus_config = config or get_base_config("milvus", {})
@@ -31,10 +34,8 @@ class VectorStoreClient(DocStoreClient):
         logger.info(f"Use Milvus at {self.uri} as the doc engine.")
 
         try:
-            self._client = None
-            self._connect()
+            self._init_client()
             logger.info("Milvus client initialized successfully.")
-
             self.bge_m3_embedding_function = model.hybrid.BGEM3EmbeddingFunction(
                 device="cpu",
                 normalize_embeddings=False,
@@ -47,7 +48,7 @@ class VectorStoreClient(DocStoreClient):
             logger.error(f"Failed to initialize Milvus client: {e}")
             raise
 
-    def _connect(self):
+    def _init_client(self):
         """Create or reconnect to Milvus."""
         try:
             self._client = MilvusClient(uri=self.uri, token=self.token)
@@ -59,14 +60,9 @@ class VectorStoreClient(DocStoreClient):
     @property
     def client(self) -> MilvusClient:
         """Get client with auto-reconnect on failure."""
-        try:
-            # Quick health check
-            self._client.list_collections()
-            return self._client
-        except Exception as e:
-            logger.warning(f"Milvus connection lost, reconnecting: {e}")
-            self._connect()
-            return self._client
+        if self._client is None:
+            self._init_client()
+        return self._client
 
     def dbType(self) -> str:
         return "milvus"
@@ -122,16 +118,15 @@ class VectorStoreClient(DocStoreClient):
 
         index_params = self.client.prepare_index_params()
         for field_name, index_config in self.milvus_mapping["indexes"].items():
+            index_config_copy = index_config.copy()
+
             if field_name == "dense_vector":
-                field_name = f"{field_name}_{vectorSize}"
-                index_config["index_name"] = f"{index_config['index_name']}_{vectorSize}"
-            index_params.add_index(
-                field_name=field_name,
-                index_name=index_config["index_name"],
-                index_type=index_config["index_type"],
-                metric_type=index_config["metric_type"],
-                params=index_config.get("params", {}),
-            )
+                index_config_copy["field_name"] = f"{field_name}_{vectorSize}"
+                index_config_copy["index_name"] = f"{index_config_copy['index_name']}_{vectorSize}"
+            else:
+                index_config_copy["field_name"] = field_name
+
+            index_params.add_index(**index_config_copy)
 
         self.client.create_collection(
             collection_name=collection_name,
@@ -182,7 +177,10 @@ class VectorStoreClient(DocStoreClient):
                 filter=filter_expr,
                 limit=limit,
                 output_fields=selectFields,
-                search_params={"metric_type": "COSINE"},
+                search_params={
+                    "metric_type": "COSINE",
+                    "params": {"ef": min(limit * 2, 100)},
+                },
             )
 
         except MilvusException as e:
@@ -241,14 +239,15 @@ class VectorStoreClient(DocStoreClient):
             "anns_field": (
                 f"dense_vector_{len(query_vectors[0])}" if knowledgebaseIds[0] == "default_kb" else "dense_vector"
             ),
-            "param": {"nprobe": 10},
+            # Optimize ef for serverless: lower ef = faster queries
+            "param": {"ef": min(limit * 2, 100)},
             "limit": limit,
             "expr": filter_expr,
         }
         dense_request = AnnSearchRequest(**dense_search_params)
 
         sparse_search_params = {
-            "data": self.bge_m3_embedding_function(optimized_queries)["sparse"],
+            "data": self._embed_query(optimized_queries),
             "anns_field": "sparse_vector",
             "param": {"drop_ratio_search": 0.2},
             "limit": limit,
@@ -392,3 +391,20 @@ class VectorStoreClient(DocStoreClient):
             else:
                 parts.append(f'{k} == "{v}"')
         return " and ".join(parts) if parts else ""
+
+    @cached(prefix="embed_sparse", ttl=1800)
+    def _embed_query(self, queries: List[str]) -> List[List[float]]:
+        """Generate sparse vectors for queries with performance monitoring."""
+        import time
+
+        start_time = time.time()
+
+        try:
+            result = self.bge_m3_embedding_function(queries)["sparse"]
+            elapsed = time.time() - start_time
+            logger.info(f"BGE-M3 sparse embedding generated in {elapsed:.3f}s for {len(queries)} query(ies)")
+            return result
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"BGE-M3 sparse embedding failed after {elapsed:.3f}s: {e}")
+            raise

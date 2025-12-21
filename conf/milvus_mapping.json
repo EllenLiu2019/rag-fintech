@@ -16,8 +16,12 @@
     "indexes": {
         "dense_vector": {
             "index_name": "dense_vector_index", 
-            "index_type": "FLAT", 
-            "metric_type": "COSINE"
+            "index_type": "HNSW", 
+            "metric_type": "COSINE",
+            "params": {
+                "m": 16,
+                "ef_construction": 200
+            }
         },
         "sparse_vector": {
             "index_name": "sparse_vector_index", 
@@ -26,6 +30,14 @@
             "params": {
                 "inverted_index_algo": "DAAT_MAXSCORE"
             }
+        },
+        "doc_id": {
+            "index_name": "doc_id_index",
+            "index_type": "STL_SORT"
+        },
+        "kb_id": {
+            "index_name": "kb_id_index",
+            "index_type": "STL_SORT"
         }
     }
 }

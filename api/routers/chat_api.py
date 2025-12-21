@@ -133,7 +133,7 @@ async def chat_qa_stream(
 
             # 3. Stream generation (using injected llm_service)
             generation_config = request.generation_config or {}
-            temperature = generation_config.get("temperature", 0.7)
+            temperature = generation_config.get("temperature", 1.0)
             max_tokens = generation_config.get("max_tokens")
 
             async for event in llm_service.stream_answer_question(

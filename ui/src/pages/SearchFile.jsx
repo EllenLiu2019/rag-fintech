@@ -302,7 +302,14 @@ function SearchFile({ fileInfo, onBack }) {
                           </span>
                         )}
                       </div>
-                      {result.pol_num && <span className="result-tag">Policy: {result.pol_num}</span>}
+                      <div className="result-meta-tags">
+                        {result.page_number !== undefined && result.page_number !== null && (
+                          <span className="result-tag" title="Page number">
+                            📄 Page {result.page_number}
+                          </span>
+                        )}
+                        {result.pol_num && <span className="result-tag">Policy: {result.pol_num}</span>}
+                      </div>
                     </div>
                     <div className="result-text">
                       <ReactMarkdown rehypePlugins={[rehypeRaw]}>

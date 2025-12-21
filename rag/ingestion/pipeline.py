@@ -1,15 +1,13 @@
 import uuid
 from typing import Any
 
-from llama_index.core.schema import Document
-
 from rag.ingestion.parser import parse_content
 from rag.ingestion.extractor.extractor import Extractor
 from rag.ingestion.document import RagDocument
 from rag.ingestion.parser.parser import ParseResult
 from rag.ingestion.parser.serializer_deserializer import serialize_documents
 from rag.ingestion.splitter.markdown_splitter import RagMarkdownSplitter
-from rag.core.embedding_service import EmbeddingService
+from rag.core.embedding_service import embedder
 from rag.core.doc_service import DocumentService
 from repository.vector.milvus_client import VectorStoreClient
 
@@ -64,8 +62,6 @@ class IngestionPipeline:
 
         # Step 4: Embed chunks (generate vectors)
         try:
-            llm: LLM = self.document_service.get_embedding_model(rdb_document.kb_name)
-            embedder = EmbeddingService(model=llm.to_dict())
             chunks_with_vectors = embedder.embed_chunks(chunks, rag_document)
         except Exception as e:
             if isinstance(e, EmbeddingError):

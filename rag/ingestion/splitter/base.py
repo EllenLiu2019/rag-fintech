@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from rag.ingestion.document import RagDocument
+from rag.entity import RagDocument
 
 
 class BaseSplitter(ABC):
@@ -22,4 +22,3 @@ class BaseSplitter(ABC):
             Expected keys in the chunk dict: 'chunk_id', 'text', 'metadata'.
         """
         pass
-

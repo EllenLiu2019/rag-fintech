@@ -1,10 +1,10 @@
 import uuid
 from typing import Any
-import time
+from fastapi import UploadFile
 
 from rag.ingestion.parser import parse_content
 from rag.ingestion.extractor.extractor import Extractor
-from rag.ingestion import RagDocument
+from rag.entity import RagDocument
 from rag.ingestion.parser.parser import ParseResult
 from rag.ingestion.parser.serializer_deserializer import serialize_documents
 from rag.ingestion.splitter.markdown_splitter import RagMarkdownSplitter
@@ -19,6 +19,8 @@ from common.exceptions import (
     VectorStoreError,
 )
 from common.error_codes import ErrorCodes
+from repository.s3 import s3_client
+from rag.ingestion.tasks import enqueue_task
 
 logger = get_logger(__name__)
 
@@ -30,105 +32,21 @@ class IngestionPipeline:
         self.extractor = Extractor(model)
         self.splitter = RagMarkdownSplitter()
 
-    def handle_document(self, filename: str, contents: bytes, content_type: str):
+    async def __call__(self, file: UploadFile):
+        rdb_document = await self.document_service.upload_file(file)
 
-        # Step 1: Save file to rdb
-        # I/O operation 1 sec
-        start = time.time()
-        rdb_document = self.document_service.upload_file(filename, contents, content_type)
-        logger.info(f"Time taken to save file to rdb & s3: {time.time() - start} seconds")
+        # Enqueue task - RQ will generate job_id
+        # Use module-level function to avoid pickle issues with instance methods
+        job_id = enqueue_task(
+            handle_document,  # Module-level function, not instance method
+            file.filename,
+            file.content_type,
+            rdb_document.kb_name,
+            rdb_document.id,
+        )
 
-        # Step 2: Parse document
-        # I/O operation 261 seconds
-        try:
-            start = time.time()
-            parse_result = parse_content(contents, filename, content_type)
-            logger.info(f"Time taken to parse document: {time.time() - start} seconds")
-        except ValueError as e:
-            raise ParsingError(
-                message=f"Failed to parse document: {filename}",
-                code=ErrorCodes.S_INGESTION_002,
-                details={"filename": filename, "content_type": content_type, "reason": str(e)},
-            )
-
-        # CPU operation 0.04 s
-        start = time.time()
-        rag_document = self.build_from_parsed_documents(filename, contents, content_type, parse_result)
-        logger.info(f"Time taken to build RagDocument: {time.time() - start} seconds")
-
-        # Step 3: Split document into chunks
-        # CPU operation 0.025 seconds
-        start = time.time()
-        try:
-            chunks = self.splitter.split_document(rag_document)
-            logger.info(f"Document split into {len(chunks)} chunks")
-            logger.info(f"Time taken to split document: {time.time() - start} seconds")
-        except Exception as e:
-            raise ChunkingError(
-                message=f"Failed to split document into chunks: {filename}",
-                code=ErrorCodes.S_INGESTION_004,
-                details={"filename": filename, "error": str(e)},
-            )
-
-        # Step 4: Embed chunks (generate vectors)
-        # I/O operation 12 seconds
-        try:
-            start = time.time()
-            chunks_with_vectors = embedder.embed_chunks(chunks, rag_document)
-            logger.info(f"Time taken to embed chunks: {time.time() - start} seconds")
-        except Exception as e:
-            if isinstance(e, EmbeddingError):
-                raise
-            raise EmbeddingError(
-                message=f"Failed to embed document chunks: {filename}",
-                code=ErrorCodes.L_EMBEDDING_001,
-                details={"filename": filename, "chunk_count": len(chunks), "error": str(e)},
-            )
-
-        # Step 5: Prepare data for Milvus
-        chunks_to_insert = []
-        for chunk in chunks_with_vectors:
-            chunk_metadata = chunk.get("metadata", {})
-
-            chunk_to_insert = {
-                "id": chunk["chunk_id"],
-                "doc_id": rag_document.document_id,
-                "file_name": rag_document.filename,
-                "page_number": chunk_metadata.get("page_number", 0),
-                "prev_chunk": chunk.get("prev_chunk", None),
-                "next_chunk": chunk.get("next_chunk", None),
-                "kb_id": rdb_document.kb_name,
-                "dense_vector": chunk.get("dense_vector", []),
-                "text": chunk.get("text", ""),
-                "business_data": rag_document.business_data or {},
-                "upload_time": rag_document.upload_time,
-            }
-            chunks_to_insert.append(chunk_to_insert)
-
-        # Step 6: Save to Milvus
-        # I/O operation 201 seconds
-        if chunks_to_insert:
-            try:
-                start = time.time()
-                self.vector_store.insert(chunks_to_insert, "rag_fintech", rdb_document.kb_name)
-                logger.info(f"Time taken to save chunks to Milvus: {time.time() - start} seconds")
-                logger.info(f"Saved {len(chunks_to_insert)} chunks to Milvus")
-            except Exception as e:
-                raise VectorStoreError(
-                    message=f"Failed to save chunks to vector store: {filename}",
-                    code=ErrorCodes.R_VECTOR_002,
-                    details={"filename": filename, "chunk_count": len(chunks_to_insert), "error": str(e)},
-                )
-
-        # Step 7: Update doc info in rdb
-        # I/O operation 0.5 seconds
-        try:
-            start = time.time()
-            self.document_service.update_file_info(filename, rag_document, rdb_document)
-            logger.info(f"Time taken to update document info in RDB: {time.time() - start} seconds")
-        except Exception as e:
-            # Log but don't fail the entire ingestion if RDB update fails
-            logger.warning(f"Failed to update document info in RDB: {e}", exc_info=True)
+        logger.info(f"Enqueued document ingestion job: {job_id}")
+        return job_id
 
     def build_from_parsed_documents(
         self, filename: str, contents: bytes, content_type: str, parse_result: ParseResult
@@ -170,6 +88,135 @@ class IngestionPipeline:
         )
 
         return rag_document
+
+
+def handle_document(
+    filename: str,
+    content_type: str,
+    kb_name: str,
+    rdb_document_id: int,
+):
+    """
+    Module-level function to process document ingestion pipeline.
+    This function is called by RQ worker and re-initializes the pipeline instance.
+
+    Args:
+        filename: File name
+        content_type: Content type
+        kb_name: Knowledge base name
+        rdb_document_id: RDB document ID
+    """
+    # Import here to avoid circular imports and pickle issues
+    from rag.ingestion.tasks import update_progress
+    from rq import get_current_job
+
+    # Get the singleton pipeline instance (will be recreated in worker if needed)
+    pipeline = ingestion_pipeline
+
+    try:
+        current_job = get_current_job()
+        job_id = current_job.id if current_job else None
+        logger.info(f"Processing document {filename} with job ID: {job_id}")
+    except Exception as e:
+        logger.warning(f"Failed to get current job: {e}")
+        job_id = None
+
+    if job_id:
+        update_progress(job_id, 1, "Loading file from S3")
+
+    # Parse document
+    contents = s3_client.load_original_file(filename)
+    if job_id:
+        update_progress(job_id, 2, "Parsing document")
+
+    try:
+        parse_result = parse_content(contents, filename, content_type)
+    except ValueError as e:
+        raise ParsingError(
+            message=f"Failed to parse document: {filename}",
+            code=ErrorCodes.S_INGESTION_002,
+            details={"filename": filename, "content_type": content_type, "reason": str(e)},
+        )
+
+    if job_id:
+        update_progress(job_id, 3, "Extracting metadata")
+
+    rag_document = pipeline.build_from_parsed_documents(filename, contents, content_type, parse_result)
+
+    if job_id:
+        update_progress(job_id, 4, "Splitting document into chunks")
+
+    try:
+        chunks = pipeline.splitter.split_document(rag_document)
+        logger.info(f"Document split into {len(chunks)} chunks")
+    except Exception as e:
+        raise ChunkingError(
+            message=f"Failed to split document into chunks: {filename}",
+            code=ErrorCodes.S_INGESTION_004,
+            details={"filename": filename, "error": str(e)},
+        )
+
+    # Embed chunks (generate vectors)
+    if job_id:
+        update_progress(job_id, 5, f"Embedding {len(chunks)} chunks")
+
+    try:
+        chunks_with_vectors = embedder.embed_chunks(chunks, rag_document)
+    except Exception as e:
+        if isinstance(e, EmbeddingError):
+            raise
+        raise EmbeddingError(
+            message=f"Failed to embed document chunks: {filename}",
+            code=ErrorCodes.L_EMBEDDING_001,
+            details={"filename": filename, "chunk_count": len(chunks), "error": str(e)},
+        )
+
+    # Prepare data for Milvus
+    chunks_to_insert = []
+    for chunk in chunks_with_vectors:
+        chunk_metadata = chunk.get("metadata", {})
+
+        chunk_to_insert = {
+            "id": chunk["chunk_id"],
+            "doc_id": rag_document.document_id,
+            "file_name": rag_document.filename,
+            "page_number": chunk_metadata.get("page_number", 0),
+            "prev_chunk": chunk.get("prev_chunk", None),
+            "next_chunk": chunk.get("next_chunk", None),
+            "kb_id": kb_name,
+            "dense_vector": chunk.get("dense_vector", []),
+            "text": chunk.get("text", ""),
+            "business_data": rag_document.business_data or {},
+            "upload_time": rag_document.upload_time,
+        }
+        chunks_to_insert.append(chunk_to_insert)
+
+    # Save to Milvus
+    if chunks_to_insert:
+        if job_id:
+            update_progress(job_id, 6, f"Saving {len(chunks_to_insert)} chunks to Milvus")
+
+        try:
+            pipeline.vector_store.insert(chunks_to_insert, kb_name)
+            logger.info(f"Saved {len(chunks_to_insert)} chunks to Milvus")
+        except Exception as e:
+            raise VectorStoreError(
+                message=f"Failed to save chunks to vector store: {filename}",
+                code=ErrorCodes.R_VECTOR_002,
+                details={"filename": filename, "chunk_count": len(chunks_to_insert), "error": str(e)},
+            )
+
+    # Update doc info in rdb
+    if job_id:
+        update_progress(job_id, 7, "Updating document info in RDB")
+
+    try:
+        pipeline.document_service.update_file_info(filename, rag_document, rdb_document_id)
+        if job_id:
+            update_progress(job_id, 8, "Document processing completed!")
+    except Exception as e:
+        # Log but don't fail the entire ingestion if RDB update fails
+        logger.warning(f"Failed to update document info in RDB: {e}", exc_info=True)
 
 
 def _create_ingestion_pipeline() -> IngestionPipeline:

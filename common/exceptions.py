@@ -176,3 +176,9 @@ class FileStorageError(StorageError):
     """File storage exception"""
 
     pass
+
+
+class DocumentNotFoundError(DatabaseError):
+    """Document not found"""
+
+    pass

@@ -21,6 +21,10 @@ class ErrorCodes:
     S_INGESTION_002 = "S_ING_002"  # Document parsing failed
     S_INGESTION_003 = "S_ING_003"  # Information extraction failed
     S_INGESTION_004 = "S_ING_004"  # Document chunking failed
+    S_INGESTION_005 = "S_ING_005"  # Failed to enqueue task
+    S_INGESTION_006 = "S_ING_006"  # Redis disabled
+    S_INGESTION_007 = "S_ING_007"  # Failed to get task
+    S_INGESTION_008 = "S_ING_008"  # Failed to update job progress
     S_RETRIEVAL_001 = "S_RET_001"  # Retrieval failed
     S_RETRIEVAL_002 = "S_RET_002"  # Reranking failed
     S_GENERATION_001 = "S_GEN_001"  # Generation failed
@@ -37,5 +41,6 @@ class ErrorCodes:
     R_VECTOR_002 = "R_VEC_002"  # Milvus query failed
     R_DB_001 = "R_DB_001"  # PostgreSQL connection failed
     R_DB_002 = "R_DB_002"  # PostgreSQL query failed
+    R_DB_003 = "R_DB_003"  # Document not found
     R_CACHE_001 = "R_CACHE_001"  # Redis connection failed
     R_FILE_001 = "R_FILE_001"  # File storage failed

@@ -6,8 +6,8 @@ from rag.llm.embedding_model import embedding_model
 from common import constants, get_logger, get_model_registry
 from common.exceptions import EmbeddingError
 from common.error_codes import ErrorCodes
-from rag.ingestion import RagDocument
 from repository.cache import RedisClient, cached
+from rag.entity import RagDocument
 
 logger = get_logger(__name__)
 
@@ -31,14 +31,15 @@ class EmbeddingService:
         texts = [chunk["text"] for chunk in chunks]
 
         try:
-            embeddings, total_tokens = self.model.encode(texts)
+            embeddings, tokens = self.model.encode(texts)
 
             for i, chunk in enumerate(chunks):
                 chunk["dense_vector"] = embeddings[i].tolist()
 
-            rag_document.token_num += total_tokens
+            rag_document.token_num += tokens
 
-            logger.info(f"Embedding completed. Total tokens: {total_tokens}")
+            logger.info(f"Embedding completed. Total tokens: {tokens}")
+
             return chunks
 
         except EmbeddingError:

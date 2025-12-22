@@ -1,11 +1,12 @@
 from fastapi import APIRouter, File, UploadFile, Query
 from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel
 
 from common import get_logger
 from common.exceptions import NotFoundError
 from common.error_codes import ErrorCodes
 from repository.s3 import s3_client
-from rag.ingestion import ingestion_pipeline
+from rag.ingestion import get_task, ingestion_pipeline
 
 logger = get_logger(__name__)
 
@@ -14,6 +15,13 @@ router = APIRouter(
     tags=["Document"],
     responses={404: {"description": "Not found"}},
 )
+
+
+class UploadedDoc(BaseModel):
+    file_name: str
+    task_id: str
+    content_type: str
+    message: str
 
 
 @router.post("/process")
@@ -27,20 +35,26 @@ async def upload_file(
     """
     logger.info(f"Received file upload request: {file.filename}")
 
-    contents = await file.read()
+    task_id = await ingestion_pipeline(file)
 
-    # Let IngestionError propagate to global handler
-    ingestion_pipeline.handle_document(file.filename, contents, file.content_type)
+    uploaded_doc = UploadedDoc(
+        file_name=file.filename,
+        task_id=task_id,
+        content_type=file.content_type,
+        message=f"File '{file.filename}' accepted",
+    )
 
     return JSONResponse(
-        status_code=200,
-        content={
-            "message": f"文件 '{file.filename}' 上传成功",
-            "filename": file.filename,
-            "size": len(contents),
-            "content_type": file.content_type,
-        },
+        status_code=202,
+        content=uploaded_doc.model_dump(),
     )
+
+
+@router.get("/process/{job_id}")
+async def get_process_status(job_id: str):
+    """Get status of a document processing job."""
+    ingestion_job = get_task(job_id)
+    return JSONResponse(content=ingestion_job.model_dump(mode="json"))
 
 
 @router.get("/file-original")

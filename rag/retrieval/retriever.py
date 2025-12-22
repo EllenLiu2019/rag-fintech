@@ -110,7 +110,6 @@ class Retriever:
                 selectFields=SELECT_FIELDS,
                 query_vectors=query_vectors,
                 limit=top_k,
-                indexNames="rag_fintech",
                 knowledgebaseIds=[kb_id],
                 filters=filters,
             )
@@ -169,7 +168,6 @@ class Retriever:
                 optimized_queries=optimized_queries,
                 query_vectors=query_vectors,
                 limit=top_k,
-                indexNames="rag_fintech",
                 knowledgebaseIds=[kb_id],
                 filters=filters,
             )
@@ -215,9 +213,9 @@ class Retriever:
             prev_chunk_id = result.get("prev_chunk")
             next_chunk_id = result.get("next_chunk")
             if prev_chunk_id != "":
-                result["prev_chunk_text"] = self.vector_store.get(prev_chunk_id, "rag_fintech", [kb_id])
+                result["prev_chunk_text"] = self.vector_store.get(prev_chunk_id, [kb_id])
             if next_chunk_id != "":
-                result["next_chunk_text"] = self.vector_store.get(next_chunk_id, "rag_fintech", [kb_id])
+                result["next_chunk_text"] = self.vector_store.get(next_chunk_id, [kb_id])
 
         return results
 

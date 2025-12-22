@@ -27,6 +27,7 @@ langchain==1.1.0
 langchain-huggingface==1.2.0
 langchain-deepseek==1.0.1
 langchain-anthropic==1.3.0
+rq==2.6.1
 
 # RDB
 SQLAlchemy>=2.0.0

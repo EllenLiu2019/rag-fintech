@@ -26,26 +26,29 @@ export const UploadFile = ({ onUploadSuccess }) => {
     isUploading,
   } = useFileUpload({
     onSuccess: (uploadedFile, successMessage, responseData) => {
-      // 上传成功后保存文件信息并跳转
+      // 上传成功后保存文件信息和 job_id 并跳转
+      console.log('Upload success - responseData:', responseData) // Debug log
       const fileInfo = responseData
         ? {
-            filename: responseData.filename || uploadedFile.name,
+            filename: responseData.file_name || uploadedFile.name,
             size: responseData.size || uploadedFile.size,
             content_type: responseData.content_type || uploadedFile.type,
+            task_id: responseData.task_id, 
           }
         : {
             filename: uploadedFile.name,
             size: uploadedFile.size,
             content_type: uploadedFile.type,
+            task_id: null,
           }
+      
+      console.log('FileInfo with task_id:', fileInfo) // Debug log
 
       setFile(null)
       resetFileInput()
 
-      // 延迟跳转，让用户看到成功消息
-      setTimeout(() => {
-        onUploadSuccess(fileInfo)
-      }, TIMING.NAVIGATION_DELAY_MS)
+      // 立即跳转，在 ParseFile 页面显示处理进度
+      onUploadSuccess(fileInfo)
     },
     onError: (error) => {
       console.error('文件上传失败:', error)

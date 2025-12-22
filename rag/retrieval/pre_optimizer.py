@@ -235,7 +235,6 @@ class GlossaryInjector:
                 self.select_fields,
                 [word_embedding],
                 limit=2,
-                indexNames="rag_fintech",
                 knowledgebaseIds=["snomed_kb"],
                 filters=filter_expr,
             )

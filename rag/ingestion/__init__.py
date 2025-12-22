@@ -9,7 +9,7 @@ This module handles the complete document processing workflow:
 - Storage to vector database
 """
 
-from .document import RagDocument
 from .pipeline import ingestion_pipeline
+from .tasks import enqueue_task, get_task
 
-__all__ = ["RagDocument", "ingestion_pipeline"]
+__all__ = ["ingestion_pipeline", "enqueue_task", "get_task"]

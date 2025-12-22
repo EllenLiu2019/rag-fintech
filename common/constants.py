@@ -1,9 +1,9 @@
 SERVICE_CONF = "service_conf.yaml"
 LLM_FACTORIES_CONF = "llm_factories.json"
 MILVUS_MAPPING_CONF = "milvus_mapping.json"
-RAG_FLOW_SERVICE_NAME = "rag-fintech"
 
 API_KEY_SUFFIX = "_API_KEY"
 DENSE_TAG = "DENSE"
 SPARSE_TAG = "SPARSE"
-CHAT_TAG = "CHAT"
+
+VECTOR_STORE_NAME = "rag_fintech"

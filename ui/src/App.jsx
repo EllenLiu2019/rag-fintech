@@ -12,7 +12,7 @@ import ChatQA from './pages/ChatQA'
  */
 
 // 开发模式：直接显示 ParseFile 组件（用于开发调试）
-const DEV_MODE_SHOW_PARSE = true // 设置为 true 可直接显示 ParseFile 页面
+const DEV_MODE_SHOW_PARSE = false // 设置为 true 可直接显示 ParseFile 页面
 
 // 模拟文件信息（用于开发调试）
 const MOCK_FILE_INFO = {
@@ -27,6 +27,7 @@ function App() {
 
   // 处理上传成功后的页面跳转
   const handleUploadSuccess = (fileInfo) => {
+    // fileInfo contains filename, size, content_type, task_id
     setUploadedFileInfo(fileInfo)
     setCurrentPage(ROUTES.PARSE)
   }

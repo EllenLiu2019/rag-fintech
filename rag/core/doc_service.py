@@ -1,15 +1,19 @@
 from typing import List
 
+from fastapi import UploadFile
+
 from common import get_logger
 from common.exceptions import (
     DatabaseError,
     FileStorageError,
     ModelNotFoundError,
+    DocumentNotFoundError,
 )
 from common.error_codes import ErrorCodes
 from repository.rdb.models.models import Document as RdbDocument, KnowledgeBase, LLM
 from repository.rdb.postgresql_client import PostgreSQLClient
-from rag.ingestion import RagDocument
+from rag.entity import RagDocument
+
 from repository.s3 import s3_client
 
 logger = get_logger(__name__)
@@ -19,16 +23,18 @@ class DocumentService:
     def __init__(self):
         self.rdb_client = PostgreSQLClient()
 
-    def upload_file(self, filename: str, contents: bytes, content_type: str):
-        logger.info(f"Uploading file: {filename}")
+    async def upload_file(self, file: UploadFile) -> RdbDocument:
+        logger.info(f"Uploading file: {file.filename}")
+        content_type = file.content_type
+        contents = await file.read()
 
         try:
-            file_path = s3_client.save_original_file(filename, contents)
+            file_path = s3_client.save_original_file(file.filename, contents)
         except Exception as e:
             raise FileStorageError(
-                message=f"Failed to save original file: {filename}",
+                message=f"Failed to save original file: {file.filename}",
                 code=ErrorCodes.R_FILE_001,
-                details={"filename": filename, "error": str(e)},
+                details={"filename": file.filename, "error": str(e)},
             ) from e
 
         if content_type == "application/pdf":
@@ -36,12 +42,8 @@ class DocumentService:
         else:
             kb_name = "unknown"
 
-        # kb_ids = self.rdb_client.execute_query(KnowledgeBase, kb_name)
-        # if len(kb_ids) == 0:
-        #     raise ValueError(f"Knowledge base {kb_name} not found")
-
         document = RdbDocument(
-            file_name=filename,
+            file_name=file.filename,
             file_location=file_path,
             content_type=content_type,
             file_size=len(contents),
@@ -53,18 +55,18 @@ class DocumentService:
             rdb_document = self.rdb_client.save(document)
         except Exception as e:
             raise DatabaseError(
-                message=f"Failed to save document to database: {filename}",
+                message=f"Failed to save document to database: {file.filename}",
                 code=ErrorCodes.R_DB_002,
-                details={"filename": filename, "error": str(e)},
+                details={"filename": file.filename, "error": str(e)},
             ) from e
 
-        logger.info(f"File {filename} saved to RDB: id={rdb_document.id} with original file location: {file_path}")
+        logger.info(f"File {file.filename} saved to RDB: id={rdb_document.id} with original file location: {file_path}")
 
         return rdb_document
 
-    def update_file_info(self, filename: str, rag_document: RagDocument, rdb_document: RdbDocument):
+    def update_file_info(self, filename: str, rag_document: RagDocument, rdb_id: int):
         file_name = f"{filename}-{rag_document.job_id}"
-        logger.info(f"Updating file {file_name} in RDB: id={rdb_document.id}")
+        logger.info(f"Updating file {file_name} in RDB: id={rdb_id}")
 
         parsed_file = rag_document.to_parsed_file()
         try:
@@ -77,6 +79,14 @@ class DocumentService:
             ) from e
 
         # Update document attributes
+        rdb_document = self.rdb_client.select_by_id(RdbDocument, rdb_id)
+        if rdb_document is None:
+            raise DocumentNotFoundError(
+                message=f"Document not found: {rdb_id}",
+                code=ErrorCodes.R_DB_003,
+                details={"rdb_id": rdb_id},
+            )
+
         rdb_document.document_id = rag_document.document_id
         rdb_document.file_name = file_name
         rdb_document.doc_status = "completed"

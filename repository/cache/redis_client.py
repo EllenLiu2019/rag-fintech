@@ -1,13 +1,17 @@
-import redis
 import hashlib
 import pickle
 from typing import Any, Optional, Callable
 from functools import wraps
 import inspect
+import time
+
+from redis import Redis, RedisError, TimeoutError
+from rq import Queue
+from rq.job import Job
+from rq.exceptions import NoSuchJobError
 
 from common.decorator import singleton
 from common.config_utils import get_base_config
-
 from common import get_logger
 
 logger = get_logger(__name__)
@@ -25,19 +29,22 @@ class RedisClient:
             return
 
         try:
-            self.client = redis.Redis(
+            self.client = Redis(
                 host=redis_config.get("host"),
                 port=int(redis_config.get("port")),
-                decode_responses=redis_config.get("decode_responses", False),  # Must be False for pickle serialization
                 username=redis_config.get("username"),
                 password=redis_config.get("password"),
+                decode_responses=redis_config.get("decode_responses", False),  # Must be False for pickle serialization
             )
             self.client.ping()
+            queue_name = redis_config.get("queue_name", "default")
+            self.queue = Queue(name=queue_name, connection=self.client)
 
             logger.info(
-                f"Redis client initialized successfully at {redis_config.get('host')}:{redis_config.get('port')}"
+                f"Redis client initialized successfully at {redis_config.get('host')}:{redis_config.get('port')}, "
+                f"queue: {queue_name}"
             )
-        except (redis.ConnectionError, redis.TimeoutError) as e:
+        except (RedisError, TimeoutError) as e:
             logger.error(f"Redis connection failed: {e}.")
             raise e
 
@@ -123,6 +130,58 @@ class RedisClient:
             }
         except Exception as e:
             return {"type": "redis", "status": "red", "error": str(e)}
+
+    def enqueue(
+        self,
+        func: Callable,
+        *args,
+        job_timeout: int = 600,
+        result_ttl: int = 3600,
+        failure_ttl: int = 86400,
+        **kwargs,
+    ) -> Job:
+        """
+        Enqueue a job to RQ queue.
+
+        Returns:
+            RQ Job object
+        """
+        return self.queue.enqueue(
+            func,
+            *args,
+            job_timeout=job_timeout,
+            result_ttl=result_ttl,
+            failure_ttl=failure_ttl,
+            **kwargs,
+        )
+
+    def get_job(self, job_id: str) -> Optional[Job]:
+        try:
+            return Job.fetch(job_id, connection=self.client)
+        except NoSuchJobError:
+            logger.warning(f"Job {job_id} not found")
+            return None
+
+    def update_progress(self, job_id: str, step: int, message: str):
+        """Update job progress in Redis."""
+        try:
+            return self.client.hset(
+                f"job:{job_id}:progress",
+                mapping={
+                    "step": step,
+                    "message": message,
+                    "updated_at": time.time(),
+                },
+            )
+        except Exception as e:
+            logger.error(f"Failed to update job progress {job_id}: {e}")
+
+    def get_progress(self, job_id: str):
+        try:
+            return self.client.hgetall(f"job:{job_id}:progress")
+        except Exception as e:
+            logger.error(f"Failed to get progress for job_id {job_id}: {e}")
+            return {}
 
 
 def cached(

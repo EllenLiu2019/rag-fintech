@@ -12,7 +12,7 @@ from pymilvus import (
 from common import get_logger, file_utils
 from common.decorator import singleton
 from common.config_utils import get_base_config, load_yaml_conf
-from common.constants import MILVUS_MAPPING_CONF
+from common.constants import MILVUS_MAPPING_CONF, VECTOR_STORE_NAME
 from repository.vector.doc_store_client import DocStoreClient, extract_entity_fields
 from common.exceptions import ConnectionError, VectorStoreError
 from common.error_codes import ErrorCodes
@@ -74,9 +74,9 @@ class VectorStoreClient(DocStoreClient):
         except Exception as e:
             return {"type": "milvus", "status": "red", "error": str(e)}
 
-    def createIdx(self, indexName: str, knowledgebaseId: str, vectorSize: int):
+    def createIdx(self, knowledgebaseId: str, vectorSize: int):
 
-        collection_name = f"{indexName}_{knowledgebaseId}"
+        collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseId}"
 
         schema = MilvusClient.create_schema(
             auto_id=False,
@@ -136,14 +136,14 @@ class VectorStoreClient(DocStoreClient):
 
         logger.info(f"Milvus created collection {collection_name}, vector size {vectorSize}")
 
-    def deleteIdx(self, indexName: str, knowledgebaseId: str):
-        collection_name = f"{indexName}_{knowledgebaseId}"
+    def deleteIdx(self, knowledgebaseId: str):
+        collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseId}"
         if self.client.has_collection(collection_name):
             self.client.drop_collection(collection_name)
             logger.info(f"Milvus dropped collection {collection_name}")
 
-    def indexExist(self, indexName: str, knowledgebaseId: str) -> bool:
-        collection_name = f"{indexName}_{knowledgebaseId}"
+    def indexExist(self, knowledgebaseId: str) -> bool:
+        collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseId}"
         return self.client.has_collection(collection_name)
 
     def search(
@@ -151,14 +151,10 @@ class VectorStoreClient(DocStoreClient):
         selectFields: list[str],
         query_vectors: List[List[float]],
         limit: int,
-        indexNames: str | list[str],
         knowledgebaseIds: list[str],
         filters: Optional[Dict | str] = None,
     ) -> List[Dict[str, Any]]:
-        if isinstance(indexNames, str):
-            indexNames = indexNames.split(",")
-
-        collection_name = f"{indexNames[0]}_{knowledgebaseIds[0]}"
+        collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseIds[0]}"
 
         if isinstance(filters, dict):
             filter_expr = self._build_filter_expr(filters)
@@ -217,14 +213,10 @@ class VectorStoreClient(DocStoreClient):
         optimized_queries: List[str],
         query_vectors: List[List[float]],
         limit: int,
-        indexNames: str | list[str],
         knowledgebaseIds: list[str],
         filters: Optional[Dict | str] = None,
     ) -> List[Dict[str, Any]]:
-        if isinstance(indexNames, str):
-            indexNames = indexNames.split(",")
-
-        collection_name = f"{indexNames[0]}_{knowledgebaseIds[0]}"
+        collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseIds[0]}"
 
         if isinstance(filters, dict):
             filter_expr = self._build_filter_expr(filters)
@@ -300,8 +292,8 @@ class VectorStoreClient(DocStoreClient):
 
         return results
 
-    def insert(self, chunks: list[dict], indexName: str, knowledgebaseId: str = None) -> list[str]:
-        collection_name = f"{indexName}_{knowledgebaseId}"
+    def insert(self, chunks: list[dict], knowledgebaseId: str = None) -> list[str]:
+        collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseId}"
 
         vector_size = 0
         if chunks and "dense_vector" in chunks[0]:
@@ -310,8 +302,8 @@ class VectorStoreClient(DocStoreClient):
             logger.exception(f"Cannot create collection {collection_name}: unknown vector size.")
             raise ValueError(f"{collection_name}: unknown vector size.")
 
-        if not self.indexExist(indexName, knowledgebaseId):
-            self.createIdx(indexName, knowledgebaseId, vector_size)
+        if not self.indexExist(knowledgebaseId):
+            self.createIdx(knowledgebaseId, vector_size)
 
         data_to_insert = []
         field_names = self.milvus_mapping["fields"].keys()
@@ -356,19 +348,19 @@ class VectorStoreClient(DocStoreClient):
 
         return res
 
-    def update(self, condition: dict, newValue: dict, indexName: str, knowledgebaseId: str) -> bool:
-        collection_name = f"{indexName}_{knowledgebaseId}"
+    def update(self, condition: dict, newValue: dict, knowledgebaseId: str) -> bool:
+        collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseId}"
         self.client.upsert(collection_name=collection_name, data=newValue)
         return True
 
-    def delete(self, condition: dict, indexName: str, knowledgebaseId: str) -> int:
-        collection_name = f"{indexName}_{knowledgebaseId}"
+    def delete(self, condition: dict, knowledgebaseId: str) -> int:
+        collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseId}"
         filter_expr = self._build_delete_expr(condition)
         res = self.client.delete(collection_name=collection_name, filter=filter_expr)
         return res
 
-    def get(self, chunkId: str, indexName: str, knowledgebaseIds: list[str]) -> dict | None:
-        collection_name = f"{indexName}_{knowledgebaseIds[0]}"
+    def get(self, chunkId: str, knowledgebaseIds: list[str]) -> dict | None:
+        collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseIds[0]}"
         search_res = self.client.get(collection_name=collection_name, ids=[chunkId], output_fields=["text"])
         return search_res[0]["text"] if search_res else None
 

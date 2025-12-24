@@ -13,13 +13,9 @@ class LLMExtractor:
         )
         self.prompt_manager = get_prompt_manager()
 
-    def extract(self, content: str, hints: dict = None) -> dict:
+    def extract(self, content: str, hints: dict = None, missing_fields: dict = None) -> dict:
 
-        fields = {
-            "total_premium": {"总保费": ""},
-            "coverage_amount": {"保险金额": ""},
-            "confidence": 0.95,
-        }
+        fields = missing_fields or {}
 
         prompt = self.prompt_manager.get(
             "insurance_extraction",

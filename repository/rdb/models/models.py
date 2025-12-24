@@ -1,24 +1,11 @@
-from typing import Optional, Dict, Any, List
+from typing import Optional, List
+from datetime import datetime
 
 from sqlalchemy import BigInteger, String, Integer, DateTime, Text, ForeignKey
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from datetime import datetime
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.inspection import inspect as sa_inspect
 
-
-class Base(DeclarativeBase):
-    """Base class for all models with common utility methods"""
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert model instance to dictionary"""
-        return {c.key: getattr(self, c.key) for c in sa_inspect(self).mapper.column_attrs}
-
-    def update_from_dict(self, data: Dict[str, Any]):
-        """Update model instance from dictionary"""
-        for key, value in data.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
+from repository.rdb.models.base import Base
 
 
 class LLM(Base):

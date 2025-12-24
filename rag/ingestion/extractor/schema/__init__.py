@@ -1,4 +1,0 @@
-"""
-Extraction schemas.
-"""
-

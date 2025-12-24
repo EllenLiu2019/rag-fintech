@@ -6,8 +6,8 @@ logger = get_logger(__name__)
 
 
 class HtmlTableGrid:
-    def __init__(self, table: Tag, fallback_strategy: callable) -> None:
-        self.fallback_strategy = fallback_strategy
+    def __init__(self, table: Tag, match_strategy: callable) -> None:
+        self.match_strategy = match_strategy
         self.table = table
         self.grid = []
         self.table_ids = []
@@ -20,14 +20,19 @@ class HtmlTableGrid:
         for row_idx, tr in enumerate(self.table.find_all("tr")):
 
             # find all cells of the row, which may be td or th
+            row_matched = False
             for cell_idx, cell in enumerate(tr.find_all(["th", "td"])):
 
                 text = cell.get_text(strip=True)
+                if text == "":
+                    logger.info(f"Skipping empty cell: {text}")
+                    continue
 
                 # identify the 1st cell of the row to get the matched key and strategy
                 # only match the 1st cell of each row with matched_keys, if matched, the row and subsequent rows belong to the matched key
-                if cell_idx == 0:
-                    matched_key, matched_strategy = self.fallback_strategy(text)
+                if not row_matched:
+                    row_matched = True
+                    matched_key, _ = self.match_strategy(text)
                     if matched_key:
                         if matched_key not in self.table_ids:
                             self.table_ids.append(matched_key)

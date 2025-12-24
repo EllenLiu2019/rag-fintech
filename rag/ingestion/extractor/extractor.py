@@ -1,13 +1,16 @@
-from typing import Any, Optional
 from copy import deepcopy
+import json
+from typing import Any, Optional
 
-from rag.ingestion.extractor.rule_extractor import RuleExtractor
-from rag.ingestion.extractor.llm_extractor import LLMExtractor
-from rag.ingestion.utils.confidence_calculator import ConfidenceCalculator
-from rag.ingestion.extractor.metadata_creator import MetadataCreator
 from common import get_logger
-from common.exceptions import ExtractionError
 from common.error_codes import ErrorCodes
+from common.exceptions import ExtractionError
+from rag.ingestion.extractor.llm_extractor import LLMExtractor
+from rag.ingestion.extractor.metadata_creator import MetadataCreator
+from rag.ingestion.extractor.rdb_builder import RdbBuilder
+from rag.ingestion.extractor.rule_extractor import RuleExtractor
+from rag.ingestion.utils.confidence_calculator import ConfidenceCalculator
+from rag.ingestion.extractor.validator import check_missing_fields
 
 logger = get_logger(__name__)
 
@@ -20,18 +23,27 @@ class Extractor:
     """
 
     def __init__(self, model: dict[str, Any]) -> None:
+        from pathlib import Path
+
+        schema_path = str(Path(__file__).parent / "schema" / "insurance.json")
+        with open(schema_path, "r") as f:
+            self.schema: dict[str, Any] = json.load(f)
+
         self.llm_extractor: LLMExtractor = LLMExtractor(model)
-        self.rule_extractor: RuleExtractor = RuleExtractor()
+        self.rule_extractor: RuleExtractor = RuleExtractor(self.schema)
         self.confidence_calculator: ConfidenceCalculator = ConfidenceCalculator()
         self.metadata_creator = MetadataCreator()
 
-    def extract(self, documents: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]]:
+    def extract(
+        self, documents: list[dict[str, Any]], source_file: str = None
+    ) -> tuple[dict[str, Any], dict[str, Any], int]:
         """
         Args:
             documents: list of documents, format: [dict[str, Any], ...]
+            source_file: optional source file name for database storage
 
         Returns:
-            tuple[dict[str, Any], dict[str, Any]]: confidence_result, metadata
+            tuple[dict[str, Any], dict[str, Any], int]: confidence_result, metadata, llm_tokens
         """
         if not isinstance(documents, list) or not all(isinstance(doc, dict) for doc in documents):
             raise ExtractionError(
@@ -44,24 +56,33 @@ class Extractor:
             logger.info("Starting rule-based extraction")
 
             raw_documents = deepcopy(documents)
-            self.rule_extractor.extract(raw_documents)
+            extracted_results = self.rule_extractor.extract(raw_documents)
+
+            missing_fields = check_missing_fields(self.schema, extracted_results)
+
+            llm_tokens = 0
+            if missing_fields:
+                llm_results = self._fallback_to_llm_extraction(documents, extracted_results, missing_fields)
+                if llm_results:
+                    extracted_results = llm_results["content"]
+                    llm_tokens = llm_results.get("tokens", 0)
 
             logger.info("Calculating confidence scores")
             confidence_result = self.confidence_calculator.calculate(
-                self.rule_extractor.extracted_result,
-                self.rule_extractor.schema,
+                extracted_results,
+                self.schema,
                 self.rule_extractor.extraction_signals,
             )
-            metadata = self.metadata_creator.create(self.rule_extractor.extracted_result)
+            metadata = self.metadata_creator.create(extracted_results)
 
-            llm_tokens = 0
-            if confidence_result.get("overall_confidence", 0.0) < 0.8:
-                logger.warning(f"Low confidence detected: {confidence_result.get('overall_confidence')}. ")
-                llm_results = self._fallback_to_llm_extraction(documents, metadata)
-                if llm_results:
-                    metadata_llm = self.metadata_creator.create(llm_results["content"])
-                    metadata.update(metadata_llm)
-                    llm_tokens = llm_results.get("tokens", 0)
+            # Build entities and save to database
+            rdb_builder = RdbBuilder(
+                self.schema,
+                extracted_results,
+                confidence_result.get("overall_confidence", 0.0),
+                source_file,
+            )
+            rdb_builder.build()
 
             return confidence_result, metadata, llm_tokens
 
@@ -77,14 +98,20 @@ class Extractor:
             ) from e
 
     def _fallback_to_llm_extraction(
-        self, documents: list[dict[str, Any]], metadata: dict[str, Any]
+        self,
+        documents: list[dict[str, Any]],
+        extracted_results: dict[str, Any],
+        missing_fields: dict[str, Any],
     ) -> Optional[dict[str, Any]]:
+
+        logger.warning(f"Missing fields detected: {missing_fields}. ")
+
         try:
-            hints = deepcopy(metadata)
+            hints = extracted_results
 
             content = "\n".join([doc.get("text", "") for doc in documents])
 
-            llm_results = self.llm_extractor.extract(content, hints=hints)
+            llm_results = self.llm_extractor.extract(content, hints=hints, missing_fields=missing_fields)
             logger.info("LLM extraction completed")
             return llm_results
 
@@ -92,11 +119,23 @@ class Extractor:
             logger.error(f"LLM extraction failed: {e}", exc_info=True)
             return None
 
-    def get_extracted_result(self) -> dict[str, Any]:
-        return self.rule_extractor.extracted_result
+    def get_extracted_results(self) -> dict[str, Any]:
+        return self.rule_extractor.extracted_results
 
     def reset(self) -> None:
-        self.rule_extractor.extracted_result = {}
+        self.rule_extractor.extracted_results = {}
         self.rule_extractor.extraction_signals = {}
         self.rule_extractor.grids = []
         logger.info("Extractor reset")
+
+
+if __name__ == "__main__":
+    from pathlib import Path
+    from common.model_registry import get_model_registry
+
+    with open(Path(__file__).parent / "data" / "policy_mini.json", "r") as f:
+        policy_base_1 = json.load(f)
+    registry = get_model_registry()
+    model_config = registry.get_chat_model("qa_reasoner")
+    extractor = Extractor(model=model_config.to_dict())
+    extractor.extract(policy_base_1["pages"])

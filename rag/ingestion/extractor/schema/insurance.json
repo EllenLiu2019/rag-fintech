@@ -1,6 +1,6 @@
 {
     "name": "insurance",
-    "version": "0.1",
+    "version": "0.2",
     "fields": {
         "policy_number": {
             "position": "content",
@@ -9,6 +9,15 @@
                 "regex": "保险单号：([A-Z0-9]+)",
                 "group": 1,
                 "key_name": "保险单号"
+            },
+            "db_mapping": {
+                "tables": ["policy", "policy_holder", "insured", "coverage", "cvg_premium"],
+                "columns": {
+                    "保险单号": {
+                        "name": "policy_number",
+                        "type": "string"
+                    }
+                }
             }
         },
         "policy_holder": {
@@ -16,7 +25,37 @@
             "match": {
                 "strategy": "exact",   
                 "values": ["投保人"],
-                "target": 0
+                "target": 0,
+                "type": "object"
+            },
+            "db_mapping": {
+                "tables": ["policy_holder"],
+                "columns": {
+                    "投保人": {
+                        "name": "name",
+                        "type": "string"
+                    },
+                    "性别": {
+                        "name": "gender",
+                        "type": "string"
+                    },
+                    "出生日期": {
+                        "name": "birth_date",
+                        "type": "string"
+                    },
+                    "证件号码": {
+                        "name": "id_number",
+                        "type": "string"
+                    },
+                    "手机号码": {
+                        "name": "phone",
+                        "type": "string"
+                    },
+                    "电子邮箱": {
+                        "name": "email",
+                        "type": "string"
+                    }
+                }
             }
         },
         "insured": {
@@ -24,7 +63,33 @@
             "match": {
                 "strategy": "exact",
                 "values": ["被保险人"],
-                "target": 0
+                "target": 0,
+                "type": "object"
+            },
+            "db_mapping": {
+                "tables": ["insured"],
+                "columns": {
+                    "被保险人": {
+                        "name": "name",
+                        "type": "string"
+                    },
+                    "性别": {
+                        "name": "gender",
+                        "type": "string"
+                    },
+                    "出生日期": {
+                        "name": "birth_date",
+                        "type": "string"
+                    },
+                    "证件号码": {
+                        "name": "id_number",
+                        "type": "string"
+                    },
+                    "与投保人关系": {
+                        "name": "relationship_to_holder",
+                        "type": "string"
+                    }
+                }
             }
         },
         "coverage": {
@@ -32,7 +97,25 @@
             "match": {
                 "strategy": "exact",
                 "values": ["保险名称"],
-                "target": 0
+                "target": 0,
+                "type": "list"
+            },
+            "db_mapping": {
+                "tables": ["coverage"],
+                "columns": {
+                    "保险名称": {
+                        "name": "cvg_name",
+                        "type": "string"
+                    },
+                    "保险责任": {
+                        "name": "cvg_type",
+                        "type": "string"
+                    },
+                    "最高保险金额（元）": {
+                        "name": "cvg_amt",
+                        "type": "decimal"
+                    }
+                }
             }
         },
         "cvg_premium": {
@@ -40,7 +123,21 @@
             "match": {
                 "strategy": "exact",
                 "values": ["条款名称"],
-                "target": 0
+                "target": 0,
+                "type": "list"
+            },
+            "db_mapping": {
+                "tables": ["cvg_premium"],
+                "columns": {
+                    "条款名称": {
+                        "name": "cvg_name",
+                        "type": "string"
+                    },
+                    "保险费（元）": {
+                        "name": "cvg_premium",
+                        "type": "decimal"
+                    }
+                }
             }
         },
         "effective_date": {
@@ -50,6 +147,15 @@
                 "regex": "(?:\\*\\*保险期间\\*\\*：|保险期间)[\\s\\S]*?自(\\d{4}年\\d{2}月\\d{2}日)[\\s\\S]*?起至",
                 "group": 1,
                 "key_name": "保险期间开始日期"
+            },
+            "db_mapping": {
+                "tables": ["policy"],
+                "columns": {
+                    "保险期间开始日期": {
+                        "name": "effective_date",
+                        "type": "date"
+                    }
+                }
             }
         },
         "expiry_date": {
@@ -59,8 +165,19 @@
                 "regex": "(?:\\*\\*保险期间\\*\\*：|保险期间)[\\s\\S]*?自[\\s\\S]*?起至(\\d{4}年\\d{2}月\\d{2}日).*?止",
                 "group": 1,
                 "key_name": "保险期间结束日期"
+            },
+            "db_mapping": {
+                "tables": ["policy"],
+                "columns": {
+                    "保险期间结束日期": {
+                        "name": "expiry_date",
+                        "type": "date"
+                    }
+                }
             }
         }
-    }
-    
+    },
+    "ignore_keywords": [
+        "Text", "Date", "Number", "Date Range", "SPAN", "文本", "日期", "数字"
+    ]
 }

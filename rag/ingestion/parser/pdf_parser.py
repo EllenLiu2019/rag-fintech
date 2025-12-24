@@ -42,15 +42,16 @@ class PDFParser(BaseParser):
                 do_not_cache=True,
                 strict_mode_reconstruction=True,
                 strict_mode_buggy_font=True,
-                user_prompt=None,
-                system_prompt_append=self.prompt_manager.get("parse_system_prompt"),
+                user_prompt=self.prompt_manager.get("parse_prompt"),
+                system_prompt_append=self.prompt_manager.get("parse_prompt"),
                 hide_footers=True,
+                preserve_very_small_text=True,
+                invalidate_cache=True,
             )
 
             logger.info("LlamaParse parse job starting...")
             result = llm_parser.parse(contents, extra_info=extra_info)
 
-            # 获取 Document 对象列表（包含元数据）
             markdown_documents = result.get_markdown_documents(split_by_page=True)
 
             if markdown_documents:

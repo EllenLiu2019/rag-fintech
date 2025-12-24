@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
-from typing import List, Optional, Type, TypeVar
+from typing import List, Optional, Type, TypeVar, Any
 
 from repository.rdb.models.models import Base
 
@@ -40,10 +40,16 @@ class PostgreSQLClient:
             records = session.query(model).all()
             return records
 
-    def select_by_id(self, model: Type[T], id: int) -> Optional[T]:
+    def select_by_id(self, model: Type[T], id: Any) -> Optional[T]:
         """Select a record by ID"""
         with self.Session() as session:
             record = session.get(model, id)
+            return record
+
+    def select_by_kwargs(self, model: Type[T], **kwargs) -> Optional[T]:
+        """Select a record by keyword arguments"""
+        with self.Session() as session:
+            record = session.query(model).filter_by(**kwargs).first()
             return record
 
     def execute_query(self, model: Type[T], name: str) -> List[T]:
@@ -90,3 +96,9 @@ class PostgreSQLClient:
                 session.refresh(record)
                 session.expunge(record)
             return record
+
+    def update_many_by_kwargs(self, model: Type[T], filter_kwargs: dict, update_kwargs: dict) -> int:
+        """Update all records matching filter_kwargs with update_kwargs"""
+        with self.Session.begin() as session:
+            count = session.query(model).filter_by(**filter_kwargs).update(update_kwargs)
+            return count

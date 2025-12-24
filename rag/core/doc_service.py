@@ -96,8 +96,8 @@ class DocumentService:
         rdb_document.upload_time = rag_document.upload_time
         rdb_document.business_data = rag_document.business_data
         rdb_document.confidence = rag_document.confidence
-        rdb_document.token_num += rag_document.token_num
-        rdb_document.chunk_num += rag_document.chunk_num
+        rdb_document.token_num += rag_document.token_num if rag_document.token_num is not None else 0
+        rdb_document.chunk_num += rag_document.chunk_num if rag_document.chunk_num is not None else 0
 
         # Save the updated document (merge will update existing record)
         try:

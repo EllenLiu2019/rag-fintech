@@ -7,7 +7,6 @@ from common import get_logger
 
 logger = get_logger(__name__)
 
-IGNORE_KEYWORDS = frozenset({"Text", "Date", "Number", "Date Range", "SPAN"})
 HEADER_IDENTIFIER = "th"
 ROW_IDENTIFIER = "tr"
 CELL_IDENTIFIER = "td"
@@ -18,44 +17,40 @@ class RuleExtractor:
     extractor based on schema matching, including exact matching and regex matching
     """
 
-    def __init__(self, schema_path: str = None) -> None:
-        if schema_path is None:
-            from pathlib import Path
-
-            schema_path = str(Path(__file__).parent / "schema" / "insurance.json")
+    def __init__(self, schema: dict[str, Any]) -> None:
         self.table_mapping_strategy: dict[str, dict[str, Any]] = {}
-        self.extract_from_content: dict[str, dict[str, Any]] = {}
-        with open(schema_path, "r") as f:
-            self.schema: dict[str, Any] = json.load(f)
-            self.parse_schema(self.schema)
+        self.content_mapping_strategy: dict[str, dict[str, Any]] = {}
+        self.schema: dict[str, Any] = schema
+        for key, config in self.schema.get("fields", {}).items():
+            if config.get("position") == "table":
+                self.table_mapping_strategy[key] = config
+            elif config.get("position") == "content":
+                self.content_mapping_strategy[key] = dict(config.get("match", {}))
+        self.ignore_keywords = frozenset(self.schema.get("ignore_keywords", []))
+
         self.grids: list[HtmlTableGrid] = []
-        self.extracted_result: dict[str, Any] = {}
-        # Extraction signals for confidence calculation
+        self.extracted_results: dict[str, Any] = {}
+        # for confidence calculation
         self.extraction_signals: dict[str, dict[str, Any]] = {}
 
-    def extract(self, documents: list[dict[str, Any]]) -> None:
+    def extract(self, documents: list[dict[str, Any]]) -> dict[str, Any]:
         for document in documents:
+            if self._is_extracted_finished():
+                logger.info("Extraction finished")
+                return self.extracted_results
             soup = BeautifulSoup(document["text"], "html.parser")
             self.content_extract(soup)
             tables = soup.find_all("table")
             self.identify_tables(tables)
             self.extract_identified_tables(tables)
             self.extract_from_grids()
+        return self.extracted_results
 
-    def parse_schema(self, schema: dict[str, Any]) -> None:
-        for key, config in schema.get("fields", {}).items():
-            if config.get("position") == "table":
-                self.table_mapping_strategy[key] = {
-                    "strategy": config.get("match", {}).get("strategy"),
-                    "values": config.get("match", {}).get("values"),
-                    "target": config.get("match", {}).get("target"),
-                    "table_type": config.get("type"),
-                }
-            elif config.get("position") == "content":
-                self.extract_from_content[key] = dict(config.get("match", {}))
+    def _is_extracted_finished(self) -> bool:
+        return len(self.extracted_results.keys()) == len(self.schema.get("fields", {}))
 
     def content_extract(self, soup: BeautifulSoup) -> None:
-        for key, item in self.extract_from_content.items():
+        for key, item in self.content_mapping_strategy.items():
             # Skip if already successfully matched (avoid overwriting with failed match)
             if key in self.extraction_signals and self.extraction_signals[key].get("matched"):
                 continue
@@ -73,7 +68,7 @@ class RuleExtractor:
 
             key_name = item.get("key_name")
             value = match.group(item["group"])
-            self.extracted_result[key] = {key_name: value}
+            self.extracted_results[key] = {key_name: value}
             # Record successful match signal
             self.extraction_signals[key] = {
                 "source": "content_regex",
@@ -97,13 +92,17 @@ class RuleExtractor:
         if not header_cells:
             return
 
-        # check if the first table header cell matches the strategy
-        first_header = header_cells[0]
-        header_text = first_header.text.strip()
+        header_text = header_cells[0].text.strip()
 
+        # check if the first table header cell matches the strategy
         matched_key, matched_strategy = self._match_table_strategy(header_text)
 
         if matched_key and matched_strategy:
+            table_type = matched_strategy["match"].get("type")
+
+            if table_type != "list":
+                return
+
             table["id"] = matched_key
             logger.info(f"Identified table with thead: {matched_key}")
             # Record table header match signal
@@ -112,11 +111,11 @@ class RuleExtractor:
                 "matched": True,
                 "strategy": "exact",
                 "matched_text": header_text,
-                "table_type": "list",
+                "table_type": table_type,
             }
 
     def _fallback_build_grid(self, table: Tag) -> None:
-        html_table_grid = HtmlTableGrid(table=table, fallback_strategy=self._match_table_strategy)
+        html_table_grid = HtmlTableGrid(table=table, match_strategy=self._match_table_strategy)
         self.grids.append(html_table_grid)
 
     def extract_identified_tables(self, tables: list[Tag]) -> None:
@@ -144,8 +143,8 @@ class RuleExtractor:
             logger.info(f"Extracting object table with id: {grid.table_ids}")
 
             for tid in grid.table_ids:
-                if tid not in self.extracted_result:
-                    self.extracted_result[tid] = {}
+                if tid not in self.extracted_results:
+                    self.extracted_results[tid] = {}
                 # Record grid fallback signal
                 if tid not in self.extraction_signals:
                     self.extraction_signals[tid] = {
@@ -159,17 +158,25 @@ class RuleExtractor:
 
             for row in grid.grid:
                 # Skip empty rows
-                if not row or not row[0]:
-                    continue
-                row_id = row[0].get("key")
-                if not row_id:
+                if not row:
                     continue
 
-                kv_count = self._extract_kv_pair(row, row_id)
+                valid_row_id = next(
+                    (
+                        item.get("key")
+                        for item in row
+                        if item is not None and item.get("text") not in self.ignore_keywords
+                    ),
+                    None,
+                )
+                if not valid_row_id:
+                    continue
+
+                kv_count = self._extract_kv_pair(row, valid_row_id)
                 # Update signal with extraction stats
-                if row_id in self.extraction_signals:
-                    self.extraction_signals[row_id]["row_count"] += 1
-                    self.extraction_signals[row_id]["kv_count"] += kv_count
+                if valid_row_id in self.extraction_signals:
+                    self.extraction_signals[valid_row_id]["row_count"] += 1
+                    self.extraction_signals[valid_row_id]["kv_count"] += kv_count
 
         self.grids.clear()
 
@@ -182,7 +189,7 @@ class RuleExtractor:
             return 0
 
         # Filter out ignored keywords first
-        cells_to_extract = [cell for cell in row if cell["text"] not in IGNORE_KEYWORDS]
+        cells_to_extract = [cell for cell in row if cell is not None and cell["text"] not in self.ignore_keywords]
 
         # Process as key-value pairs
         kv_count = 0
@@ -190,7 +197,7 @@ class RuleExtractor:
         for key_cell in iterator:
             value_cell = next(iterator, None)
             if value_cell:
-                self.extracted_result[row_id][key_cell["text"]] = value_cell["text"]
+                self.extracted_results[row_id][key_cell["text"]] = value_cell["text"]
                 kv_count += 1
         return kv_count
 
@@ -204,12 +211,12 @@ class RuleExtractor:
         headers = [cell.text.strip() for cell in header_cells]
 
         rows = table.find_all(ROW_IDENTIFIER)
-        self.extracted_result[table_id] = []
+        self.extracted_results[table_id] = []
 
         for row in rows:
             row_data = self._extract_row_by_header(row, headers)
             if row_data:
-                self.extracted_result[table_id].append(row_data)
+                self.extracted_results[table_id].append(row_data)
 
     def _extract_row_by_header(self, row: Tag, headers: list[str]) -> dict[str, Any]:
         """
@@ -234,10 +241,16 @@ class RuleExtractor:
         return None, None
 
     def _is_strategy_match(self, strategy: dict[str, Any], text: str, cell_index: int) -> bool:
-        target = strategy.get("target")
-        values = strategy.get("values", [])
+        match_strategy = strategy.get("match", {})
+        target = match_strategy.get("target")
+        values = match_strategy.get("values", [])
 
         if target == cell_index and text in values:
             return True
 
         return False
+
+    def clear(self) -> None:
+        self.extracted_results.clear()
+        self.extraction_signals.clear()
+        self.grids.clear()

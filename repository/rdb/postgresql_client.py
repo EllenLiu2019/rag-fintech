@@ -3,6 +3,7 @@ from sqlalchemy.orm import sessionmaker
 from typing import List, Optional, Type, TypeVar, Any
 
 from repository.rdb.models.models import Base
+from sqlalchemy.orm import Session
 
 from common.decorator import singleton
 from common.config_utils import get_base_config
@@ -46,11 +47,10 @@ class PostgreSQLClient:
             record = session.get(model, id)
             return record
 
-    def select_by_kwargs(self, model: Type[T], **kwargs) -> Optional[T]:
+    def select_by_kwargs(self, session: Session, model: Type[T], **kwargs) -> Optional[T]:
         """Select a record by keyword arguments"""
-        with self.Session() as session:
-            record = session.query(model).filter_by(**kwargs).first()
-            return record
+        record = session.query(model).filter_by(**kwargs).first()
+        return record
 
     def execute_query(self, model: Type[T], name: str) -> List[T]:
         """Execute a query to get IDs by kb_name"""
@@ -68,7 +68,7 @@ class PostgreSQLClient:
         """
         with self.Session.begin() as session:
             result = session.merge(model)
-            session.flush()  # Ensure ID is generated
+            session.flush()
             # Explicitly load all attributes before session closes
             session.refresh(result)
             # Make the instance detached but with loaded attributes
@@ -92,13 +92,24 @@ class PostgreSQLClient:
             if record:
                 for key, value in kwargs.items():
                     setattr(record, key, value)
-                session.flush()
                 session.refresh(record)
                 session.expunge(record)
             return record
 
-    def update_many_by_kwargs(self, model: Type[T], filter_kwargs: dict, update_kwargs: dict) -> int:
+    def begin_transaction(self):
+        """Create and return a session for manual transaction management.
+        Caller is responsible for committing, rolling back, and closing the session.
+        """
+        return Session(self.engine, autobegin=False)
+
+    def update_many_by_kwargs(self, session: Session, model: Type[T], filter_kwargs: dict, update_kwargs: dict) -> int:
         """Update all records matching filter_kwargs with update_kwargs"""
-        with self.Session.begin() as session:
-            count = session.query(model).filter_by(**filter_kwargs).update(update_kwargs)
-            return count
+        count = session.query(model).filter_by(**filter_kwargs).update(update_kwargs)
+        return count
+
+    def save_with_session(self, session: Session, model: Base):
+        result = session.merge(model)
+        session.flush()
+        session.refresh(result)
+        session.expunge(result)
+        return result

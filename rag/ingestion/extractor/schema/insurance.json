@@ -179,5 +179,19 @@
     },
     "ignore_keywords": [
         "Text", "Date", "Number", "Date Range", "SPAN", "文本", "日期", "数字"
-    ]
+    ],
+    "entity_rules": {
+        "entities": {
+            "policy": {
+                "primary_key": "policy_number",
+                "meta_fields": [
+                    "source_file",
+                    "confidence_score"
+                ]
+            }
+        },
+        "version_control": {
+            "field": "status"
+        }
+    }
 }

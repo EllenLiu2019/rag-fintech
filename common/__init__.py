@@ -19,7 +19,7 @@ from .model_registry import get_model_registry
 
 
 __all__ = [
-    # 日志工具
+    # log utils
     "init_root_logger",
     "get_logger",
     "set_request_id",
@@ -28,7 +28,7 @@ __all__ = [
     "set_third_party_log_level",
     "RequestIDFormatter",
     "request_id_var",
-    # 中间件
+    # log middleware
     "setup_request_logging_middleware",
     "request_logging_middleware",
     # config

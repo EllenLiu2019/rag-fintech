@@ -1,21 +1,12 @@
-from datetime import datetime
-from decimal import Decimal
 from typing import Any, Optional, Type
 
-from repository.rdb.models import PolicyHolder, Insured, Coverage, CvgPremium, Policy, Base
+from repository.rdb.models import Base
 from repository.rdb.postgresql_client import PostgreSQLClient
-from common import get_logger
+from rag.ingestion.extractor.converter import field_converter
+from common import get_logger, constants
+from sqlalchemy.orm import Session
 
 logger = get_logger(__name__)
-
-
-SCHEMA_TABLE_MAP = {
-    "policy": Policy,
-    "policy_holder": PolicyHolder,
-    "insured": Insured,
-    "coverage": Coverage,
-    "cvg_premium": CvgPremium,
-}
 
 
 class RdbBuilder:
@@ -23,57 +14,87 @@ class RdbBuilder:
         self,
         schema: dict[str, Any],
         extracted_results: dict[str, dict[str, Any]],
-        confidence_score: float = 0.0,
-        source_file: str = "unknown",
+        **kwargs: Any,
     ) -> None:
         self.schema = schema
+        self.kwargs = kwargs
         self.extracted_results = extracted_results
-        self.confidence_score = confidence_score
-        self.source_file = source_file
-        self.rdb_client = PostgreSQLClient()
         self.extracted_entities = self._build_entities()
+        self.schema_model_map = self._discover_models()
+        self.rdb_client = PostgreSQLClient()
+
+    def _discover_models(self) -> dict[str, Type[Base]]:
+        """Discover all models that inherit from Base"""
+        table_map = {}
+        for model_class in Base.registry._class_registry.values():
+            if hasattr(model_class, "__tablename__"):
+                table_name = model_class.__tablename__
+                table_map[table_name] = model_class
+        return table_map
 
     def build(self) -> None:
         """
         Build and save all entities to database.
         """
+        session = None
         try:
-            policy_number = self.check_policy_exists()
-            if policy_number is None:
-                logger.warning("Policy number not found, cannot proceed")
+            session = self.rdb_client.begin_transaction()
+            session.begin()
+
+            primary_key = self.check_entity_rules(session)
+            if primary_key is None:
+                logger.warning("Primary key not found, cannot proceed")
+                if session:
+                    session.rollback()
                 return
 
-            for table, model in SCHEMA_TABLE_MAP.items():
-                self._build_table(table, model)
+            entities = self.schema.get("entity_rules", {}).get("entities", {})
+            for table, model in self.schema_model_map.items():
+                self._build_table(session, table, model, entities)
 
-            logger.info(f"Successfully saved policy {policy_number} to database")
+            session.commit()
+            logger.info(f"Successfully saved {primary_key} to database")
 
         except Exception as e:
-            logger.error(f"Failed to build and save entities to database: {e}", exc_info=True)
+            logger.error(
+                f"Failed to build and save entities to database: {type(e).__name__}: {str(e)}, rolling back session"
+            )
+            if session:
+                session.rollback()
+                logger.info("Session rolled back successfully")
+        finally:
+            if session:
+                session.close()
 
-    def check_policy_exists(self) -> Optional[str]:
-        policy_data = self.extracted_entities.get("policy", {})
-        if not policy_data:
-            logger.warning("Policy data not found")
-            return None
+    def check_entity_rules(self, session: Session) -> Optional[str]:
+        primary_key = None
+        filter_kwargs = {}
+        entity_rules = self.schema.get("entity_rules", {})
+        entities = entity_rules.get("entities", {})
+        for entity_name, entity in entities.items():
+            if entity_name not in self.extracted_entities:
+                logger.warning(f"Entity {entity_name} not found, cannot proceed")
+                return None
 
-        policy_number = None
-        if "policy_number" in policy_data:
-            policy_number_tuple = policy_data["policy_number"]
-            if policy_number_tuple:
-                policy_number, _ = policy_number_tuple
+            entity_data = self.extracted_entities.get(entity_name, {})
+            primary_key = entity.get("primary_key")
+            filter_kwargs.update({primary_key: entity_data.get(primary_key)[0]})
 
-        if not policy_number:
-            logger.warning("Policy number not found, cannot proceed")
-            return None
+        version_control = entity_rules.get("version_control", {})
+        field = version_control.get("field")
+        filter_kwargs.update({field: constants.ACTIVE_VALUE})
+        update_kwargs = {field: constants.INACTIVE_VALUE}
 
-        existing_policy = self.rdb_client.select_by_kwargs(Policy, policy_number=policy_number)
+        for table, model in self.schema_model_map.items():
+            try:
+                count = self.rdb_client.update_many_by_kwargs(session, model, filter_kwargs, update_kwargs)
+                if count > 0:
+                    logger.info(f"Updated {count} {table} records to status 'I' for primary key {primary_key}")
+            except Exception as e:
+                logger.warning(f"Failed to update {table}, caused by {type(e).__name__}: {str(e)}")
+                continue
 
-        if existing_policy:
-            logger.info(f"Policy {policy_number} already exists, updating all related records to status 'I'")
-            self._inactivate_existing_policy(policy_number)
-
-        return policy_number
+        return primary_key
 
     def _build_entities(self) -> dict[str, dict[str, Any]]:
         """
@@ -99,7 +120,14 @@ class RdbBuilder:
                 for table in tables:
                     if table not in extracted_entities:
                         extracted_entities[table] = {}
-                    extracted_entities[table].update(entity)
+                    existing_data = extracted_entities[table]
+                    if isinstance(existing_data, dict):
+                        existing_data.update(entity)
+                        logger.debug(f"Updated table {table} with entity: {entity}")
+                    elif isinstance(existing_data, list):
+                        for existing_row in existing_data:
+                            existing_row.update({k: v for k, v in entity.items() if k not in existing_row})
+                            logger.debug(f"Updated row {existing_row} with entity: {entity}")
             elif isinstance(results, list):
                 entities = [
                     {
@@ -116,162 +144,20 @@ class RdbBuilder:
                         if isinstance(existing_data, dict):
                             for entity in entities:
                                 entity.update({k: v for k, v in existing_data.items() if k not in entity})
+
+                                logger.debug(f"Updated table {table} with entity: {entity}")
                         elif isinstance(existing_data, list):
                             entities = existing_data + entities
-
+                            logger.debug(
+                                f"Updated table {table} with existing entities: {existing_data} and new entities: {entities}"
+                            )
                     extracted_entities[table] = entities
+                    logger.debug(f"Updated table {table} with entities: {entities}")
 
-        logger.info(f"Extracted entities: {extracted_entities}")
+        logger.info(f"Built entities: {extracted_entities}")
         return extracted_entities
 
-    def _inactivate_existing_policy(self, policy_number: str) -> None:
-        """Update all records for a given policy_number to status 'I' (inactive)"""
-        update_kwargs = {"status": "I"}
-        filter_kwargs = {"policy_number": policy_number}
-
-        for table, model in SCHEMA_TABLE_MAP.items():
-            try:
-                count = self.rdb_client.update_many_by_kwargs(model, filter_kwargs, update_kwargs)
-                if count > 0:
-                    logger.info(f"Updated {count} {table} records to status 'I' for policy {policy_number}")
-            except Exception as e:
-                logger.warning(f"Failed to update {table} records: {e}", exc_info=True)
-                continue
-
-    def _parse_date(self, date_str: str) -> Optional[datetime]:
-        """Parse date string with multiple format support"""
-        if not date_str:
-            return None
-
-        # Remove common Chinese date separators
-        date_str = date_str.replace("年", "-").replace("月", "-").replace("日", "").strip()
-
-        formats = ["%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d"]
-        for fmt in formats:
-            try:
-                return datetime.strptime(date_str, fmt)
-            except ValueError:
-                continue
-
-        logger.warning(f"Failed to parse date: {date_str}")
-        return None
-
-    def _parse_decimal(self, value: Any) -> Optional[Decimal]:
-        """Parse decimal value, handling strings, int, float, and other numeric types"""
-        if value is None:
-            return None
-
-        # If already a Decimal, return as is
-        if isinstance(value, Decimal):
-            return value
-
-        # If already a number (int or float), convert directly
-        if isinstance(value, (int, float)):
-            try:
-                return Decimal(str(value))
-            except (ValueError, Exception) as e:
-                logger.warning(f"Failed to convert number to decimal: {value}, error: {e}")
-                return None
-
-        # If string, clean and parse
-        if isinstance(value, str):
-            if not value.strip():
-                return None
-            try:
-                # Remove commas and other separators
-                cleaned = value.replace(",", "").replace(" ", "").strip()
-                return Decimal(cleaned)
-            except (ValueError, Exception) as e:
-                logger.warning(f"Failed to parse decimal string: {value}, error: {e}")
-                return None
-
-        # Try to convert other types
-        try:
-            return Decimal(str(value))
-        except (ValueError, Exception) as e:
-            logger.warning(f"Failed to parse decimal: {value}, error: {e}")
-            return None
-
-    def _parse_float(self, value: Any) -> Optional[float]:
-        """Parse float value, handling strings, int, float, and other numeric types"""
-        if value is None:
-            return None
-
-        # If already a float, return as is
-        if isinstance(value, float):
-            return value
-
-        # If already an int, convert to float
-        if isinstance(value, int):
-            return float(value)
-
-        # If string, clean and parse
-        if isinstance(value, str):
-            if not value.strip():
-                return None
-            try:
-                # Remove commas and other separators
-                cleaned = value.replace(",", "").replace(" ", "").strip()
-                return float(cleaned)
-            except (ValueError, Exception) as e:
-                logger.warning(f"Failed to parse float string: {value}, error: {e}")
-                return None
-
-        # Try to convert other types
-        try:
-            return float(value)
-        except (ValueError, Exception) as e:
-            logger.warning(f"Failed to parse float: {value}, error: {e}")
-            return None
-
-    def _get_value(self, entity_data: dict, key: str, default: Any = None) -> Any:
-        """Safely get value from entity_data"""
-        if key in entity_data:
-            value, _ = entity_data[key]
-            return value
-        return default
-
-    def _convert_value(self, value: Any, value_type: str) -> Any:
-        """Convert value based on type"""
-        if value_type == "date":
-            # Date values should be strings
-            if isinstance(value, str):
-                return self._parse_date(value)
-            else:
-                return value
-        elif value_type == "decimal":
-            return self._parse_decimal(value)
-        elif value_type == "float":
-            return self._parse_float(value)
-        elif value_type == "string":
-            return value
-        else:
-            return value
-
-    def _get_update_kwargs(self, model_instance: Base, table: str) -> dict[str, Any]:
-        """Get keyword arguments for updating an existing record"""
-        from sqlalchemy.inspection import inspect as sa_inspect
-
-        update_kwargs = {}
-
-        # Handle special fields for Policy
-        if table == "policy":
-            update_kwargs["source_file"] = self.source_file
-            update_kwargs["extraction_time"] = datetime.now()
-            update_kwargs["confidence_score"] = self.confidence_score
-
-        # Get all column attributes (excluding relationships and id)
-        mapper = sa_inspect(model_instance).mapper
-        for column_attr in mapper.column_attrs:
-            key = column_attr.key
-            if key != "id" and hasattr(model_instance, key):
-                value = getattr(model_instance, key)
-                # Include value even if None (to allow clearing fields)
-                update_kwargs[key] = value
-
-        return update_kwargs
-
-    def _build_table(self, table: str, model: Type[Base]) -> None:
+    def _build_table(self, session: Session, table: str, model: Type[Base], entities: dict[str, Any]) -> None:
         """
         Build and save table entities.
         All tables use the same logic: check if exists, update if exists, otherwise save.
@@ -281,6 +167,11 @@ class RdbBuilder:
             logger.warning(f"No data found for table {table}")
             return
 
+        # Get entity configuration for this table
+        entity = entities.get(table, {})
+        primary_key = entity.get("primary_key", "id")
+        meta_fields = entity.get("meta_fields", [])
+
         try:
             if isinstance(table_data, dict):
                 # Single entity (policy_holder, insured, policy)
@@ -288,20 +179,20 @@ class RdbBuilder:
 
                 for key, entity_tuple in table_data.items():
                     value_str, value_type = entity_tuple
-                    converted_value = self._convert_value(value_str, value_type)
+                    converted_value = field_converter.convert(value_str, value_type)
                     setattr(model_instance, key, converted_value)
 
-                # Handle special fields for Policy
-                if table == "policy":
-                    model_instance.source_file = self.source_file
-                    model_instance.extraction_time = datetime.now()
-                    model_instance.confidence_score = self.confidence_score
+                # Handle meta fields
+                for field in meta_fields:
+                    if field in self.kwargs:
+                        setattr(model_instance, field, self.kwargs[field])
+                    else:
+                        logger.warning(f"Meta field {field} not found in kwargs for table {table}")
 
-                if hasattr(model_instance, "status"):
-                    model_instance.status = "A"
+                model_instance.status = constants.ACTIVE_VALUE
 
-                saved = self.rdb_client.save(model_instance)
-                identifier = getattr(saved, "name", getattr(saved, "policy_number", "N/A"))
+                saved = self.rdb_client.save_with_session(session, model_instance)
+                identifier = getattr(saved, primary_key, "N/A")
                 logger.info(f"Saved {table}: {identifier}")
 
             elif isinstance(table_data, list):
@@ -313,20 +204,50 @@ class RdbBuilder:
 
                         for key, entity_tuple in entity_data.items():
                             value_str, value_type = entity_tuple
-                            converted_value = self._convert_value(value_str, value_type)
+                            converted_value = field_converter.convert(value_str, value_type)
                             setattr(model_instance, key, converted_value)
 
-                        if hasattr(model_instance, "status"):
-                            model_instance.status = "A"
+                        # Handle meta fields for list entities
+                        for field in meta_fields:
+                            if field in self.kwargs:
+                                setattr(model_instance, field, self.kwargs[field])
+                            else:
+                                logger.warning(f"Meta field {field} not found in kwargs for table {table}")
 
-                        saved = self.rdb_client.save(model_instance)
-                        logger.info(f"Saved {table} {idx+1}: {getattr(saved, 'policy_number', 'N/A')}")
+                        model_instance.status = constants.ACTIVE_VALUE
+
+                        saved = self.rdb_client.save_with_session(session, model_instance)
+                        identifier = getattr(saved, primary_key, "N/A")
+                        logger.info(f"Saved {table} {idx+1}: {identifier}")
 
                         saved_instances.append(saved)
                     except Exception as e:
-                        logger.error(f"Failed to build {table} {idx+1}: {e}", exc_info=True)
+                        logger.error(f"Failed to build {table} {idx+1}: {type(e).__name__}: {str(e)}")
+                        raise e
 
                 logger.info(f"Processed {len(saved_instances)} {table} entities")
 
         except Exception as e:
-            logger.error(f"Failed to build {table}: {e}", exc_info=True)
+            logger.error(f"Failed to build {table}: {type(e).__name__}: {str(e)}")
+            raise e
+
+
+if __name__ == "__main__":
+    from pathlib import Path
+    import json
+
+    schema = Path(__file__).parent / "data" / "schema.json"
+    with open(schema, "r") as f:
+        schema = json.load(f)
+
+    extracted_results = Path(__file__).parent / "data" / "extracted_results.json"
+    with open(extracted_results, "r") as f:
+        extracted_results = json.load(f)
+
+    rdb_builder = RdbBuilder(
+        schema=schema,
+        extracted_results=extracted_results,
+        confidence_score=0.95,
+        source_file="test.pdf",
+    )
+    rdb_builder.build()

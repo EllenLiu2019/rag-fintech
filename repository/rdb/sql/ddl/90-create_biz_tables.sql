@@ -28,6 +28,7 @@ CREATE TABLE rag_fintech.policy_holder (
     id_number           VARCHAR(50),
     phone               VARCHAR(100),
     email               VARCHAR(100),
+    extraction_time  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status           VARCHAR(1) DEFAULT 'A' CHECK (status IN ('A', 'I'))
 );
 
@@ -40,6 +41,7 @@ CREATE TABLE rag_fintech.insured (
     birth_date             DATE,
     id_number              VARCHAR(50),
     relationship_to_holder VARCHAR(50),
+    extraction_time        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status                 VARCHAR(1) DEFAULT 'A' CHECK (status IN ('A', 'I'))
 );
 
@@ -50,6 +52,7 @@ CREATE TABLE rag_fintech.coverage (
     cvg_name       VARCHAR(200),
     cvg_type       VARCHAR(200),
     cvg_amt        DECIMAL(15, 2),
+    extraction_time  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status         VARCHAR(1) DEFAULT 'A' CHECK (status IN ('A', 'I'))
 );
 
@@ -59,6 +62,7 @@ CREATE TABLE rag_fintech.cvg_premium (
     policy_number  VARCHAR(50),
     cvg_name       VARCHAR(200),
     cvg_premium    DECIMAL(15, 2),
+    extraction_time  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status         VARCHAR(1) DEFAULT 'A' CHECK (status IN ('A', 'I'))
 );
 

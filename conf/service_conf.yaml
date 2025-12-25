@@ -19,3 +19,5 @@ redis:
   password: ${RAG_REDIS_PASSWORD}
   queue_name: ingestion
   enable: True
+
+schema_path: rag/ingestion/extractor/schema/insurance.json

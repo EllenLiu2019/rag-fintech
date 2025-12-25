@@ -7,7 +7,11 @@ from sqlalchemy import BigInteger, String, DateTime, Float, Date, Numeric
 from sqlalchemy.orm import Mapped, mapped_column
 
 
-class Policy(Base):
+class InsuranceBase(Base):
+    __abstract__ = True
+
+
+class Policy(InsuranceBase):
 
     __tablename__ = "policy"
     __table_args__ = {"schema": "rag_fintech"}
@@ -17,12 +21,12 @@ class Policy(Base):
     effective_date: Mapped[date] = mapped_column(Date, nullable=False)
     expiry_date: Mapped[date] = mapped_column(Date, nullable=False)
     source_file: Mapped[str] = mapped_column(String(200), nullable=False)
-    extraction_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    extraction_time: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
     confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[str] = mapped_column(String(1), nullable=False, default="A")
 
 
-class PolicyHolder(Base):
+class PolicyHolder(InsuranceBase):
     __tablename__ = "policy_holder"
     __table_args__ = {"schema": "rag_fintech"}
 
@@ -34,11 +38,12 @@ class PolicyHolder(Base):
     phone: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     status: Mapped[str] = mapped_column(String(1), nullable=False, default="A")
+    extraction_time: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
 
     policy_number: Mapped[str] = mapped_column(String(50), nullable=False)
 
 
-class Insured(Base):
+class Insured(InsuranceBase):
     __tablename__ = "insured"
     __table_args__ = {"schema": "rag_fintech"}
 
@@ -51,9 +56,10 @@ class Insured(Base):
     status: Mapped[str] = mapped_column(String(1), nullable=False, default="A")
 
     policy_number: Mapped[str] = mapped_column(String(50), nullable=False)
+    extraction_time: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
 
 
-class Coverage(Base):
+class Coverage(InsuranceBase):
 
     __tablename__ = "coverage"
     __table_args__ = {"schema": "rag_fintech"}
@@ -63,11 +69,12 @@ class Coverage(Base):
     cvg_type: Mapped[str] = mapped_column(String(200), nullable=False)
     cvg_amt: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(1), nullable=False, default="A")
+    extraction_time: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
 
     policy_number: Mapped[str] = mapped_column(String(50), nullable=False)
 
 
-class CvgPremium(Base):
+class CvgPremium(InsuranceBase):
 
     __tablename__ = "cvg_premium"
     __table_args__ = {"schema": "rag_fintech"}
@@ -76,5 +83,6 @@ class CvgPremium(Base):
     cvg_name: Mapped[str] = mapped_column(String(200), nullable=False)
     cvg_premium: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(1), nullable=False, default="A")
+    extraction_time: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
 
     policy_number: Mapped[str] = mapped_column(String(50), nullable=False)

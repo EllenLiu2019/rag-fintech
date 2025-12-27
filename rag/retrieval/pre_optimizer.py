@@ -6,7 +6,7 @@ from rag.llm.chat_model import chat_model
 from common import get_logger, get_model_registry
 from common.prompt_manager import get_prompt_manager
 from rag.core import embedder
-from repository.vector.milvus_client import VectorStoreClient
+from repository.vector import vector_store
 from rag.retrieval.ner_service import ner_service
 from repository.cache import cached
 
@@ -191,9 +191,6 @@ class GlossaryInjector:
     select_fields = ["concept_name", "domain_id", "concept_class_id"]
     threshold = 0.4
 
-    def __init__(self):
-        self.vector_store = VectorStoreClient()
-
     def ner(self, query: str) -> Dict[str, Dict[str, Any]]:
         """
         Extract entities from query and standardize them using SNOMED.
@@ -231,7 +228,7 @@ class GlossaryInjector:
                 domain_ids = entity["domain_id"].split(";")
                 concept_class_ids = entity["concept_class_id"].split(";")
                 filter_expr = f"domain_id in {domain_ids} or concept_class_id in {concept_class_ids}"
-            search_result = self.vector_store.search(
+            search_result = vector_store.search(
                 self.select_fields,
                 [word_embedding],
                 limit=2,

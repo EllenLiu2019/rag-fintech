@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Callable, Optional
 
-from repository.cache import RedisClient
+from repository.cache import redis_client
 from common import get_logger
 from common.exceptions import IngestionError
 from common.error_codes import ErrorCodes
@@ -23,9 +23,6 @@ class IngestionJob(BaseModel):
     ended_at: Optional[datetime] = Field(default=None, description="ended_at")
     error: Optional[str] = Field(default=None, description="error")
     result: Optional[str] = Field(default=None, description="result")
-
-
-redis_client = RedisClient()
 
 
 def enqueue_task(func: Callable, *args, **kwargs) -> str:

@@ -2,6 +2,6 @@
 Cache layer for performance optimization.
 """
 
-from .redis_client import RedisClient, cached
+from .redis_client import cached, redis_client
 
-__all__ = ["RedisClient", "cached"]
+__all__ = ["cached", "redis_client"]

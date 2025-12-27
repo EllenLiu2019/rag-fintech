@@ -1,9 +1,8 @@
 from typing import Any, Optional, Type
 
 from repository.rdb.models import Base
-from repository.rdb.postgresql_client import PostgreSQLClient
-from rag.ingestion.extractor.converter import field_converter
-from common import get_logger, constants
+from repository.rdb import rdb_client
+from common import get_logger, constants, field_converter
 from sqlalchemy.orm import Session
 
 logger = get_logger(__name__)
@@ -21,7 +20,6 @@ class RdbBuilder:
         self.extracted_results = extracted_results
         self.extracted_entities = self._build_entities()
         self.schema_model_map = self._discover_models()
-        self.rdb_client = PostgreSQLClient()
 
     def _discover_models(self) -> dict[str, Type[Base]]:
         """Discover all models that inherit from Base"""
@@ -38,7 +36,7 @@ class RdbBuilder:
         """
         session = None
         try:
-            session = self.rdb_client.begin_transaction()
+            session = rdb_client.begin_transaction()
             session.begin()
 
             primary_key = self.check_entity_rules(session)
@@ -87,7 +85,7 @@ class RdbBuilder:
 
         for table, model in self.schema_model_map.items():
             try:
-                count = self.rdb_client.update_many_by_kwargs(session, model, filter_kwargs, update_kwargs)
+                count = rdb_client.update_many_by_kwargs(session, model, filter_kwargs, update_kwargs)
                 if count > 0:
                     logger.info(f"Updated {count} {table} records to status 'I' for primary key {primary_key}")
             except Exception as e:
@@ -191,7 +189,7 @@ class RdbBuilder:
 
                 model_instance.status = constants.ACTIVE_VALUE
 
-                saved = self.rdb_client.save_with_session(session, model_instance)
+                saved = rdb_client.save_with_session(session, model_instance)
                 identifier = getattr(saved, primary_key, "N/A")
                 logger.info(f"Saved {table}: {identifier}")
 
@@ -216,7 +214,7 @@ class RdbBuilder:
 
                         model_instance.status = constants.ACTIVE_VALUE
 
-                        saved = self.rdb_client.save_with_session(session, model_instance)
+                        saved = rdb_client.save_with_session(session, model_instance)
                         identifier = getattr(saved, primary_key, "N/A")
                         logger.info(f"Saved {table} {idx+1}: {identifier}")
 

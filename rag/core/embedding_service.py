@@ -6,7 +6,7 @@ from rag.llm.embedding_model import embedding_model
 from common import constants, get_logger, get_model_registry
 from common.exceptions import EmbeddingError
 from common.error_codes import ErrorCodes
-from repository.cache import RedisClient, cached
+from repository.cache import redis_client, cached
 from rag.entity import RagDocument
 
 logger = get_logger(__name__)
@@ -16,7 +16,6 @@ class EmbeddingService:
     def __init__(self, model: dict[str, Any]):
         api_key = os.getenv(model["provider"].upper() + constants.API_KEY_SUFFIX)
         self.model = embedding_model[model["provider"]](key=api_key, model_name=model["model_name"])
-        self.redis_client = RedisClient()
 
     def embed_chunks(self, chunks: list[dict], rag_document: RagDocument) -> list[dict]:
         """
@@ -88,9 +87,9 @@ class EmbeddingService:
 
         # Check cache for each query
         for idx, text in enumerate(texts):
-            if self.redis_client.redis_enabled:
+            if redis_client.redis_enabled:
                 cache_key = self._cache_key(text)
-                cached_embedding = self.redis_client.get(cache_key)
+                cached_embedding = redis_client.get(cache_key)
 
                 if cached_embedding is not None:
                     results.append(cached_embedding)
@@ -111,9 +110,9 @@ class EmbeddingService:
                     results[idx] = embedding
 
                     # Cache the result
-                    if self.redis_client.redis_enabled:
+                    if redis_client.redis_enabled:
                         cache_key = self._cache_key(uncached_texts[i])
-                        self.redis_client.set(cache_key, embedding, ttl=3600)
+                        redis_client.set(cache_key, embedding, ttl=3600)
 
             except EmbeddingError:
                 raise

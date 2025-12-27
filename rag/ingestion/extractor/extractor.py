@@ -10,6 +10,7 @@ from rag.ingestion.extractor.llm_extractor import LLMExtractor
 from rag.ingestion.extractor.metadata_creator import MetadataCreator
 from rag.ingestion.extractor.rdb_builder import RdbBuilder
 from rag.ingestion.extractor.rule_extractor import RuleExtractor
+from rag.ingestion.extractor.clause_forest_builder import ClauseForestBuilder
 from rag.ingestion.utils.confidence_calculator import ConfidenceCalculator
 from rag.ingestion.extractor.validator import check_missing_fields
 
@@ -34,19 +35,18 @@ class Extractor:
             self.schema: dict[str, Any] = json.load(f)
 
         self.llm_extractor: LLMExtractor = LLMExtractor(model)
-        self.rule_extractor: RuleExtractor = RuleExtractor(self.schema)
         self.confidence_calculator: ConfidenceCalculator = ConfidenceCalculator()
         self.metadata_creator = MetadataCreator()
 
     def extract(
         self, documents: list[dict[str, Any]], source_file: str = None
-    ) -> tuple[dict[str, Any], dict[str, Any], int]:
+    ) -> tuple[dict[str, Any], dict[str, Any], int, Any]:
         """
         Args:
             documents: list of documents, format: [dict[str, Any], ...]
             source_file: optional source file name for database storage
         Returns:
-            tuple[dict[str, Any], dict[str, Any], int]: confidence_result, metadata, llm_tokens
+            tuple[dict[str, Any], dict[str, Any], int, ClauseNode]: confidence_result, metadata, llm_tokens, clause_tree
         """
         if not isinstance(documents, list) or not all(isinstance(doc, dict) for doc in documents):
             raise ExtractionError(
@@ -59,7 +59,8 @@ class Extractor:
             logger.info("Starting rule-based extraction")
 
             raw_documents = deepcopy(documents)
-            extracted_results = self.rule_extractor.extract(raw_documents)
+            rule_extractor: RuleExtractor = RuleExtractor(self.schema)
+            extracted_results = rule_extractor.extract(raw_documents)
 
             missing_fields = check_missing_fields(self.schema, extracted_results)
 
@@ -74,9 +75,14 @@ class Extractor:
             confidence_result = self.confidence_calculator.calculate(
                 extracted_results,
                 self.schema,
-                self.rule_extractor.extraction_signals,
+                rule_extractor.extraction_signals,
             )
             metadata = self.metadata_creator.create(extracted_results)
+
+            # Extract clause tree structure
+            logger.info("Extracting clause trees from documents")
+            clause_forest_builder = ClauseForestBuilder()
+            clause_forest = clause_forest_builder.build(raw_documents)
 
             # Build entities and save to database
             rdb_builder = RdbBuilder(
@@ -87,7 +93,7 @@ class Extractor:
             )
             rdb_builder.build()
 
-            return confidence_result, metadata, llm_tokens
+            return confidence_result, metadata, llm_tokens, clause_forest
 
         except ExtractionError:
             raise
@@ -120,15 +126,6 @@ class Extractor:
         except Exception as e:
             logger.error(f"LLM extraction failed: {e}", exc_info=True)
             return None
-
-    def get_extracted_results(self) -> dict[str, Any]:
-        return self.rule_extractor.extracted_results
-
-    def reset(self) -> None:
-        self.rule_extractor.extracted_results = {}
-        self.rule_extractor.extraction_signals = {}
-        self.rule_extractor.grids = []
-        logger.info("Extractor reset")
 
 
 if __name__ == "__main__":

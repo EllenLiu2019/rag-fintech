@@ -1,60 +1,5 @@
 from abc import ABC, abstractmethod
-import numpy as np
-
-
-DEFAULT_MATCH_VECTOR_TOPN = 5
-VEC = list | np.ndarray
-
-
-class MatchTextExpr(ABC):
-    def __init__(
-        self,
-        fields: list[str],
-        matching_text: str,
-        topn: int,
-        extra_options: dict = dict(),
-    ):
-        self.fields = fields
-        self.matching_text = matching_text
-        self.topn = topn
-        self.extra_options = extra_options
-
-
-class MatchDenseExpr(ABC):
-    def __init__(
-        self,
-        vector_column_name: str,
-        embedding_data: VEC,
-        embedding_data_type: str,
-        distance_type: str,
-        topn: int = DEFAULT_MATCH_VECTOR_TOPN,
-        extra_options: dict = dict(),
-    ):
-        self.vector_column_name = vector_column_name
-        self.embedding_data = embedding_data
-        self.embedding_data_type = embedding_data_type
-        self.distance_type = distance_type
-        self.topn = topn
-        self.extra_options = extra_options
-
-
-MatchExpr = MatchDenseExpr | MatchTextExpr
-
-
-class OrderByExpr(ABC):
-    def __init__(self):
-        self.fields = list()
-
-    def asc(self, field: str):
-        self.fields.append((field, 0))
-        return self
-
-    def desc(self, field: str):
-        self.fields.append((field, 1))
-        return self
-
-    def fields(self):
-        return self.fields
+from typing import List, Dict, Any, Optional
 
 
 class DocStoreClient(ABC):
@@ -108,14 +53,14 @@ class DocStoreClient(ABC):
     @abstractmethod
     def search(
         self,
-        matchExprs: list[MatchExpr],
         selectFields: list[str],
+        query_vectors: List[List[float]],
         limit: int,
-        condition: dict,
         knowledgebaseIds: list[str],
-    ):
+        filters: Optional[Dict | str] = None,
+    ) -> List[Dict[str, Any]]:
         """
-        Search with given conjunctive equivalent filtering condition and return all fields of matched documents
+        Search with given filters and return all fields of matched documents
         """
         raise NotImplementedError("Not implemented")
 

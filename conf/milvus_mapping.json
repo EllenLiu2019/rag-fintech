@@ -3,7 +3,7 @@
         "id": {"data_type": "varchar", "is_primary": true, "max_length": 100},
         "doc_id": {"data_type": "varchar", "max_length": 100},
         "file_name": {"data_type": "varchar", "max_length": 100},
-        "page_number": {"data_type": "INT8", "default": 0},
+        "page_number": {"data_type": "int32", "default": 0},
         "prev_chunk": {"data_type": "varchar", "max_length": 100, "nullable": true, "default": "N/A"},
         "next_chunk": {"data_type": "varchar", "max_length": 100, "nullable": true, "default": "N/A"},
         "kb_id": {"data_type": "varchar", "max_length": 100},
@@ -11,6 +11,9 @@
         "sparse_vector": {"data_type": "sparse_float_vector"},
         "text": {"data_type": "varchar", "max_length": 65535, "enable_analyzer": false},
         "business_data": {"data_type": "json", "nullable": true},
+        "clause_id": {"data_type": "int32", "nullable": true, "default": -1},
+        "clause_path": {"data_type": "varchar", "max_length": 100, "nullable": true},
+        "clause_title": {"data_type": "varchar", "max_length": 100, "nullable": true},
         "upload_time": {"data_type": "varchar", "max_length": 100, "nullable": true}
     },
     "indexes": {

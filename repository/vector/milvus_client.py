@@ -400,3 +400,10 @@ class VectorStoreClient(DocStoreClient):
             elapsed = time.time() - start_time
             logger.error(f"BGE-M3 sparse embedding failed after {elapsed:.3f}s: {e}")
             raise
+
+
+def _create_milvus_client() -> VectorStoreClient:
+    return VectorStoreClient()
+
+
+vector_store = _create_milvus_client()

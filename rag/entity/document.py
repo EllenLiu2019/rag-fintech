@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, field_validator
 from datetime import datetime, timezone
 
 from common import get_logger
+from rag.entity.clause_forest import ClauseForest
 
 logger = get_logger(__name__)
 
@@ -22,6 +23,7 @@ class RagDocument(BaseModel):
     content_type: Optional[str] = None
     page_count: int = 0
     upload_time: Optional[str] = None
+    clause_forest: Optional[ClauseForest] = Field(default=None, description="clause forest structure")
 
     @field_validator("pages", mode="before")
     @classmethod
@@ -54,6 +56,7 @@ class RagDocument(BaseModel):
         content_type: Optional[str] = None,
         chunk_num: int = 0,
         job_id: str = "",
+        clause_forest: Optional[ClauseForest] = None,
     ) -> "RagDocument":
         return cls(
             document_id=document_id,
@@ -68,6 +71,7 @@ class RagDocument(BaseModel):
             page_count=len(parsed_documents),
             upload_time=datetime.now(tz=timezone.utc).isoformat(),
             job_id=job_id,
+            clause_forest=clause_forest,
         )
 
     def to_document_metadata(self) -> dict[str, Any]:

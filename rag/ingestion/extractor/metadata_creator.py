@@ -41,10 +41,6 @@ class MetadataCreator:
             "insured_relationship_to_holder": {"type": "str", "mapping": ("insured", "与投保人关系")},
             "effective_date": {"type": "str", "mapping": "effective_date"},
             "expiry_date": {"type": "str", "mapping": "expiry_date"},
-            "coverage": {"type": "list", "mapping": "coverage"},
-            "cvg_premium": {"type": "list", "mapping": "cvg_premium"},
-            "total_premium": {"type": "str", "mapping": ("total_premium", "总保费")},
-            "coverage_amount": {"type": "str", "mapping": ("coverage_amount", "保险金额")},
         }
 
     def create(self, extracted_result: dict[str, Any]) -> dict[str, Any]:
@@ -79,8 +75,6 @@ class MetadataCreator:
                     "insured_relationship_to_holder": "父母",
                     "effective_date": "2025-01-01",
                     "expiry_date": "2026-01-01",
-                    "coverage": [{"保险名称": "个人癌症医疗保险（互联网2022版A款）", "保险责任": "恶性肿瘤质子重离子医疗保险金", "最高保险金额（元）": "2,000,000", "详细说明": "首次投保或非连续投保等待期:90天<br/>免赔额:0元/年<br/>社保目录内医疗费用赔付比例:100%<br/>社保目录外医疗费用赔付比例:100%"}, ...],
-                    "cvg_premium": [{"条款名称": "个人癌症医疗保险（互联网2022版A款）", "保险费（元）": "2,284.00"}, ...],
                 }
         """
         if not isinstance(extracted_result, dict):
@@ -113,7 +107,6 @@ class MetadataCreator:
         支持：
         - 直接字段：policy_number → extracted_result["policy_number"] → 取第一个值
         - 嵌套字段：holder_name → extracted_result["policy_holder"]["投保人"]
-        - 列表字段：coverage → extracted_result["coverage"] (直接返回列表)
 
         Args:
             extracted_result: 提取结果字典

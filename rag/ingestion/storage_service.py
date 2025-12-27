@@ -11,7 +11,7 @@ from common.exceptions import (
 )
 from common.error_codes import ErrorCodes
 from repository.rdb.models.models import Document as RdbDocument, KnowledgeBase, LLM
-from repository.rdb.postgresql_client import PostgreSQLClient
+from repository.rdb import rdb_client
 from rag.entity import RagDocument
 
 from repository.s3 import s3_client
@@ -19,9 +19,9 @@ from repository.s3 import s3_client
 logger = get_logger(__name__)
 
 
-class DocumentService:
+class StorageService:
     def __init__(self):
-        self.rdb_client = PostgreSQLClient()
+        pass
 
     async def upload_file(self, file: UploadFile) -> RdbDocument:
         logger.info(f"Uploading file: {file.filename}")
@@ -52,7 +52,7 @@ class DocumentService:
         )
 
         try:
-            rdb_document = self.rdb_client.save(document)
+            rdb_document = rdb_client.save(document)
         except Exception as e:
             raise DatabaseError(
                 message=f"Failed to save document to database: {file.filename}",
@@ -79,7 +79,7 @@ class DocumentService:
             ) from e
 
         # Update document attributes
-        rdb_document = self.rdb_client.select_by_id(RdbDocument, rdb_id)
+        rdb_document = rdb_client.select_by_id(RdbDocument, rdb_id)
         if rdb_document is None:
             raise DocumentNotFoundError(
                 message=f"Document not found: {rdb_id}",
@@ -101,7 +101,7 @@ class DocumentService:
 
         # Save the updated document (merge will update existing record)
         try:
-            updated_doc = self.rdb_client.save(rdb_document)
+            updated_doc = rdb_client.save(rdb_document)
 
             logger.info(
                 f"File {file_name} updated in RDB: id={updated_doc.id} with parsed file location: {parsed_file_path}"
@@ -115,7 +115,7 @@ class DocumentService:
 
     def get_embedding_model(self, kb_name: str) -> str:
         try:
-            kb_ids = self.rdb_client.execute_query(KnowledgeBase, kb_name)
+            kb_ids = rdb_client.execute_query(KnowledgeBase, kb_name)
             if not kb_ids:
                 raise ModelNotFoundError(
                     message=f"Knowledge base not found: {kb_name}",
@@ -123,7 +123,7 @@ class DocumentService:
                     details={"kb_name": kb_name},
                 )
             kb_id = kb_ids[0]
-            llm_model = self.rdb_client.select_by_id(LLM, kb_id.embed_llm_id)
+            llm_model = rdb_client.select_by_id(LLM, kb_id.embed_llm_id)
             if llm_model is None:
                 raise ModelNotFoundError(
                     message=f"LLM model not found for knowledge base: {kb_name}",

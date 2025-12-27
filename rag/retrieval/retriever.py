@@ -1,7 +1,7 @@
 from typing import Optional, Dict, Any, List, Literal, Union
 
-from rag.core import embedder, DocumentService
-from repository.vector import VectorStoreClient
+from rag.core import embedder
+from repository.vector import vector_store
 from repository.cache import cached
 from rag.retrieval.reranker import reranker
 from common import get_logger
@@ -25,10 +25,6 @@ class Retriever:
     """
     Main retriever with support for both simple dense search and hybrid search.
     """
-
-    def __init__(self):
-        self.document_service = DocumentService()
-        self.vector_store = VectorStoreClient()
 
     # @cached(prefix="search", ttl=1800)
     def search(
@@ -106,7 +102,7 @@ class Retriever:
         """Dense vector search."""
 
         try:
-            results = self.vector_store.search(
+            results = vector_store.search(
                 selectFields=SELECT_FIELDS,
                 query_vectors=query_vectors,
                 limit=top_k,
@@ -163,7 +159,7 @@ class Retriever:
         """Hybrid search (dense + sparse)."""
 
         try:
-            results = self.vector_store.hybrid_search(
+            results = vector_store.hybrid_search(
                 selectFields=SELECT_FIELDS,
                 optimized_queries=optimized_queries,
                 query_vectors=query_vectors,
@@ -213,18 +209,15 @@ class Retriever:
             prev_chunk_id = result.get("prev_chunk")
             next_chunk_id = result.get("next_chunk")
             if prev_chunk_id != "":
-                result["prev_chunk_text"] = self.vector_store.get(prev_chunk_id, [kb_id])
+                result["prev_chunk_text"] = vector_store.get(prev_chunk_id, [kb_id])
             if next_chunk_id != "":
-                result["next_chunk_text"] = self.vector_store.get(next_chunk_id, [kb_id])
+                result["next_chunk_text"] = vector_store.get(next_chunk_id, [kb_id])
 
         return results
 
 
 def _create_retriever() -> Retriever:
-    retriever = Retriever()
-
-    logger.info("Initialized Retriever singleton")
-    return retriever
+    return Retriever()
 
 
 retriever = _create_retriever()

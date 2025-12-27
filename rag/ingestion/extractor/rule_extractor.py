@@ -250,7 +250,7 @@ class RuleExtractor:
 
         return False
 
-    def clear(self) -> None:
+    def init(self) -> None:
         self.extracted_results.clear()
         self.extraction_signals.clear()
         self.grids.clear()

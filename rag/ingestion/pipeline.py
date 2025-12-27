@@ -8,8 +8,8 @@ from rag.entity import RagDocument
 from rag.ingestion.parser.parser import ParseResult
 from rag.ingestion.parser.serializer_deserializer import serialize_documents
 from rag.ingestion.splitter.markdown_splitter import RagMarkdownSplitter
-from rag.core import embedder, DocumentService
-from repository.vector import VectorStoreClient
+from rag.core import embedder
+from repository.vector import vector_store
 from common import get_logger, get_model_registry
 from common.exceptions import (
     ParsingError,
@@ -21,19 +21,18 @@ from common.exceptions import (
 from common.error_codes import ErrorCodes
 from repository.s3 import s3_client
 from rag.ingestion.tasks import enqueue_task
+from rag.ingestion.storage_service import StorageService
 
 logger = get_logger(__name__)
 
 
 class IngestionPipeline:
     def __init__(self, model: dict[str, Any]):
-        self.document_service = DocumentService()
-        self.vector_store = VectorStoreClient()
+        self.storage_service = StorageService()
         self.extractor = Extractor(model)
-        self.splitter = RagMarkdownSplitter()
 
     async def __call__(self, file: UploadFile):
-        rdb_document = await self.document_service.upload_file(file)
+        rdb_document = await self.storage_service.upload_file(file)
 
         # Enqueue task - RQ will generate job_id
         # Use module-level function to avoid pickle issues with instance methods
@@ -61,7 +60,9 @@ class IngestionPipeline:
         # pages = document["pages"]
 
         try:
-            confidence, business_data, tokens = self.extractor.extract(pages)
+            confidence, business_data, tokens, clause_forest = self.extractor.extract(
+                documents=pages, source_file=filename
+            )
         except Exception as e:
             raise ExtractionError(
                 message=f"Failed to extract metadata from document: {filename}",
@@ -79,6 +80,7 @@ class IngestionPipeline:
             file_size=len(contents),
             content_type=content_type,
             job_id=parse_result.job_id,
+            clause_forest=clause_forest,
         )
 
         logger.info(
@@ -147,13 +149,13 @@ def handle_document(
         update_progress(job_id, 4, "Splitting document into chunks")
 
     try:
-        chunks = pipeline.splitter.split_document(rag_document)
+        chunks = RagMarkdownSplitter().split_document(doc=rag_document)
         logger.info(f"Document split into {len(chunks)} chunks")
     except Exception as e:
         raise ChunkingError(
             message=f"Failed to split document into chunks: {filename}",
             code=ErrorCodes.S_INGESTION_004,
-            details={"filename": filename, "error": str(e)},
+            details={"filename": filename, "error": str(e), "error_type": type(e).__name__},
         )
 
     # Embed chunks (generate vectors)
@@ -187,6 +189,9 @@ def handle_document(
             "dense_vector": chunk.get("dense_vector", []),
             "text": chunk.get("text", ""),
             "business_data": rag_document.business_data or {},
+            "clause_id": chunk.get("clause_id"),
+            "clause_path": chunk.get("clause_path"),
+            "clause_title": chunk.get("clause_title"),
             "upload_time": rag_document.upload_time,
         }
         chunks_to_insert.append(chunk_to_insert)
@@ -197,7 +202,7 @@ def handle_document(
             update_progress(job_id, 6, f"Saving {len(chunks_to_insert)} chunks to Milvus")
 
         try:
-            pipeline.vector_store.insert(chunks_to_insert, kb_name)
+            vector_store.insert(chunks_to_insert, kb_name)
             logger.info(f"Saved {len(chunks_to_insert)} chunks to Milvus")
         except Exception as e:
             raise VectorStoreError(
@@ -211,7 +216,7 @@ def handle_document(
         update_progress(job_id, 7, "Updating document info in RDB")
 
     try:
-        pipeline.document_service.update_file_info(filename, rag_document, rdb_document_id)
+        pipeline.storage_service.update_file_info(filename, rag_document, rdb_document_id)
         if job_id:
             update_progress(job_id, 8, "Document processing completed!")
     except Exception as e:
@@ -224,7 +229,7 @@ def _create_ingestion_pipeline() -> IngestionPipeline:
     Create IngestionPipeline instance at module load time.
     """
     registry = get_model_registry()
-    model_config = registry.get_chat_model("qa_lite")
+    model_config = registry.get_chat_model("query_lite")
     ingestion_pipeline = IngestionPipeline(model=model_config.to_dict())
 
     logger.info("Initialized IngestionPipeline singleton")

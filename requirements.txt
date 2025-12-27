@@ -19,6 +19,7 @@ PyPDF2>=3.0.1
 llama-parse==0.6.81
 llama-index-core>=0.10.0
 beautifulsoup4>=4.12.2
+markdown-it-py==4.0.0
 pymilvus>=2.6.3
 openai==2.8.1
 dashscope==1.25.3

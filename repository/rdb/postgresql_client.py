@@ -113,3 +113,10 @@ class PostgreSQLClient:
         session.refresh(result)
         session.expunge(result)
         return result
+
+
+def _create_postgresql_client() -> PostgreSQLClient:
+    return PostgreSQLClient()
+
+
+rdb_client = _create_postgresql_client()

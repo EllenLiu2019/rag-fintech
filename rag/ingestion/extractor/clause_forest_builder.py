@@ -2,7 +2,7 @@ from typing import Optional, Any
 import re
 
 from markdown_it import MarkdownIt
-from rag.entity.clause_forest import ClauseNode, ClauseForest
+from rag.entity import ClauseNode, ClauseForest
 
 from common import get_logger
 

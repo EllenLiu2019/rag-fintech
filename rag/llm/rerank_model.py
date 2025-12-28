@@ -9,7 +9,7 @@ import numpy as np
 from common import get_logger
 from common.exceptions import ModelRateLimitError, ModelTimeoutError, ModelServerError, RerankError
 from common.error_codes import ErrorCodes
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_unless
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 logger = get_logger(__name__)
 
@@ -106,7 +106,7 @@ class FlagEmbeddingRerank(BaseReranker):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_unless(_should_not_retry),
+        retry=retry_if_exception(lambda e: not _should_not_retry(e)),
         before_sleep=lambda retry_state: logger.warning(
             f"Retrying FlagEmbeddingRerank.similarity (attempt {retry_state.attempt_number}/3) "
             f"after error: {retry_state.outcome.exception()}"
@@ -165,7 +165,7 @@ class TEIRerank(BaseReranker):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_unless(_should_not_retry),
+        retry=retry_if_exception(lambda e: not _should_not_retry(e)),
         before_sleep=lambda retry_state: logger.warning(
             f"Retrying TEIRerank.similarity (attempt {retry_state.attempt_number}/3) "
             f"after error: {retry_state.outcome.exception()}"
@@ -258,7 +258,7 @@ class QWenRerank(BaseReranker):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_unless(_should_not_retry),
+        retry=retry_if_exception(lambda e: not _should_not_retry(e)),
         before_sleep=lambda retry_state: logger.warning(
             f"Retrying QWenRerank.similarity (attempt {retry_state.attempt_number}/3) "
             f"after error: {retry_state.outcome.exception()}"
@@ -339,7 +339,7 @@ class JinaRerank(BaseReranker):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_unless(_should_not_retry),
+        retry=retry_if_exception(lambda e: not _should_not_retry(e)),
         before_sleep=lambda retry_state: logger.warning(
             f"Retrying JinaRerank.similarity (attempt {retry_state.attempt_number}/3) "
             f"after error: {retry_state.outcome.exception()}"
@@ -424,7 +424,7 @@ class CohereRerank(BaseReranker):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_unless(_should_not_retry),
+        retry=retry_if_exception(lambda e: not _should_not_retry(e)),
         before_sleep=lambda retry_state: logger.warning(
             f"Retrying CohereRerank.similarity (attempt {retry_state.attempt_number}/3) "
             f"after error: {retry_state.outcome.exception()}"

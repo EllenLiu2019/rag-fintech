@@ -3,7 +3,7 @@ import os
 from typing import List, Dict, Optional, AsyncIterator, Any
 from openai import OpenAI, AsyncOpenAI, RateLimitError, APITimeoutError, APIError, AuthenticationError
 from common import get_logger
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_unless
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 from common.exceptions import ModelRateLimitError, ModelTimeoutError, ModelServerError
 
 logger = get_logger(__name__)
@@ -47,7 +47,7 @@ class LLM(ABC):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_unless(_should_not_retry),
+        retry=retry_if_exception(lambda e: not _should_not_retry(e)),
         before_sleep=lambda retry_state: logger.warning(
             f"Retrying LLM.generate (attempt {retry_state.attempt_number}/3) "
             f"after error: {retry_state.outcome.exception()}"
@@ -130,7 +130,7 @@ class LLM(ABC):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_unless(_should_not_retry),
+        retry=retry_if_exception(lambda e: not _should_not_retry(e)),
         before_sleep=lambda retry_state: logger.warning(
             f"Retrying LLM.stream_generate (attempt {retry_state.attempt_number}/3) "
             f"after error: {retry_state.outcome.exception()}"
@@ -171,7 +171,7 @@ class DeepSeek(LLM):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_unless(_should_not_retry),
+        retry=retry_if_exception(lambda e: not _should_not_retry(e)),
         before_sleep=lambda retry_state: logger.warning(
             f"Retrying DeepSeek.stream_generate (attempt {retry_state.attempt_number}/3) "
             f"after error: {retry_state.outcome.exception()}"

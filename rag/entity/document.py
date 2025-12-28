@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, field_validator
 from datetime import datetime, timezone
 
 from common import get_logger
-from rag.entity.clause_forest import ClauseForest
+from rag.entity.clause_tree import ClauseForest
 
 logger = get_logger(__name__)
 

@@ -63,18 +63,19 @@
         }
     },
     "reranker_models": {
-        "qwen": {
-            "provider": "QWen",
-            "model_name": "gte-rerank-v2",
-            "description": "Alibaba DashScope reranker API"
-        },
-        "default": {
+        "jina": {
             "provider": "Jina",
             "model_name": "jina-reranker-v3",
             "base_url": "https://api.jina.ai/v1/rerank",
             "description": "Jina AI reranker, based on Qwen3-0.6B"
         },
-        "dev": {
+        "cohere": {
+            "provider": "Cohere",
+            "model_name": "rerank-v4.0-pro",
+            "base_url": "https://api.cohere.com/v2/rerank",
+            "description": "Cohere reranker"
+        },
+        "bge": {
             "provider": "FlagEmbedding",
             "model_name": "BAAI/bge-reranker-v2-m3",
             "description": "Development reranker (in-process)"

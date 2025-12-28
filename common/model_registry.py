@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 # Type definitions for model purposes
 ChatModelPurpose = Literal["qa_reasoner", "qa_lite", "query_lite", "query_reasoner"]
 EmbeddingModelPurpose = Literal["dense", "sparse"]
-RerankerModelPurpose = Literal["default", "dev", "qwen", "jina"]
+RerankerModelPurpose = Literal["jina", "cohere", "bge"]
 
 
 @dataclass
@@ -102,7 +102,7 @@ class ModelRegistry:
             raise KeyError(f"Unknown embedding model purpose: {purpose}. Available: {available}")
         return self._embedding_models[purpose]
 
-    def get_reranker_model(self, purpose: RerankerModelPurpose = "default") -> ModelConfig:
+    def get_reranker_model(self, purpose: RerankerModelPurpose = "jina") -> ModelConfig:
         if purpose not in self._reranker_models:
             available = list(self._reranker_models.keys())
             raise KeyError(f"Unknown reranker model purpose: {purpose}. Available: {available}")

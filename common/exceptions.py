@@ -116,6 +116,14 @@ class ModelTimeoutError(LLMError):
     pass
 
 
+class ModelServerError(LLMError):
+    """Model API server error (5xx)"""
+
+    def __init__(self, message: str, status_code: int = None, **kwargs):
+        super().__init__(message, **kwargs)
+        self.status_code = status_code
+
+
 class ModelRateLimitError(LLMError):
     """Model API rate limit exceeded"""
 

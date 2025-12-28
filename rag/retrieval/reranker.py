@@ -103,7 +103,7 @@ class Reranker:
 def _create_reranker() -> Reranker:
     """Create reranker instance at module load time."""
     registry = get_model_registry()
-    model_config = registry.get_reranker_model()  # Uses "default" config
+    model_config = registry.get_reranker_model(purpose="cohere")
     return Reranker(model=model_config.to_dict())
 
 

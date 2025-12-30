@@ -25,6 +25,7 @@ class ChatRequest(BaseModel):
     stream: bool = True
     generation_config: Optional[dict] = {}
     mode: Literal["dense", "hybrid"] = "dense"
+    foc_enhance: bool = True
 
 
 class ChatResponse(BaseModel):
@@ -57,6 +58,7 @@ async def chat_qa(
         top_k=top_k,
         filters=filters,
         mode=request.mode,
+        foc_enhance=request.foc_enhance,
     )
 
     logger.info(f"Retrieved {len(retrieved_res['results'])} chunks")
@@ -120,6 +122,7 @@ async def chat_qa_stream(
                 top_k=top_k,
                 filters=filters,
                 mode=request.mode,
+                foc_enhance=request.foc_enhance,
             )
 
             # 2. Send chunks
@@ -139,6 +142,7 @@ async def chat_qa_stream(
             async for event in llm_service.stream_answer_question(
                 question=retrival_res["query_to_use"],
                 context=retrival_res["results"],
+                foc_markdown=retrival_res.get("foc_markdown", None),
                 conversation_history=request.conversation_history,
                 temperature=temperature,
                 max_tokens=max_tokens,

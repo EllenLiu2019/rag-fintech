@@ -31,6 +31,7 @@ function ChatQA({ fileInfo, onBack }) {
   const [streamOutput, setStreamOutput] = useState(true) // 默认启用流式输出
   const [enableReasoning, setEnableReasoning] = useState(true)
   const [retrievalMode, setRetrievalMode] = useState('hybrid') // 检索模式: dense or hybrid，默认 hybrid
+  const [cfEnhance, setCfEnhance] = useState(true) // Clause Forest enhance，默认启用
 
   // 右侧栏状态
   const [retrievedChunks, setRetrievedChunks] = useState([])
@@ -40,6 +41,27 @@ function ChatQA({ fileInfo, onBack }) {
   // 重试机制状态
   const [retryCount, setRetryCount] = useState(0)
   const [isRetrying, setIsRetrying] = useState(false)
+
+  // 全局错误处理：捕获浏览器扩展错误
+  useEffect(() => {
+    const handleError = (event) => {
+      // 忽略来自浏览器扩展的错误
+      if (event.error && (
+        event.error.message?.includes('content_script') ||
+        event.error.message?.includes('Cannot read properties of undefined') ||
+        event.filename?.includes('content_script')
+      )) {
+        event.preventDefault()
+        console.warn('Browser extension error caught and ignored:', event.error)
+        return false
+      }
+    }
+
+    window.addEventListener('error', handleError)
+    return () => {
+      window.removeEventListener('error', handleError)
+    }
+  }, [])
 
   // 初始化Filters（从fileInfo.summary中提取）
   useEffect(() => {
@@ -202,7 +224,7 @@ function ChatQA({ fileInfo, onBack }) {
                 text: source.text || '',
                 score: source.score || 0.0,
                 source: source.doc_id || fileInfo?.filename || 'Unknown',
-                page: source.page_number || 'N/A',
+                clause_path: source.clause_path || 'N/A',
                 business_data: source.business_data || {},
                 doc_id: source.doc_id,
                 prev_chunk: source.prev_chunk,
@@ -327,6 +349,7 @@ function ChatQA({ fileInfo, onBack }) {
       filters: activeFilters,
       mode: retrievalMode,
       stream: true,
+      foc_enhance: cfEnhance,
       generation_config: {
         top_k: topK,
         temperature: temperature,
@@ -495,6 +518,7 @@ function ChatQA({ fileInfo, onBack }) {
         filters: activeFilters,
         mode: retrievalMode,
         stream: false, // 暂时使用非流式，后续可以实现流式
+        foc_enhance: cfEnhance,
         generation_config: {
           top_k: topK,
           temperature: temperature,
@@ -529,7 +553,7 @@ function ChatQA({ fileInfo, onBack }) {
             text: source.text || '',
             score: source.score || 0.0,
             source: sourceName,
-            page: source.page_number || 'N/A',
+            clause_path: source.clause_path || 'N/A',
             business_data: source.business_data || {},
             prev_chunk: source.prev_chunk,
             next_chunk: source.next_chunk,
@@ -708,6 +732,9 @@ function ChatQA({ fileInfo, onBack }) {
                             disabled={key === 'doc_id' || !selectedFilters[key]}
                             readOnly={key === 'doc_id'}
                             title={filters[key] || ''}
+                            autoComplete="off"
+                            data-form-type="other"
+                            name={`filter-${key}-value`}
                           />
                         </td>
                       </tr>
@@ -765,6 +792,9 @@ function ChatQA({ fileInfo, onBack }) {
                   className="model-select"
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
+                  autoComplete="off"
+                  data-form-type="other"
+                  name="model-select"
                 >
                   <option value="DeepSeek-R1">DeepSeek-R1</option>
                   <option value="GPT-4o">GPT-4o</option>
@@ -814,6 +844,9 @@ function ChatQA({ fileInfo, onBack }) {
                   value={maxTokens}
                   onChange={(e) => setMaxTokens(parseInt(e.target.value))}
                   className="tokens-input"
+                  autoComplete="off"
+                  data-form-type="other"
+                  name="max-tokens-input"
                 />
               </div>
 
@@ -839,6 +872,21 @@ function ChatQA({ fileInfo, onBack }) {
                   />
                   Stream Output
                 </label>
+              </div>
+
+              <div className="setting-item">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={cfEnhance}
+                    onChange={(e) => setCfEnhance(e.target.checked)}
+                    className="setting-checkbox"
+                  />
+                  🌲 Clause Forest Enhance
+                </label>
+                <div className="setting-hint">
+                  Enable clause forest structure enhancement for better retrieval
+                </div>
               </div>
             </div>
           </div>
@@ -949,6 +997,10 @@ function ChatQA({ fileInfo, onBack }) {
                 onKeyDown={handleKeyDown}
                 rows={1}
                 disabled={loading}
+                autoComplete="off"
+                data-form-type="other"
+                name="chat-input"
+                id="chat-input"
               />
               <button
                 className="send-button"
@@ -1021,7 +1073,7 @@ function ChatQA({ fileInfo, onBack }) {
                           </span>
                         </div>
                         <div className="chunk-source">
-                          Document: {chunk.source || 'Unknown'} [Page.{chunk.page || 'N/A'}]
+                          Document: {chunk.source || 'Unknown'} [Clause Path: {chunk.clause_path || 'N/A'}]
                         </div>
                         <button 
                           className="view-context-button"

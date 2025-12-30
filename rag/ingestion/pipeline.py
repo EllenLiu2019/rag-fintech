@@ -1,16 +1,15 @@
 import uuid
-from typing import Any
 from fastapi import UploadFile
 
 from rag.ingestion.parser import parse_content
-from rag.ingestion.extractor.extractor import Extractor
+from rag.ingestion.extractor import extractor
 from rag.entity import RagDocument
 from rag.ingestion.parser.parser import ParseResult
 from rag.ingestion.parser.serializer_deserializer import serialize_documents
 from rag.ingestion.splitter.markdown_splitter import RagMarkdownSplitter
-from rag.core import embedder
+from rag.core import embedder, StorageService
 from repository.vector import vector_store
-from common import get_logger, get_model_registry
+from common import get_logger
 from common.exceptions import (
     ParsingError,
     ExtractionError,
@@ -21,18 +20,14 @@ from common.exceptions import (
 from common.error_codes import ErrorCodes
 from repository.s3 import s3_client
 from rag.ingestion.tasks import enqueue_task
-from rag.ingestion.storage_service import StorageService
 
 logger = get_logger(__name__)
 
 
 class IngestionPipeline:
-    def __init__(self, model: dict[str, Any]):
-        self.storage_service = StorageService()
-        self.extractor = Extractor(model)
 
     async def __call__(self, file: UploadFile):
-        rdb_document = await self.storage_service.upload_file(file)
+        rdb_document = await StorageService.upload_file(file)
 
         # Enqueue task - RQ will generate job_id
         # Use module-level function to avoid pickle issues with instance methods
@@ -60,9 +55,7 @@ class IngestionPipeline:
         # pages = document["pages"]
 
         try:
-            confidence, business_data, tokens, clause_forest = self.extractor.extract(
-                documents=pages, source_file=filename
-            )
+            confidence, business_data, tokens, clause_forest = extractor.extract(documents=pages, source_file=filename)
         except Exception as e:
             raise ExtractionError(
                 message=f"Failed to extract metadata from document: {filename}",
@@ -216,7 +209,7 @@ def handle_document(
         update_progress(job_id, 7, "Updating document info in RDB")
 
     try:
-        pipeline.storage_service.update_file_info(filename, rag_document, rdb_document_id)
+        StorageService.update_document(filename, rag_document, rdb_document_id)
         if job_id:
             update_progress(job_id, 8, "Document processing completed!")
     except Exception as e:
@@ -225,15 +218,7 @@ def handle_document(
 
 
 def _create_ingestion_pipeline() -> IngestionPipeline:
-    """
-    Create IngestionPipeline instance at module load time.
-    """
-    registry = get_model_registry()
-    model_config = registry.get_chat_model("query_lite")
-    ingestion_pipeline = IngestionPipeline(model=model_config.to_dict())
-
-    logger.info("Initialized IngestionPipeline singleton")
-    return ingestion_pipeline
+    return IngestionPipeline()
 
 
 ingestion_pipeline = _create_ingestion_pipeline()

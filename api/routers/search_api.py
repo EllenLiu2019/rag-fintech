@@ -21,6 +21,7 @@ class SearchRequest(BaseModel):
     top_k: int = 5
     filters: dict
     mode: Literal["dense", "hybrid"] = "dense"
+    foc_enhance: bool = True
 
 
 @router.post("/search")
@@ -33,6 +34,7 @@ async def search_docs(request: SearchRequest):
     - **top_k**: Number of results to return
     - **filters**: Metadata filters
     - **mode**: Retrieval mode (dense or hybrid)
+    - **foc_enhance**: Whether to enhance the results with clause forest
     """
     logger.info(f"Received search request: query='{request.query}', kb_id='{request.kb_id}', top_k={request.top_k}")
 
@@ -43,6 +45,7 @@ async def search_docs(request: SearchRequest):
         top_k=request.top_k,
         filters=request.filters,
         mode=request.mode,
+        foc_enhance=request.foc_enhance,
     )
 
     formatted_results = results or []
@@ -52,6 +55,8 @@ async def search_docs(request: SearchRequest):
         content={
             "query": request.query,
             "results": formatted_results["results"],
+            "foc_markdown": formatted_results["foc_markdown"],
+            "foc_data": formatted_results.get("foc_data"),
             "query_to_use": formatted_results["query_to_use"],
             "snomed_entities": formatted_results["snomed_entities"],
             "total": len(formatted_results["results"]),

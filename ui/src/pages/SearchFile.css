@@ -34,7 +34,7 @@
 
 /* 左侧控制面板 */
 .left-control-panel {
-  width: 25%;
+  width: 20%;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -326,7 +326,17 @@
   transform: none;
 }
 
+/* 结果展示区和条款森林容器 */
+.results-and-foc-container {
+  flex: 1;
+  display: flex;
+  gap: 1rem;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .results-area {
+  width: 70%;
   flex: 1;
   overflow-y: auto;
   padding-right: 0.5rem;
@@ -590,6 +600,7 @@
   background: rgba(91, 233, 255, 0.2);
   outline: none;
   -webkit-appearance: none;
+  appearance: none;
 }
 
 .slider-max-value {
@@ -617,5 +628,202 @@
   background: var(--accent-cyan, #5be9ff);
   cursor: pointer;
   border: none;
+}
+
+/* 条款森林显示区域 */
+.foc-display-area {
+  width: 30%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(91, 233, 255, 0.3);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+}
+
+.foc-header {
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(91, 233, 255, 0.2);
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.foc-header h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--accent-cyan, #5be9ff);
+  flex: 1;
+}
+
+.foc-view-toggle {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.foc-toggle-btn {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(91, 233, 255, 0.3);
+  border-radius: 0.25rem;
+  padding: 0.3rem 0.8rem;
+  color: var(--foreground-muted, #9fb4ce);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.foc-toggle-btn:hover:not(:disabled) {
+  background: rgba(91, 233, 255, 0.1);
+  border-color: rgba(91, 233, 255, 0.5);
+  color: var(--accent-cyan, #5be9ff);
+}
+
+.foc-toggle-btn.active {
+  background: rgba(91, 233, 255, 0.2);
+  border-color: var(--accent-cyan, #5be9ff);
+  color: var(--accent-cyan, #5be9ff);
+  font-weight: 600;
+}
+
+.foc-toggle-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.foc-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 自定义滚动条样式 */
+.foc-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.foc-content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.foc-content::-webkit-scrollbar-thumb {
+  background: rgba(91, 233, 255, 0.3);
+  border-radius: 3px;
+}
+
+.foc-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(91, 233, 255, 0.5);
+}
+
+.foc-content h1,
+.foc-content h2,
+.foc-content h3,
+.foc-content h4,
+.foc-content h5,
+.foc-content h6 {
+  color: var(--accent-cyan, #5be9ff);
+  margin-top: 1.2rem;
+  margin-bottom: 0.6rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.foc-content h1 {
+  font-size: 1.4rem;
+  border-bottom: 2px solid rgba(91, 233, 255, 0.3);
+  padding-bottom: 0.6rem;
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.foc-content h2 {
+  font-size: 1.2rem;
+  padding-left: 0.5rem;
+  border-left: 3px solid rgba(91, 233, 255, 0.4);
+  margin-top: 1rem;
+}
+
+.foc-content h3 {
+  font-size: 1rem;
+  padding-left: 1rem;
+  border-left: 2px solid rgba(91, 233, 255, 0.3);
+  margin-top: 0.8rem;
+}
+
+.foc-content h4 {
+  font-size: 0.95rem;
+  padding-left: 1.5rem;
+  border-left: 2px solid rgba(91, 233, 255, 0.2);
+  margin-top: 0.6rem;
+}
+
+.foc-content h5 {
+  font-size: 0.9rem;
+  padding-left: 2rem;
+  margin-top: 0.5rem;
+}
+
+.foc-content h6 {
+  font-size: 0.85rem;
+  padding-left: 2.5rem;
+  margin-top: 0.4rem;
+}
+
+.foc-content p {
+  margin: 0.4rem 0;
+  color: var(--foreground-muted, #9fb4ce);
+  padding-left: 0.5rem;
+}
+
+/* 条款 ID 和 chunk 信息的样式 */
+.foc-content code {
+  background: rgba(91, 233, 255, 0.15);
+  color: var(--accent-cyan, #5be9ff);
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.8rem;
+  font-family: 'Courier New', monospace;
+  margin: 0 0.2rem;
+}
+
+/* 列表样式 */
+.foc-content ul,
+.foc-content ol {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+  color: var(--foreground-muted, #9fb4ce);
+}
+
+.foc-content li {
+  margin: 0.3rem 0;
+  line-height: 1.6;
+}
+
+/* 强调搜索结果相关的条款 */
+.foc-content mark {
+  background: rgba(91, 233, 255, 0.2);
+  color: var(--accent-cyan, #5be9ff);
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.2rem;
+}
+
+.foc-empty-state {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--foreground-muted, #9fb4ce);
+  font-size: 1rem;
+  opacity: 0.5;
+  text-align: center;
 }
 

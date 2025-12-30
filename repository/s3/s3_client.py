@@ -34,7 +34,7 @@ def get_file_db_path(filename: str) -> Path:
     return PARSED_FILES_DIR / f"{name_without_ext}.json"
 
 
-def save_file_info(filename: str, file_info: Dict) -> str:
+def save_parsed_file(filename: str, file_info: Dict) -> str:
     """
     将文件信息保存到 JSON 文件
 
@@ -47,13 +47,12 @@ def save_file_info(filename: str, file_info: Dict) -> str:
     """
     try:
         db_path = get_file_db_path(filename)
-        # Ensure directory exists
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(db_path, "w", encoding="utf-8") as f:
             json.dump(file_info, f, ensure_ascii=False, indent=2)
+
         logger.info(f"file info saved to: {db_path}")
-        # Return as string for database storage
         return str(db_path)
     except Exception as e:
         raise Exception(f"failed to save file info to '{filename}': {str(e)}")
@@ -111,26 +110,15 @@ def get_original_file_path(filename: str) -> Path:
     return ORIGINAL_FILES_DIR / safe_filename
 
 
-def save_original_file(filename: str, contents: bytes) -> str:
-    """
-    保存原始文件到磁盘
-
-    Args:
-        filename: 原始文件名
-        contents: 文件内容（字节）
-
-    Returns:
-        str: 文件存储路径（字符串格式，用于数据库存储）
-    """
+def save_file(filename: str, contents: bytes) -> str:
     try:
         file_path = get_original_file_path(filename)
-        # Ensure directory exists
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(file_path, "wb") as f:
             f.write(contents)
+
         logger.info(f"original file saved to: {file_path}")
-        # Return as string for database storage
         return str(file_path)
     except Exception as e:
         raise Exception(f"failed to save original file for '{filename}': {str(e)}")

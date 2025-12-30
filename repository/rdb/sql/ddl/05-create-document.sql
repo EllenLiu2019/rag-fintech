@@ -1,11 +1,8 @@
--- connect to rag_fintech database
-\c rag_fintech;
-
 -- set schema search path
 SET search_path TO rag_fintech, public;
 
 -- drop existing table
-DROP TABLE IF EXISTS rag_fintech.document CASCADE;
+DROP TABLE IF EXISTS rag_fintech.document;
 
 -- create document table
 CREATE TABLE rag_fintech.document (
@@ -24,18 +21,22 @@ CREATE TABLE rag_fintech.document (
     kb_name                     VARCHAR(60)    NOT NULL,
     business_data               JSONB,
     confidence                  JSONB,
+    clause_forest               JSONB,
     CONSTRAINT fk_document_kb FOREIGN KEY (kb_name) REFERENCES rag_fintech.knowledgebase(kb_name) ON DELETE RESTRICT,
     CONSTRAINT chk_doc_status CHECK (doc_status IN ('uploaded', 'processing', 'completed', 'failed'))
 );
 
 -- create indexes
 CREATE INDEX idx_document_id ON rag_fintech.document(document_id);
---CREATE INDEX idx_document_kb_id ON rag_fintech.document(kb_id);
+--CREATE INDEX idx_document_kb_id ON rag_fintech.document(kb_name);
 --CREATE INDEX idx_document_status ON rag_fintech.document(doc_status);
 --CREATE INDEX idx_document_upload_time ON rag_fintech.document(upload_time DESC);
 
 -- create indexes for jsonb fields
 --CREATE INDEX idx_document_business_data ON rag_fintech.document USING GIN (business_data);
 --CREATE INDEX idx_document_confidence ON rag_fintech.document USING GIN (confidence);
+CREATE INDEX idx_document_clause_forest_partial ON rag_fintech.document 
+USING GIN (clause_forest) 
+WHERE clause_forest IS NOT NULL;
 
 

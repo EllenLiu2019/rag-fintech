@@ -486,6 +486,15 @@
   color: var(--foreground-muted, #9fb4ce);
 }
 
+.setting-hint {
+  font-size: 0.7rem;
+  color: var(--foreground-muted, #9fb4ce);
+  opacity: 0.7;
+  margin-top: 0.25rem;
+  padding-left: 1.5rem;
+  line-height: 1.4;
+}
+
 .model-select,
 .tokens-input {
   background: rgba(0, 0, 0, 0.2);
@@ -557,6 +566,13 @@
   flex-direction: row;
   align-items: center;
   gap: 0.5rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
 }
 
 .setting-checkbox {

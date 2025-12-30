@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, and_
 from sqlalchemy.orm import sessionmaker
 from typing import List, Optional, Type, TypeVar, Any
 
@@ -42,15 +42,23 @@ class PostgreSQLClient:
             return records
 
     def select_by_id(self, model: Type[T], id: Any) -> Optional[T]:
-        """Select a record by ID"""
+        """Select a record by id"""
         with self.Session() as session:
             record = session.get(model, id)
             return record
 
-    def select_by_kwargs(self, session: Session, model: Type[T], **kwargs) -> Optional[T]:
+    def select_by_kwargs(self, model: Type[T], **kwargs):
         """Select a record by keyword arguments"""
-        record = session.query(model).filter_by(**kwargs).first()
-        return record
+        if not kwargs:
+            raise ValueError("At least one keyword argument is required")
+
+        # Build WHERE conditions from kwargs
+        conditions = [getattr(model, key) == value for key, value in kwargs.items()]
+        statement = select(model).where(and_(*conditions))
+
+        with self.Session() as session:
+            result = session.execute(statement).scalars().first()
+            return result
 
     def execute_query(self, model: Type[T], name: str) -> List[T]:
         """Execute a query to get IDs by kb_name"""

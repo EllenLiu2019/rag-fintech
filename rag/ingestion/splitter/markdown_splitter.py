@@ -29,8 +29,8 @@ class RagMarkdownSplitter(BaseSplitter):
             callback_manager=CallbackManager([LlamaDebugHandler()]),
         )
 
-        self.title_matchers = {}
-        self.candidates = {}
+        self.title_matchers: dict[str, re.Pattern] = {}
+        self.candidates: dict[int, set[ClauseNode]] = {}
 
     def split_document(self, doc: RagDocument) -> list[dict[str, Any]]:
 
@@ -84,16 +84,9 @@ class RagMarkdownSplitter(BaseSplitter):
                 # Associate chunk with clause if clause_forest is provided
                 clause_node = None
                 if doc.clause_forest:
-                    try:
-                        clause_node = self.find_clause(doc.clause_forest, cleaned_text, node.metadata["page_number"])
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to find clause for chunk {idx}: {e}",
-                            exc_info=True,
-                            extra={"chunk_text_preview": cleaned_text[:100] if cleaned_text else ""},
-                        )
-                        # Continue processing even if clause finding fails
-                        clause_node = None
+                    clause_node = self.find_clause_node(
+                        doc.clause_forest, cleaned_text, node.metadata["page_number"], node.node_id
+                    )
 
                 chunk = {
                     "chunk_id": node.node_id,
@@ -102,7 +95,7 @@ class RagMarkdownSplitter(BaseSplitter):
                     "prev_chunk": node.prev_node.node_id if node.prev_node else None,
                     "next_chunk": node.next_node.node_id if node.next_node else None,
                     "clause_id": clause_node.id if clause_node else -1,
-                    "clause_title": clause_node.title if clause_node else "N/A",
+                    "clause_title": clause_node.title[:80] if clause_node else "N/A",
                     "clause_path": clause_node.build_clause_path() if clause_node else "N/A",
                 }
             except Exception as e:
@@ -111,7 +104,6 @@ class RagMarkdownSplitter(BaseSplitter):
                     exc_info=True,
                     extra={"node_id": getattr(node, "node_id", None)},
                 )
-                # Skip this node and continue with the next one
                 continue
 
             chunks.append(chunk)
@@ -139,61 +131,68 @@ class RagMarkdownSplitter(BaseSplitter):
         page_pattern_remove = re.escape(PAGE_MARKER) + r"\d+\]"
         return re.sub(page_pattern_remove, "", text)
 
-    def find_clause(
+    def find_clause_node(
         self,
         clause_forest: ClauseForest,
         chunk_text: str,
         page_number: int,
+        chunk_id: str,
     ) -> Optional[ClauseNode]:
         """
         Find the most relevant clause for a given chunk based on page number and text content.
         """
-        forest_root: ClauseNode = clause_forest.root
-        if not forest_root or not forest_root.children:
+        try:
+            forest_root: ClauseNode = clause_forest.root
+            if not forest_root or not forest_root.children:
+                return None
+
+            tree_root: Optional[ClauseNode] = None
+            for node, (start_page, end_page) in clause_forest.trees.items():
+                if page_number >= start_page and page_number <= end_page:
+                    tree_root = node
+                    break
+            if not tree_root:
+                return None
+
+            candidates = self._get_candidates(tree_root, page_number)
+
+            best_match: Optional[ClauseNode] = None
+            best_score = 0
+
+            chunk_text_lines = chunk_text.split("\n\n")
+            for candidate in candidates:
+                node: ClauseNode = candidate
+                score = 0
+
+                # Text matching score
+                if node.title:
+                    title_matcher = self._create_title_matcher(node.title)
+                    title_match = title_matcher.match(chunk_text)
+                    if title_match:
+                        score += 20  # Title match is strong signal
+
+                # split chunk_text by "\n\n", the result is a whole line of the original text
+                # if the line is in node.content, then score += 5
+                for line in chunk_text_lines:
+                    if line in node.content and len(line) > 1:
+                        score += 5
+
+                # Prefer higher level clauses (more specific)
+                score += node.level * 1 if score > 0 else 0
+
+                if score > best_score:
+                    best_score = score
+                    best_match = node
+
+            if best_match:
+                best_match.update_chunk_ids(chunk_id)
+            return best_match
+
+        except Exception as e:
+            logger.error(
+                f"Failed to find clause for chunk {chunk_id}: {e}, page_number: {page_number}, chunk_text: {chunk_text[:100] if chunk_text else ''}",
+            )
             return None
-
-        if page_number < clause_forest.start_page_number:
-            return None
-
-        tree_root: Optional[ClauseNode] = None
-        for node, (start_page, end_page) in clause_forest.trees.items():
-            if page_number >= start_page and page_number <= end_page:
-                tree_root = node
-                break
-        if not tree_root:
-            return None
-
-        candidates = self._get_candidates(tree_root, page_number)
-
-        best_match: Optional[ClauseNode] = None
-        best_score = 0
-
-        chunk_text_lines = chunk_text.split("\n\n")
-        for candidate in candidates:
-            node: ClauseNode = candidate
-            score = 0
-
-            # Text matching score
-            if node.title:
-                title_matcher = self._create_title_matcher(node.title)
-                title_match = title_matcher.match(chunk_text)
-                if title_match:
-                    score += 20  # Title match is strong signal
-
-            # split chunk_text by "\n\n", the result is a whole line of the original text
-            # if the line is in node.content, then score += 5
-            for line in chunk_text_lines:
-                if line in node.content and len(line) > 1:
-                    score += 5
-
-            # Prefer higher level clauses (more specific)
-            score += node.level * 1 if score > 0 else 0
-
-            if score > best_score:
-                best_score = score
-                best_match = node
-
-        return best_match
 
     def _create_title_matcher(self, title: str) -> re.Pattern:
         if title in self.title_matchers:
@@ -207,7 +206,13 @@ class RagMarkdownSplitter(BaseSplitter):
     def _get_candidates(self, forest_root: ClauseNode, page_number: int) -> list[ClauseNode]:
         if page_number in self.candidates:
             return self.candidates[page_number]
-        candidates = forest_root.get_tree_nodes(lambda x: x if page_number in x.pages else None)
+
+        candidates: set[ClauseNode] = set()
+        forest_root.get_nodes(
+            lambda x: x if page_number in x.pages else None,
+            candidates,
+            lambda x: page_number < min(x.pages) if x.pages else False,
+        )
         self.candidates[page_number] = candidates
         return candidates
 
@@ -234,3 +239,6 @@ if __name__ == "__main__":
     )
     splitter = RagMarkdownSplitter()
     chunks = splitter.split_document(rag_document)
+    forest = rag_document.clause_forest.get_forest()
+    for node in forest:
+        print(node)

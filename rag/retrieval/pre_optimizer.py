@@ -327,7 +327,7 @@ class QueryOptimizer:
         self.hyde_rewriter = HyDERewriter(model=model)
         self.multi_query_rewriter = MiltiQueryOptimizer(model=model)
 
-    @cached(prefix="optimize", ttl=1800)
+    @cached(prefix="optimize", ttl=3600)
     def optimize(
         self, query: str, mode: Literal["unified", "hyde", "multi"] = "unified", use_snomed_enhancement: bool = True
     ) -> Dict[str, Any]:

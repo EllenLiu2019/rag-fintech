@@ -63,6 +63,7 @@ class Document(Base):
     kb_name: Mapped[str] = mapped_column(String(60), ForeignKey("rag_fintech.knowledgebase.kb_name"), nullable=False)
     business_data: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     confidence: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    clause_forest: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     knowledgebase: Mapped["KnowledgeBase"] = relationship(
         "KnowledgeBase", back_populates="documents", foreign_keys=[kb_name]

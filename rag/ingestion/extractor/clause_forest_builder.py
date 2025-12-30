@@ -11,8 +11,8 @@ logger = get_logger(__name__)
 TITLE_PATTERNS = [
     {
         "level": 1,
-        "pattern": re.compile(r"^(?:#+\s*|\*\*)?(?:注册号：\s*[A-Za-z0-9-]+)"),
-    },  # match: 注册号：
+        "pattern": re.compile(r"^(?:#+\s*|\*\*)?(?:.*?保险条款.*?（[^）]*）)"),
+    },  # match: 保险条款（...）
     {
         "level": 2,
         "pattern": re.compile(r"^(?:#+\s*|\*\*)?第[一二三四五六七八九十]+部分\s*[\S\s]+"),
@@ -56,8 +56,6 @@ class ClauseForestBuilder:
 
                 # new clause started
                 if current_level == 1:
-                    if self.clause_forest.start_page_number == 0:
-                        self.clause_forest.start_page_number = page_number
                     self.clause_forest.clause_count += 1
 
                 # not matched, belongs to the node on top of the stack
@@ -76,6 +74,7 @@ class ClauseForestBuilder:
                     self._add_clause_node(title, current_level, page_number)
 
         self._update_last_tree_node(page_number)
+        self._ensure_tree_structure()
 
         logger.info(f"Extracted clause forest with {self.clause_forest.clause_count} clauses")
         return self.clause_forest
@@ -95,10 +94,13 @@ class ClauseForestBuilder:
             id=self.clause_forest.node_count,
             title=title,
             level=level,
+            type="leaf",
             pages={page_number},  # Use set literal instead of set() constructor
             parent=self.stack[-1],
         )
         self.stack[-1].children.append(new_node)
+        # if the node has children, it is an index node
+        self.stack[-1].type = "index"
         self.stack.append(new_node)
 
         if level == 1:
@@ -115,6 +117,20 @@ class ClauseForestBuilder:
         if end_page == -1:
             self.clause_forest.trees[node] = (start_page, page_number)
 
+    def _ensure_tree_structure(self) -> None:
+        removed_nodes = []
+        for node in list(self.clause_forest.root.children):
+            if node.level == 1 and not node.children:
+                logger.debug(f"Level 1 node has no children and no content, removing: {node.title}")
+                self.clause_forest.trees.pop(node, None)
+                self.clause_forest.node_count -= 1
+                self.clause_forest.clause_count -= 1
+                removed_nodes.append(node.id)
+
+        self.clause_forest.root.children = [
+            node for node in self.clause_forest.root.children if node.id not in removed_nodes
+        ]
+
 
 if __name__ == "__main__":
     import json
@@ -124,4 +140,10 @@ if __name__ == "__main__":
         document = json.load(f)
     clause_forest_builder = ClauseForestBuilder()
     clause_forest = clause_forest_builder.build(document["pages"])
-    print(clause_forest.get_forest_list())
+    for node in clause_forest.get_forest():
+        print(node)
+    # forest = clause_forest.serialize()
+    # clause_forest_2 = ClauseForest.deserialize(forest)
+    # print(clause_forest.root.to_dict() == clause_forest_2.root.to_dict())
+    # for node in clause_forest_2.get_forest():
+    #     print(node)

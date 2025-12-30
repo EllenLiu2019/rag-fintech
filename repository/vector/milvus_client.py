@@ -364,6 +364,22 @@ class VectorStoreClient(DocStoreClient):
         search_res = self.client.get(collection_name=collection_name, ids=[chunkId], output_fields=["text"])
         return search_res[0]["text"] if search_res else None
 
+    def get_bulk(
+        self,
+        chunkIds: list[str],
+        knowledgebaseIds: list[str],
+        selectFields: list[str],
+    ) -> dict[str, str]:
+        collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseIds[0]}"
+        search_res = self.client.get(collection_name=collection_name, ids=chunkIds, output_fields=selectFields)
+        return self._extract_results(search_res, selectFields)
+
+    def _extract_results(self, search_res: list[dict], selectFields: list[str]) -> list[dict]:
+        results = []
+        for result in search_res:
+            results.append({**extract_entity_fields(result, selectFields)})
+        return results
+
     def _build_delete_expr(self, condition: dict) -> str:
         parts = []
         for k, v in condition.items():
@@ -384,7 +400,7 @@ class VectorStoreClient(DocStoreClient):
                 parts.append(f'{k} == "{v}"')
         return " and ".join(parts) if parts else ""
 
-    @cached(prefix="embed_sparse", ttl=1800)
+    @cached(prefix="embed_sparse", ttl=3600)
     def _embed_query(self, queries: List[str]) -> List[List[float]]:
         """Generate sparse vectors for queries with performance monitoring."""
         import time

@@ -1,6 +1,5 @@
-from typing import List
-
 from fastapi import UploadFile
+from typing import Optional
 
 from common import get_logger
 from common.exceptions import (
@@ -12,7 +11,7 @@ from common.exceptions import (
 from common.error_codes import ErrorCodes
 from repository.rdb.models.models import Document as RdbDocument, KnowledgeBase, LLM
 from repository.rdb import rdb_client
-from rag.entity import RagDocument
+from rag.entity import RagDocument, ClauseForest
 
 from repository.s3 import s3_client
 
@@ -20,16 +19,13 @@ logger = get_logger(__name__)
 
 
 class StorageService:
-    def __init__(self):
-        pass
-
-    async def upload_file(self, file: UploadFile) -> RdbDocument:
+    @classmethod
+    async def upload_file(cls, file: UploadFile) -> RdbDocument:
         logger.info(f"Uploading file: {file.filename}")
-        content_type = file.content_type
         contents = await file.read()
 
         try:
-            file_path = s3_client.save_original_file(file.filename, contents)
+            file_path = s3_client.save_file(file.filename, contents)
         except Exception as e:
             raise FileStorageError(
                 message=f"Failed to save original file: {file.filename}",
@@ -37,7 +33,7 @@ class StorageService:
                 details={"filename": file.filename, "error": str(e)},
             ) from e
 
-        if content_type == "application/pdf":
+        if file.content_type == "application/pdf":
             kb_name = "default_kb"
         else:
             kb_name = "unknown"
@@ -45,7 +41,7 @@ class StorageService:
         document = RdbDocument(
             file_name=file.filename,
             file_location=file_path,
-            content_type=content_type,
+            content_type=file.content_type,
             file_size=len(contents),
             doc_status="uploaded",
             kb_name=kb_name,
@@ -64,13 +60,14 @@ class StorageService:
 
         return rdb_document
 
-    def update_file_info(self, filename: str, rag_document: RagDocument, rdb_id: int):
+    @classmethod
+    def update_document(cls, filename: str, rag_document: RagDocument, rdb_id: int):
         file_name = f"{filename}-{rag_document.job_id}"
         logger.info(f"Updating file {file_name} in RDB: id={rdb_id}")
 
         parsed_file = rag_document.to_parsed_file()
         try:
-            parsed_file_path = s3_client.save_file_info(file_name, parsed_file)
+            parsed_file_path = s3_client.save_parsed_file(file_name, parsed_file)
         except Exception as e:
             raise FileStorageError(
                 message=f"Failed to save parsed file info: {file_name}",
@@ -98,6 +95,7 @@ class StorageService:
         rdb_document.confidence = rag_document.confidence
         rdb_document.token_num += rag_document.token_num if rag_document.token_num is not None else 0
         rdb_document.chunk_num += rag_document.chunk_num if rag_document.chunk_num is not None else 0
+        rdb_document.clause_forest = rag_document.clause_forest.to_dict() if rag_document.clause_forest else None
 
         # Save the updated document (merge will update existing record)
         try:
@@ -113,7 +111,8 @@ class StorageService:
                 details={"filename": file_name, "document_id": rdb_document.id, "error": str(e)},
             ) from e
 
-    def get_embedding_model(self, kb_name: str) -> str:
+    @classmethod
+    def get_embedding_model(cls, kb_name: str) -> str:
         try:
             kb_ids = rdb_client.execute_query(KnowledgeBase, kb_name)
             if not kb_ids:
@@ -140,15 +139,9 @@ class StorageService:
                 details={"kb_name": kb_name, "error": str(e)},
             ) from e
 
-    def download_file(self, filename: str) -> bytes:
-        file_contents = s3_client.load_original_file(filename)
-        if file_contents is None:
-            raise FileStorageError(
-                message=f"File not found: {filename}",
-                code=ErrorCodes.R_FILE_001,
-                details={"filename": filename},
-            )
-        return file_contents
-
-    def list_files(self) -> List[str]:
-        return s3_client.list_stored_files()
+    @classmethod
+    def get_clause_forest(cls, doc_id: str) -> Optional[ClauseForest]:
+        rdb_document = rdb_client.select_by_kwargs(RdbDocument, document_id=doc_id)
+        if rdb_document is None:
+            return None
+        return ClauseForest.deserialize(rdb_document.clause_forest)

@@ -21,19 +21,23 @@ class LLMService:
         self,
         question: str,
         context: List[Dict[str, Any]],
+        foc_markdown: Optional[str] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
     ) -> List[Dict[str, str]]:
         conversation_history = conversation_history or []
 
-        # format context, add reference annotation
+        # format context
         context_parts = []
         for idx, chunk in enumerate(context):
+            if chunk.get("type") == "foc":
+                continue
+            clause_id = chunk.get("clause_id", "")
             chunk_text = chunk.get("text", "")
-            chunk_score = chunk.get("score", 0.0)
-            # add reference annotation and similarity score
-            context_parts.append(f"[{idx + 1}] (相似度: {chunk_score:.2f})\n{chunk_text}")
+            context_parts.append(f"[{idx + 1}] (clause_id: {clause_id})\n{chunk_text}")
 
-        context_str = "\n\n".join(context_parts)
+        context_str = "---\n\n".join(context_parts)
+        if foc_markdown:
+            context_str = f"{foc_markdown}{context_str}"
 
         # format conversation history
         history_text = ""
@@ -63,12 +67,13 @@ class LLMService:
         self,
         question: str,
         context: List[Dict[str, Any]],
+        foc_markdown: Optional[str] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
     ) -> Dict[str, Any]:
 
-        messages = self._prepare_messages(question, context, conversation_history)
+        messages = self._prepare_messages(question, context, foc_markdown, conversation_history)
 
         logger.info(f"Generating answer with temperature={temperature}, max_tokens={max_tokens}")
 
@@ -88,6 +93,7 @@ class LLMService:
         self,
         question: str,
         context: List[Dict[str, Any]],
+        foc_markdown: Optional[str] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
@@ -96,7 +102,7 @@ class LLMService:
         Stream generation of answer
         Yields: SSE event strings
         """
-        messages = self._prepare_messages(question, context, conversation_history)
+        messages = self._prepare_messages(question, context, foc_markdown, conversation_history)
 
         logger.info(f"Streaming answer with temperature={temperature}, max_tokens={max_tokens}")
 

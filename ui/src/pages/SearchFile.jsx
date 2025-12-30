@@ -3,6 +3,7 @@ import { apiBaseUrl } from '../../config/config'
 import BackIcon from '../components/icons/BackIcon'
 import ReactMarkdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
+import ClauseTree from '../components/ClauseTree'
 import './SearchFile.css'
 
 function SearchFile({ fileInfo, onBack }) {
@@ -15,11 +16,10 @@ function SearchFile({ fileInfo, onBack }) {
   const [availableFilters, setAvailableFilters] = useState([])
   const [retrievalMode, setRetrievalMode] = useState('hybrid') // 检索模式: dense or hybrid，默认 hybrid
   const [topK, setTopK] = useState(5) // Top K 结果数量
+  const [focData, setFocData] = useState(null) // 完整条款森林 JSON 数据
+  const [showFullForest, setShowFullForest] = useState(true) // 是否显示完整条款森林
 
   useEffect(() => {
-    // Debug: 
-    console.log('SearchFile - fileInfo:', fileInfo)
-    
     if (fileInfo?.business_data) {
       const business_data = fileInfo.business_data
       setAvailableFilters(Object.keys(business_data))
@@ -104,6 +104,7 @@ function SearchFile({ fileInfo, onBack }) {
 
       const data = await response.json()
       setResults(data.results || [])
+      setFocData(data.foc_data || null)
     } catch (err) {
       console.error('Search failed:', err)
       setError(err.message || '搜索失败')
@@ -281,69 +282,127 @@ function SearchFile({ fileInfo, onBack }) {
             </button>
           </div>
 
-          {/* 结果展示区 */}
-          <div className="results-area">
-            {error && <div className="error-message">❌ {error}</div>}
-            
-            {results.length > 0 ? (
-              <div className="results-list">
-                <div className="results-count">Found {results.length} results</div>
-                {results.map((result, index) => (
-                  <div key={index} className="result-card">
-                    <div className="result-header">
-                      <span className="result-rank">#{index + 1}</span>
-                      <div className="result-scores">
-                        <span className="result-score" title="Original retrieval score">
-                          Retrieval: {result.score ? result.score.toFixed(4) : 'N/A'}
-                        </span>
-                        {result.rerank_score !== undefined && (
-                          <span className="result-rerank-score" title="Reranker score">
-                            Rerank: {result.rerank_score.toFixed(4)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="result-meta-tags">
-                        {result.page_number !== undefined && result.page_number !== null && (
-                          <span className="result-tag" title="Page number">
-                            📄 Page {result.page_number}
-                          </span>
-                        )}
-                        {result.pol_num && <span className="result-tag">Policy: {result.pol_num}</span>}
-                      </div>
-                    </div>
-                    <div className="result-text">
-                      <ReactMarkdown rehypePlugins={[rehypeRaw]}>
-                        {result.text}
-                      </ReactMarkdown>
-                    </div>
-                    {/* Metadata 详情 (可折叠) */}
-                    <div className="result-metadata">
-                      <details>
-                        <summary>View Metadata</summary>
-                        <pre>
-                          {(() => {
-                            try {
-                              const data = result.business_data;
-                              if (!data) return 'No metadata available';
-                              // Handle JSON string or object
-                              if (typeof data === 'string') {
-                                const parsed = JSON.parse(data);
-                                return JSON.stringify(parsed, null, 2);
-                              }
-                              return JSON.stringify(data, null, 2);
-                            } catch (e) {
-                              return result.business_data || 'No metadata available';
-                            }
-                          })()}
-                        </pre>
-                      </details>
-                    </div>
+          {/* 结果展示区和条款森林显示区域 */}
+          <div className="results-and-foc-container">
+            {/* 条款森林显示区域 */}
+            <div className="foc-display-area">
+              <div className="foc-header">
+                <h3>🌲 条款森林结构</h3>
+                {focData && (
+                  <div className="foc-view-toggle">
+                    <button
+                      className={`foc-toggle-btn ${showFullForest ? 'active' : ''}`}
+                      onClick={() => setShowFullForest(true)}
+                      title="显示完整条款森林"
+                    >
+                      完整结构
+                    </button>
+                    <button
+                      className={`foc-toggle-btn ${!showFullForest ? 'active' : ''}`}
+                      onClick={() => setShowFullForest(false)}
+                      disabled={results.length === 0}
+                      title="高亮显示搜索结果相关条款"
+                    >
+                      高亮相关
+                    </button>
                   </div>
-                ))}
+                )}
               </div>
-            ) : (
-              !loading && <div className="empty-state">Enter a query to start searching</div>
-            )}
+              <div className="foc-content">
+                {focData ? (
+                  <ClauseTree
+                    clauseForest={focData}
+                    highlightedClauseIds={
+                      showFullForest || results.length === 0
+                        ? []
+                        : (() => {
+                            // 从搜索结果中提取所有相关的 clause IDs
+                            const clauseIds = new Set()
+                            results.forEach(result => {
+                              if (result.clause_path) {
+                                result.clause_path.split('.').forEach(id => {
+                                  const numId = parseInt(id, 10)
+                                  if (!isNaN(numId)) {
+                                    clauseIds.add(numId)
+                                  }
+                                })
+                              }
+                            })
+                            return Array.from(clauseIds)
+                          })()
+                    }
+                  />
+                ) : (
+                  <div className="foc-empty-state">
+                    {loading ? '正在加载...' : '执行搜索后，条款森林结构将显示在这里'}
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* 结果展示区 */}
+            <div className="results-area">
+              {error && <div className="error-message">❌ {error}</div>}
+              
+              {results.length > 0 ? (
+                <div className="results-list">
+                  <div className="results-count">Found {results.length} results</div>
+                  {results.map((result, index) => (
+                    <div key={index} className="result-card">
+                      <div className="result-header">
+                        <span className="result-rank">#{index + 1}</span>
+                        <div className="result-scores">
+                          <span className="result-score" title="Original retrieval score">
+                            Retrieval: {result.score ? result.score.toFixed(4) : 'N/A'}
+                          </span>
+                          {result.rerank_score !== undefined && (
+                            <span className="result-rerank-score" title="Reranker score">
+                              Rerank: {result.rerank_score.toFixed(4)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="result-meta-tags">
+                          {result.clause_path !== undefined && result.clause_path !== null && (
+                            <span className="result-tag" title="Page number">
+                              📄 Clause Path： {result.clause_path}
+                            </span>
+                          )}
+                          {result.pol_num && <span className="result-tag">Policy: {result.pol_num}</span>}
+                        </div>
+                      </div>
+                      <div className="result-text">
+                        <ReactMarkdown rehypePlugins={[rehypeRaw]}>
+                          {result.text}
+                        </ReactMarkdown>
+                      </div>
+                      {/* Metadata 详情 (可折叠) */}
+                      <div className="result-metadata">
+                        <details>
+                          <summary>View Metadata</summary>
+                          <pre>
+                            {(() => {
+                              try {
+                                const data = result.business_data;
+                                if (!data) return 'No metadata available';
+                                // Handle JSON string or object
+                                if (typeof data === 'string') {
+                                  const parsed = JSON.parse(data);
+                                  return JSON.stringify(parsed, null, 2);
+                                }
+                                return JSON.stringify(data, null, 2);
+                              } catch (e) {
+                                return result.business_data || 'No metadata available';
+                              }
+                            })()}
+                          </pre>
+                        </details>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                !loading && <div className="empty-state">Enter a query to start searching</div>
+              )}
+            </div>
           </div>
         </div>
       </div>

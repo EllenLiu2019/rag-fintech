@@ -1,8 +1,9 @@
 from typing import Optional, Dict, Any, List, Literal, Union
 
-from rag.core import embedder
+from rag.core import embedder, StorageService
 from repository.vector import vector_store
 from repository.cache import cached
+from rag.retrieval.foc_retriever import foc_retriever
 from rag.retrieval.reranker import reranker
 from common import get_logger
 from rag.retrieval.pre_optimizer import query_optimizer
@@ -11,14 +12,12 @@ from common.exceptions import (
     RerankError,
     EmbeddingError,
     VectorStoreError,
-    ValidationError,
     ConnectionError,
 )
 from common.error_codes import ErrorCodes
+from common.constants import VECTOR_RETRIEVE_FIELDS
 
 logger = get_logger(__name__)
-
-SELECT_FIELDS = ["id", "text", "page_number"]
 
 
 class Retriever:
@@ -69,56 +68,18 @@ class Retriever:
             ) from e
 
         if mode == "hybrid":
-            results = self._hybrid_search(optimized_queries, kb_id, top_k, query_vectors, filters, opt_mode, **params)
+            results = self._hybrid_search(optimized_queries, kb_id, top_k, query_vectors, filters)
         elif mode == "dense":
-            results = self._dense_search(query, kb_id, top_k, query_vectors, filters, opt_mode, **params)
-        else:
-            raise ValidationError(
-                message=f"Invalid retrieval mode: {mode}",
-                code=ErrorCodes.A_VALIDATION_001,
-                details={"mode": mode, "valid_modes": ["dense", "hybrid"]},
-            )
+            results = self._dense_search(query, kb_id, top_k, query_vectors, filters)
 
-        logger.info(f"Found {len(results) if results else 0} results.")
-
-        # Return with metadata if requested
-        return {
-            "results": results,
-            "query_to_use": optimization_result["query_to_use"],
-            "snomed_entities": optimization_result.get("snomed_entities", {}),
-        }
-
-    # @cached(prefix="dense_search", ttl=1800)
-    def _dense_search(
-        self,
-        query: str,
-        kb_id: str,
-        top_k: int,
-        query_vectors: List[List[float]],
-        filters: Optional[Dict] = None,
-        opt_mode: Literal["unified", "hyde", "multi"] = "unified",
-        **params: Any,
-    ) -> List[Dict[str, Any]]:
-        """Dense vector search."""
-
-        try:
-            results = vector_store.search(
-                selectFields=SELECT_FIELDS,
-                query_vectors=query_vectors,
-                limit=top_k,
-                knowledgebaseIds=[kb_id],
-                filters=filters,
-            )
-        except (VectorStoreError, ConnectionError):
-            # Re-raise storage-related errors as-is (already properly formatted)
-            raise
-        except Exception as e:
-            # Wrap unexpected exceptions
-            raise VectorStoreError(
-                message="Vector store search failed",
-                code=ErrorCodes.R_VECTOR_002,
-                details={"kb_id": kb_id, "top_k": top_k, "error": str(e)},
-            ) from e
+        foc_enhance = params.pop("foc_enhance", False)
+        if foc_enhance:
+            doc_id = filters.get("doc_id")
+            clause_forest = StorageService.get_clause_forest(doc_id)
+            if clause_forest:
+                results, foc_markdown, foc_data = foc_retriever.retrieve(
+                    query, kb_id, query_vectors, top_k, clause_forest, results[0]
+                )
 
         if opt_mode == "multi":
             try:
@@ -131,19 +92,52 @@ class Retriever:
                     code=ErrorCodes.S_RETRIEVAL_002,
                     details={"query": query[:50], "result_count": len(results), "error": str(e)},
                 ) from e
-        else:
+        elif not foc_enhance:
             results = results[0]
 
-        get_relevant_chunks = params.pop("get_relevant_chunks", False)
-        if not get_relevant_chunks:
-            return results
+        if params.pop("get_relevant_chunks", False):
+            try:
+                results = self._get_relevant_chunks(results, kb_id)
+            except Exception as e:
+                logger.warning(f"Failed to get relevant chunks: {e}", exc_info=True)
+
+        logger.info(f"Found {len(results) if results else 0} results.")
+
+        return {
+            "results": results,
+            "foc_data": foc_data if foc_enhance else None,
+            "foc_markdown": foc_markdown if foc_enhance else None,
+            "query_to_use": optimization_result["query_to_use"],
+            "snomed_entities": optimization_result.get("snomed_entities", {}),
+        }
+
+    # @cached(prefix="dense_search", ttl=1800)
+    def _dense_search(
+        self,
+        query: str,
+        kb_id: str,
+        top_k: int,
+        query_vectors: List[List[float]],
+        filters: Optional[Dict] = None,
+    ) -> List[Dict[str, Any]]:
+        """Dense vector search."""
 
         try:
-            return self._get_relevant_chunks(results, kb_id)
+            return vector_store.search(
+                selectFields=VECTOR_RETRIEVE_FIELDS,
+                query_vectors=query_vectors,
+                limit=top_k,
+                knowledgebaseIds=[kb_id],
+                filters=filters,
+            )
+        except (VectorStoreError, ConnectionError):
+            raise
         except Exception as e:
-            logger.warning(f"Failed to get relevant chunks: {e}", exc_info=True)
-            # Return results without context chunks rather than failing
-            return results
+            raise VectorStoreError(
+                message="Vector store search failed",
+                code=ErrorCodes.R_VECTOR_002,
+                details={"kb_id": kb_id, "top_k": top_k, "error": str(e)},
+            ) from e
 
     # @cached(prefix="hybrid_search", ttl=1800)
     def _hybrid_search(
@@ -153,14 +147,12 @@ class Retriever:
         top_k: int,
         query_vectors: List[List[float]],
         filters: Optional[Dict] = None,
-        opt_mode: Literal["unified", "hyde", "multi"] = "unified",
-        **params: Any,
     ) -> List[Dict[str, Any]]:
         """Hybrid search (dense + sparse)."""
 
         try:
-            results = vector_store.hybrid_search(
-                selectFields=SELECT_FIELDS,
+            return vector_store.hybrid_search(
+                selectFields=VECTOR_RETRIEVE_FIELDS,
                 optimized_queries=optimized_queries,
                 query_vectors=query_vectors,
                 limit=top_k,
@@ -168,40 +160,13 @@ class Retriever:
                 filters=filters,
             )
         except (VectorStoreError, ConnectionError):
-            # Re-raise storage-related errors as-is (already properly formatted)
             raise
         except Exception as e:
-            # Wrap unexpected exceptions
             raise VectorStoreError(
                 message="Vector store hybrid search failed",
                 code=ErrorCodes.R_VECTOR_002,
                 details={"kb_id": kb_id, "top_k": top_k, "error": str(e)},
             ) from e
-
-        if opt_mode == "multi":
-            query = optimized_queries[0]
-            try:
-                results = reranker.process(query, results, top_k)
-            except RerankError:
-                raise
-            except Exception as e:
-                raise RerankError(
-                    message="Reranking failed in hybrid search",
-                    code=ErrorCodes.S_RETRIEVAL_002,
-                    details={"query": query[:50], "result_count": len(results), "error": str(e)},
-                ) from e
-        else:
-            results = results[0]
-
-        get_relevant_chunks = params.get("get_relevant_chunks", False)
-        if not get_relevant_chunks:
-            return results
-
-        try:
-            return self._get_relevant_chunks(results, kb_id)
-        except Exception as e:
-            logger.warning(f"Failed to get relevant chunks: {e}", exc_info=True)
-            return results
 
     def _get_relevant_chunks(self, results: List[Dict[str, Any]], kb_id: str) -> List[Dict[str, Any]]:
         """Get relevant chunks from the vector store."""

@@ -5,7 +5,7 @@ from typing import Dict, Any, List, Literal, Optional
 from rag.llm.chat_model import chat_model
 from common import get_logger, get_model_registry
 from common.prompt_manager import get_prompt_manager
-from rag.core import embedder
+from rag.embedding import dense_embedder
 from repository.vector import vector_store
 from rag.retrieval.ner_service import ner_service
 from repository.cache import cached
@@ -220,7 +220,7 @@ class GlossaryInjector:
         if not words_to_search:
             return snomed_entities
 
-        word_embeddings = embedder.embed_queries_batch(words_to_search)
+        word_embeddings = dense_embedder.embed_queries_batch(words_to_search)
 
         for entity, word_embedding in zip(entities_to_search, word_embeddings):
             filter_expr = ""

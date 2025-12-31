@@ -34,7 +34,8 @@ class ErrorCodes:
     L_MODEL_001 = "L_MOD_001"  # Model not found
     L_MODEL_002 = "L_MOD_002"  # Model timeout
     L_MODEL_003 = "L_MOD_003"  # Model rate limit exceeded
-    L_EMBEDDING_001 = "L_EMB_001"  # Embedding failed
+    L_EMBEDDING_001 = "L_EMB_001"  # Dense embedding failed
+    L_EMBEDDING_002 = "L_EMB_002"  # Sparse embedding failed
     L_TOKEN_001 = "L_TOK_001"  # Token limit exceeded
 
     # Repository Layer (R)

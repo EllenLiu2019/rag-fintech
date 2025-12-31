@@ -45,6 +45,10 @@ async def chat_qa(
     """
     Standard chat endpoint with dependency injection.
     """
+    if not request.query or not request.query.strip():
+        logger.warning("Empty query provided, returning empty results")
+        return {}
+
     logger.info(f"Received chat request: query='{request.query}', kb_id='{request.kb_id}'")
 
     top_k = request.generation_config.get("top_k", 5) if request.generation_config else 5
@@ -52,7 +56,7 @@ async def chat_qa(
 
     logger.info(f"Retrieving top {top_k} chunks with filters: {filters}")
     # Let RetrievalError propagate
-    retrieved_res = retriever.search(
+    retrieved_res = await retriever.search(
         query=request.query,
         kb_id=request.kb_id,
         top_k=top_k,
@@ -73,6 +77,7 @@ async def chat_qa(
         llm_result = llm_service.answer_question(
             question=retrieved_res["query_to_use"],
             context=retrieved_res["results"],
+            relevant_foc=retrieved_res.get("relevant_foc", None),
             conversation_history=request.conversation_history,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -116,7 +121,7 @@ async def chat_qa_stream(
             filters = request.filters or {}
 
             logger.info(f"Retrieving top {top_k} chunks with filters: {filters}")
-            retrival_res = retriever.search(
+            retrival_res = await retriever.search(
                 query=request.query,
                 kb_id=request.kb_id,
                 top_k=top_k,
@@ -142,7 +147,7 @@ async def chat_qa_stream(
             async for event in llm_service.stream_answer_question(
                 question=retrival_res["query_to_use"],
                 context=retrival_res["results"],
-                foc_markdown=retrival_res.get("foc_markdown", None),
+                relevant_foc=retrival_res.get("relevant_foc", None),
                 conversation_history=request.conversation_history,
                 temperature=temperature,
                 max_tokens=max_tokens,

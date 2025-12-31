@@ -1,5 +1,6 @@
 import os
 import hashlib
+import time
 from typing import List, Any
 
 from rag.llm.embedding_model import embedding_model
@@ -12,7 +13,7 @@ from rag.entity import RagDocument
 logger = get_logger(__name__)
 
 
-class EmbeddingService:
+class DenseEmbedder:
     def __init__(self, model: dict[str, Any]):
         api_key = os.getenv(model["provider"].upper() + constants.API_KEY_SUFFIX)
         self.model = embedding_model[model["provider"]](key=api_key, model_name=model["model_name"])
@@ -25,7 +26,7 @@ class EmbeddingService:
         if not chunks:
             return []
 
-        logger.info(f"Embedding {len(chunks)} chunks using {self.model.model_name}...")
+        logger.info(f"Generating dense embeddings for {len(chunks)} chunks using {self.model.model_name}...")
 
         texts = [chunk["text"] for chunk in chunks]
 
@@ -50,7 +51,7 @@ class EmbeddingService:
                 details={"chunk_count": len(chunks), "model": self.model.model_name, "error": str(e)},
             ) from e
 
-    @cached(prefix="embedding", ttl=3600, key_func=lambda self, text: self._cache_key(text))
+    @cached(prefix="dense_embedding", ttl=3600, key_func=lambda self, text: self._cache_key(text))
     def embed_query(self, text: str) -> list[float]:
         """
         Embed query with caching (TTL: 1 hour).
@@ -58,9 +59,12 @@ class EmbeddingService:
         """
 
         try:
+            start = time.time()
             embedding, total_tokens = self.model.encode_queries(text)
 
-            logger.info(f"Embedding query: {text} completed. Total tokens: {total_tokens}")
+            logger.info(
+                f"Embedding query: {text} completed in {time.time() - start:.3f}s. Total tokens: {total_tokens}"
+            )
             return embedding.tolist()
 
         except EmbeddingError:
@@ -133,12 +137,12 @@ class EmbeddingService:
         return results
 
 
-def _create_embedder() -> EmbeddingService:
+def _create_dense_embedder() -> DenseEmbedder:
     registry = get_model_registry()
     model_config = registry.get_embedding_model("dense")
-    embedder = EmbeddingService(model=model_config.to_dict())
-    logger.info("Initialized embedder singleton")
-    return embedder
+    dense_embedder = DenseEmbedder(model=model_config.to_dict())
+    logger.info("Initialized dense embedder singleton")
+    return dense_embedder
 
 
-embedder = _create_embedder()
+dense_embedder = _create_dense_embedder()

@@ -13,7 +13,6 @@
         "business_data": {"data_type": "json", "nullable": true},
         "clause_id": {"data_type": "int32", "nullable": true, "default": -1},
         "clause_path": {"data_type": "varchar", "max_length": 100, "nullable": true},
-        "clause_title": {"data_type": "varchar", "max_length": 100, "nullable": true},
         "upload_time": {"data_type": "varchar", "max_length": 100, "nullable": true}
     },
     "indexes": {

@@ -4,7 +4,6 @@ from pymilvus import (
     DataType,
     Function,
     FunctionType,
-    model,
     AnnSearchRequest,
     MilvusException,
 )
@@ -16,7 +15,6 @@ from common.constants import MILVUS_MAPPING_CONF, VECTOR_STORE_NAME
 from repository.vector.doc_store_client import DocStoreClient, extract_entity_fields
 from common.exceptions import ConnectionError, VectorStoreError
 from common.error_codes import ErrorCodes
-from repository.cache import cached
 
 logger = get_logger(__name__)
 
@@ -36,14 +34,6 @@ class VectorStoreClient(DocStoreClient):
         try:
             self._init_client()
             logger.info("Milvus client initialized successfully.")
-            self.bge_m3_embedding_function = model.hybrid.BGEM3EmbeddingFunction(
-                device="cpu",
-                normalize_embeddings=False,
-                return_dense=False,
-                return_sparse=True,
-                return_colbert_vecs=False,
-            )
-            logger.info("BGE-M3 embedding function initialized successfully.")
         except Exception as e:
             logger.error(f"Failed to initialize Milvus client: {e}")
             raise
@@ -149,7 +139,7 @@ class VectorStoreClient(DocStoreClient):
     def search(
         self,
         selectFields: list[str],
-        query_vectors: List[List[float]],
+        dense_vectors: List[List[float]],
         limit: int,
         knowledgebaseIds: list[str],
         filters: Optional[Dict | str] = None,
@@ -166,9 +156,9 @@ class VectorStoreClient(DocStoreClient):
         try:
             search_res = self.client.search(
                 collection_name=collection_name,
-                data=query_vectors,
+                data=dense_vectors,
                 anns_field=(
-                    f"dense_vector_{len(query_vectors[0])}" if knowledgebaseIds[0] == "default_kb" else "dense_vector"
+                    f"dense_vector_{len(dense_vectors[0])}" if knowledgebaseIds[0] == "default_kb" else "dense_vector"
                 ),
                 filter=filter_expr,
                 limit=limit,
@@ -210,8 +200,8 @@ class VectorStoreClient(DocStoreClient):
     def hybrid_search(
         self,
         selectFields: list[str],
-        optimized_queries: List[str],
-        query_vectors: List[List[float]],
+        dense_vectors: List[List[float]],
+        sparse_vectors: List[Dict[str, float]],
         limit: int,
         knowledgebaseIds: list[str],
         filters: Optional[Dict | str] = None,
@@ -227,9 +217,9 @@ class VectorStoreClient(DocStoreClient):
 
         # Handle vector search parameters
         dense_search_params = {
-            "data": query_vectors,
+            "data": dense_vectors,
             "anns_field": (
-                f"dense_vector_{len(query_vectors[0])}" if knowledgebaseIds[0] == "default_kb" else "dense_vector"
+                f"dense_vector_{len(dense_vectors[0])}" if knowledgebaseIds[0] == "default_kb" else "dense_vector"
             ),
             # Optimize ef for serverless: lower ef = faster queries
             "param": {"ef": min(limit * 2, 100)},
@@ -239,7 +229,7 @@ class VectorStoreClient(DocStoreClient):
         dense_request = AnnSearchRequest(**dense_search_params)
 
         sparse_search_params = {
-            "data": self._embed_query(optimized_queries),
+            "data": sparse_vectors,
             "anns_field": "sparse_vector",
             "param": {"drop_ratio_search": 0.2},
             "limit": limit,
@@ -308,21 +298,6 @@ class VectorStoreClient(DocStoreClient):
         data_to_insert = []
         field_names = self.milvus_mapping["fields"].keys()
 
-        embedding_to_use = [chunk.get("text", "") for chunk in chunks]
-        sparse_vectors = self.bge_m3_embedding_function(embedding_to_use)
-
-        for chunk, sparse_vector in zip(chunks, sparse_vectors["sparse"]):
-            # Convert scipy sparse matrix to Milvus dict format
-            if hasattr(sparse_vector, "tocoo"):
-                # Convert CSR to COO format for easier iteration
-                coo_matrix = sparse_vector.tocoo()
-                sparse_dict = {int(idx): float(val) for idx, val in zip(coo_matrix.col, coo_matrix.data)}
-                chunk["sparse_vector"] = sparse_dict
-                logger.info(f"Converted sparse vector with {len(sparse_dict)} non-zero elements")
-            else:
-                chunk["sparse_vector"] = sparse_vector
-                logger.warning(f"Sparse vector is not in expected scipy format: {type(sparse_vector)}")
-
         for chunk in chunks:
             item = {}
             for field in field_names:
@@ -369,7 +344,7 @@ class VectorStoreClient(DocStoreClient):
         chunkIds: list[str],
         knowledgebaseIds: list[str],
         selectFields: list[str],
-    ) -> dict[str, str]:
+    ) -> list[dict]:
         collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseIds[0]}"
         search_res = self.client.get(collection_name=collection_name, ids=chunkIds, output_fields=selectFields)
         return self._extract_results(search_res, selectFields)
@@ -399,23 +374,6 @@ class VectorStoreClient(DocStoreClient):
             else:
                 parts.append(f'{k} == "{v}"')
         return " and ".join(parts) if parts else ""
-
-    @cached(prefix="embed_sparse", ttl=3600)
-    def _embed_query(self, queries: List[str]) -> List[List[float]]:
-        """Generate sparse vectors for queries with performance monitoring."""
-        import time
-
-        start_time = time.time()
-
-        try:
-            result = self.bge_m3_embedding_function(queries)["sparse"]
-            elapsed = time.time() - start_time
-            logger.info(f"BGE-M3 sparse embedding generated in {elapsed:.3f}s for {len(queries)} query(ies)")
-            return result
-        except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(f"BGE-M3 sparse embedding failed after {elapsed:.3f}s: {e}")
-            raise
 
 
 def _create_milvus_client() -> VectorStoreClient:

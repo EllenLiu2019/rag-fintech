@@ -95,7 +95,6 @@ class RagMarkdownSplitter(BaseSplitter):
                     "prev_chunk": node.prev_node.node_id if node.prev_node else None,
                     "next_chunk": node.next_node.node_id if node.next_node else None,
                     "clause_id": clause_node.id if clause_node else -1,
-                    "clause_title": clause_node.title[:80] if clause_node else "N/A",
                     "clause_path": clause_node.build_clause_path() if clause_node else "N/A",
                 }
             except Exception as e:

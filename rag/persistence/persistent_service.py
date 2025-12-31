@@ -12,15 +12,15 @@ from common.error_codes import ErrorCodes
 from repository.rdb.models.models import Document as RdbDocument, KnowledgeBase, LLM
 from repository.rdb import rdb_client
 from rag.entity import RagDocument, ClauseForest
-
 from repository.s3 import s3_client
+from repository.cache import cached
 
 logger = get_logger(__name__)
 
 
-class StorageService:
-    @classmethod
-    async def upload_file(cls, file: UploadFile) -> RdbDocument:
+class PersistentService:
+    @staticmethod
+    async def upload_file(file: UploadFile) -> RdbDocument:
         logger.info(f"Uploading file: {file.filename}")
         contents = await file.read()
 
@@ -60,8 +60,8 @@ class StorageService:
 
         return rdb_document
 
-    @classmethod
-    def update_document(cls, filename: str, rag_document: RagDocument, rdb_id: int):
+    @staticmethod
+    def update_document(filename: str, rag_document: RagDocument, rdb_id: int):
         file_name = f"{filename}-{rag_document.job_id}"
         logger.info(f"Updating file {file_name} in RDB: id={rdb_id}")
 
@@ -111,8 +111,8 @@ class StorageService:
                 details={"filename": file_name, "document_id": rdb_document.id, "error": str(e)},
             ) from e
 
-    @classmethod
-    def get_embedding_model(cls, kb_name: str) -> str:
+    @staticmethod
+    def get_embedding_model(kb_name: str) -> str:
         try:
             kb_ids = rdb_client.execute_query(KnowledgeBase, kb_name)
             if not kb_ids:
@@ -139,8 +139,9 @@ class StorageService:
                 details={"kb_name": kb_name, "error": str(e)},
             ) from e
 
-    @classmethod
-    def get_clause_forest(cls, doc_id: str) -> Optional[ClauseForest]:
+    @staticmethod
+    @cached(prefix="get_foc", ttl=3600)
+    def get_clause_forest(doc_id: str) -> Optional[ClauseForest]:
         rdb_document = rdb_client.select_by_kwargs(RdbDocument, document_id=doc_id)
         if rdb_document is None:
             return None

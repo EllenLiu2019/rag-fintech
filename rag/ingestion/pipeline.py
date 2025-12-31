@@ -1,5 +1,6 @@
 import uuid
 from fastapi import UploadFile
+from concurrent.futures import ThreadPoolExecutor
 
 from rag.ingestion.parser import parse_content
 from rag.ingestion.extractor import extractor
@@ -7,7 +8,8 @@ from rag.entity import RagDocument
 from rag.ingestion.parser.parser import ParseResult
 from rag.ingestion.parser.serializer_deserializer import serialize_documents
 from rag.ingestion.splitter.markdown_splitter import RagMarkdownSplitter
-from rag.core import embedder, StorageService
+from rag.embedding import dense_embedder, sparse_embedder
+from rag.persistence import PersistentService
 from repository.vector import vector_store
 from common import get_logger
 from common.exceptions import (
@@ -27,7 +29,7 @@ logger = get_logger(__name__)
 class IngestionPipeline:
 
     async def __call__(self, file: UploadFile):
-        rdb_document = await StorageService.upload_file(file)
+        rdb_document = await PersistentService.upload_file(file)
 
         # Enqueue task - RQ will generate job_id
         # Use module-level function to avoid pickle issues with instance methods
@@ -151,12 +153,17 @@ def handle_document(
             details={"filename": filename, "error": str(e), "error_type": type(e).__name__},
         )
 
-    # Embed chunks (generate vectors)
+    # Embed chunks (generate vectors) - parallel execution
     if job_id:
         update_progress(job_id, 5, f"Embedding {len(chunks)} chunks")
 
     try:
-        chunks_with_vectors = embedder.embed_chunks(chunks, rag_document)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            dense_future = executor.submit(dense_embedder.embed_chunks, chunks, rag_document)
+            sparse_future = executor.submit(sparse_embedder.embed_chunks, chunks)
+
+            dense_future.result()
+            sparse_future.result()
     except Exception as e:
         if isinstance(e, EmbeddingError):
             raise
@@ -168,7 +175,7 @@ def handle_document(
 
     # Prepare data for Milvus
     chunks_to_insert = []
-    for chunk in chunks_with_vectors:
+    for chunk in chunks:
         chunk_metadata = chunk.get("metadata", {})
 
         chunk_to_insert = {
@@ -180,11 +187,11 @@ def handle_document(
             "next_chunk": chunk.get("next_chunk", None),
             "kb_id": kb_name,
             "dense_vector": chunk.get("dense_vector", []),
+            "sparse_vector": chunk.get("sparse_vector", {}),
             "text": chunk.get("text", ""),
             "business_data": rag_document.business_data or {},
             "clause_id": chunk.get("clause_id"),
             "clause_path": chunk.get("clause_path"),
-            "clause_title": chunk.get("clause_title"),
             "upload_time": rag_document.upload_time,
         }
         chunks_to_insert.append(chunk_to_insert)
@@ -209,7 +216,7 @@ def handle_document(
         update_progress(job_id, 7, "Updating document info in RDB")
 
     try:
-        StorageService.update_document(filename, rag_document, rdb_document_id)
+        PersistentService.update_document(filename, rag_document, rdb_document_id)
         if job_id:
             update_progress(job_id, 8, "Document processing completed!")
     except Exception as e:

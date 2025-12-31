@@ -1,7 +1,7 @@
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Literal
+from typing import Literal, List, Dict, Any
+from typing import Optional
 
 from common import get_logger
 from rag.retrieval import retriever
@@ -24,6 +24,14 @@ class SearchRequest(BaseModel):
     foc_enhance: bool = True
 
 
+class SearchResponse(BaseModel):
+    query: str
+    results: List[Dict[str, Any]]
+    relevant_foc: Optional[str] = None
+    snomed_entities: Optional[dict] = None
+    foc_data: Optional[dict] = None
+
+
 @router.post("/search")
 async def search_docs(request: SearchRequest):
     """
@@ -36,10 +44,15 @@ async def search_docs(request: SearchRequest):
     - **mode**: Retrieval mode (dense or hybrid)
     - **foc_enhance**: Whether to enhance the results with clause forest
     """
+
+    if not request.query or not request.query.strip():
+        logger.warning("Empty query provided, returning empty results")
+        return {}
+
     logger.info(f"Received search request: query='{request.query}', kb_id='{request.kb_id}', top_k={request.top_k}")
 
     # Let RetrievalError propagate to global handler
-    results = retriever.search(
+    results = await retriever.search(
         query=request.query,
         kb_id=request.kb_id,
         top_k=request.top_k,
@@ -48,18 +61,17 @@ async def search_docs(request: SearchRequest):
         foc_enhance=request.foc_enhance,
     )
 
-    formatted_results = results or []
+    formatted_results = results or {
+        "results": [],
+        "relevant_foc": None,
+        "snomed_entities": {},
+        "foc_data": None,
+    }
 
-    return JSONResponse(
-        status_code=200,
-        content={
-            "query": request.query,
-            "results": formatted_results["results"],
-            "foc_markdown": formatted_results["foc_markdown"],
-            "foc_data": formatted_results.get("foc_data"),
-            "query_to_use": formatted_results["query_to_use"],
-            "snomed_entities": formatted_results["snomed_entities"],
-            "total": len(formatted_results["results"]),
-            "mode": request.mode,
-        },
+    return SearchResponse(
+        query=request.query,
+        results=formatted_results["results"],
+        relevant_foc=formatted_results["relevant_foc"],
+        snomed_entities=formatted_results["snomed_entities"],
+        foc_data=formatted_results["foc_data"],
     )

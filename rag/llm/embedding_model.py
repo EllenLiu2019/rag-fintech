@@ -1,6 +1,7 @@
 from abc import ABC
-
+from typing import List, Dict
 import numpy as np
+import time
 
 from common import get_logger
 
@@ -63,7 +64,72 @@ class VoyageEmbed(Base):
             logger.error(f"Failed to encode query: {_e}")
 
 
+class BAAIBgeM3Embed(Base):
+    _FACTORY_NAME = "BGE-M3"
+
+    def __init__(self, key, model_name, base_url=None):
+        from FlagEmbedding import BGEM3FlagModel
+
+        self.model_name = model_name
+        self.model = BGEM3FlagModel(
+            model_name,
+            use_fp16=True,
+            batch_size=256,
+            return_dense=False,
+            return_sparse=True,
+            return_colbert_vecs=False,
+        )
+
+    def encode(self, texts: list):
+        try:
+            start = time.time()
+            res: List[Dict[str, float]] = self.model.encode(sentences=texts)["lexical_weights"]
+            elapsed = time.time() - start
+            logger.info(f"BAAI BGE-M3 encode {len(texts)} texts completed in {elapsed:.3f}s.")
+
+            return res
+        except Exception as _e:
+            logger.error(f"Failed to encode {len(texts)} texts: {_e}")
+            raise
+
+
+class MilvusBgeM3Embed(Base):
+    _FACTORY_NAME = "Milvus-BGE-M3"
+
+    def __init__(self, key, model_name, base_url=None):
+        from pymilvus import model
+
+        self.model_name = model_name
+        self.model = model.hybrid.BGEM3EmbeddingFunction(
+            device="cpu",
+            normalize_embeddings=False,
+            return_dense=False,
+            return_sparse=True,
+            return_colbert_vecs=False,
+        )
+
+    def encode(self, texts: list):
+        from scipy.sparse import csr_array
+
+        try:
+            start = time.time()
+            res: List[csr_array] = self.model(texts)["sparse"]
+            elapsed = time.time() - start
+            logger.info(f"Milvus BGE-M3 encode {len(texts)} texts completed in {elapsed:.3f}s.")
+
+            sparse_vectors = []
+            for sparse_vector in res:
+                sparse_dict = {int(idx): float(val) for idx, val in zip(sparse_vector.indices, sparse_vector.data)}
+                sparse_vectors.append(sparse_dict)
+            return sparse_vectors
+        except Exception as _e:
+            logger.error(f"Failed to encode text: {_e}")
+            raise
+
+
 # Provider -> Class mapping
 embedding_model = {
     "Voyage": VoyageEmbed,
+    "BAAI": BAAIBgeM3Embed,
+    "Milvus": MilvusBgeM3Embed,
 }

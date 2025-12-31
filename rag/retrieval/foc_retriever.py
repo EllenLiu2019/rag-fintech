@@ -60,7 +60,7 @@ class FocRetriever:
         if not results:
             return ""
 
-        lines = ["## 文档条款结构信息\n\n"]
+        lines = ["## 条款内容：\n\n"]
         clause_ids: set[int] = set()
         for result in results:
             for tree_id in result["clause_path"].split("."):
@@ -92,7 +92,7 @@ class FocRetriever:
                 ],
                 temperature=self.temperature,
             )
-            print(f"Time taken to generate: {time.time() - start} seconds")
+            logger.info(f"Time taken to generate: {time.time() - start} seconds")
             result = json.loads(content.replace("```json", "").replace("```", ""))
             clause_ids = result.get("relevant_clause_ids", [])
 
@@ -168,7 +168,6 @@ class FocRetriever:
             logger.info(f"No relevant clauses identified for query: {query[:50]}")
             return {
                 "chunk_ids": [],
-                "clause_ids": [],
                 "reasoning": analysis_result["reasoning"],
                 "tokens": analysis_result["tokens"],
             }
@@ -184,55 +183,38 @@ class FocRetriever:
 
         return {
             "chunk_ids": list(chunk_ids),
-            "clause_ids": relevant_clause_ids,
             "reasoning": analysis_result["reasoning"],
             "tokens": analysis_result["tokens"],
         }
 
-    def retrieve(
+    def merge_results(
         self,
-        query: str,
-        kb_id: str,
-        query_vector: List[List[float]],
-        top_k: int,
+        foc_results: List[Dict[str, Any]],
+        vector_results: List[Dict[str, Any]],
         clause_forest: ClauseForest,
-        search_results: List[Dict[str, Any]],
     ) -> Tuple[List[Dict[str, Any]], str, Dict[str, Any]]:
-        foc_result = self.retrieve_candidate_chunks(query, clause_forest)
-        foc_chunk_ids = list(foc_result["chunk_ids"])
+        foc_chunks = []
+        non_foc_chunks = []
 
-        if not foc_chunk_ids:
-            return search_results
+        foc_chunks.extend(foc_results)
+        foc_chunk_ids = [foc_result.get("id") for foc_result in foc_results]
 
-        foc_results = []
-        vector_results = []
-
-        llm_chunks = vector_store.get_bulk(foc_chunk_ids, [kb_id], VECTOR_GET_FIELDS)
-        for llm_chunk in llm_chunks:
-            llm_chunk["score"] = cosine_similarity(query_vector[0], llm_chunk["dense_vector_1024"])
-            llm_chunk["type"] = "foc"
-            foc_results.append(llm_chunk)
-
-        for result in search_results:
+        for result in vector_results:
             chunk_id = result.get("id")
-            if chunk_id in foc_chunk_ids:
-                foc_chunk = next((foc_chunk for foc_chunk in foc_results if foc_chunk.get("id", "") == chunk_id), None)
-                if foc_chunk:
-                    foc_chunk["score"] = foc_chunk["score"] * WEIGHT_FACTOR
-            else:
-                result["type"] = "vector"
-                vector_results.append(result)
+            clause_id = result.get("clause_id")
+            if clause_id != "-1" and chunk_id not in foc_chunk_ids:  # clause but not in FOC chunks
+                foc_chunks.append(result)
+            elif clause_id == "-1":  # non-clause
+                non_foc_chunks.append(result)
 
-        all_results = sorted(
-            foc_results + vector_results,
-            key=lambda x: x.get("score", 0.0),
-            reverse=True,
+        relevant_foc = self._build_foc_by_results(foc_chunks, clause_forest)
+        all_results = foc_chunks + non_foc_chunks
+
+        logger.info(
+            f"Found {len(all_results)} chunks in total, including {len(foc_chunks)} FOC chunks and {len(non_foc_chunks)} non-FOC chunks"
         )
 
-        foc_markdown = self._build_foc_by_results(all_results, clause_forest)
-        logger.info(f"FOC markdown length: {len(foc_markdown)} chars")
-
-        return all_results[:top_k], foc_markdown, clause_forest.serialize()
+        return all_results, relevant_foc, clause_forest.serialize()
 
 
 def _create_foc_retriever() -> FocRetriever:

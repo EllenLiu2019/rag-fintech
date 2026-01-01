@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional
 import json
 import os
 import concurrent.futures
+import asyncio
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_deepseek import ChatDeepSeek
@@ -14,7 +15,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from ragas.evaluation import EvaluationResult, evaluate
 from datasets import Dataset
-from ragas.metrics import faithfulness, answer_relevancy, context_recall
+from ragas.metrics import faithfulness, context_recall, answer_correctness
 from ragas.run_config import RunConfig
 
 from rag.retrieval.retriever import retriever
@@ -82,7 +83,7 @@ class RAGEvaluator:
     Comprehensive RAG evaluation framework.
     """
 
-    ragas_metrics = [faithfulness, answer_relevancy, context_recall]
+    ragas_metrics = [context_recall, answer_correctness, faithfulness]
     run_config = RunConfig(
         max_workers=4,
         timeout=300,
@@ -95,7 +96,8 @@ class RAGEvaluator:
                 base_model=ChatDeepSeek(
                     model="deepseek-chat",
                     api_key=os.getenv("DEEPSEEK_API_KEY"),
-                    temperature=1.0,
+                    temperature=0.3,
+                    max_tokens=8192,
                 )
             )
             self.eval_embedding_model = HuggingFaceEmbeddings(model="BAAI/bge-m3")
@@ -226,7 +228,7 @@ class RAGEvaluator:
         logger.info(f"Loading evaluation data from: {eval_file}")
 
         # Use provided filters or default
-        filters = filters or {"doc_id": "7f203234-0620-4a56-a362-005d40d9fa14"}
+        filters = filters or {"doc_id": "a13a9cea-6bff-4875-9772-f4b2645fe82f"}
         with open(eval_file, "r", encoding="utf-8") as f:
             data = json.load(f)
 
@@ -321,14 +323,21 @@ class RAGEvaluator:
             logger.info(f"[{index}/{total}] Processing: {question[:50]}...")
 
         try:
-            # Retrieve documents
-            search_result = retriever.search(
-                query=question, kb_id="default_kb", top_k=5, filters=filters, mode="hybrid"
+            # Retrieve documents (retriever.search is now async)
+            search_result = asyncio.run(
+                retriever.search(
+                    query=question,
+                    kb_id="default_kb",
+                    top_k=5,
+                    filters=filters,
+                    mode="hybrid",
+                    foc_enhance=True if sample.get("type") == "logic" else False,
+                )
             )
 
             # Update retrieved_docs
             retrieved = search_result.get("results", [])
-            filtered_retrieved = [chunk for chunk in retrieved if chunk.get("score") > 0.0]
+            filtered_retrieved = [chunk for chunk in retrieved if chunk.get("score", 0.1) > 0.0]
             retrieved_docs = []
             for retrieved_doc in filtered_retrieved:
                 retrieved_doc = {col: retrieved_doc.get(col, "") for col in ["text", "score"]}
@@ -340,7 +349,13 @@ class RAGEvaluator:
 
             # Generate answer
             query_to_use = search_result.get("query_to_use", question)
-            generation_result = llm_service.answer_question(question=query_to_use, context=retrieved, temperature=1.0)
+            generation_result = llm_service.answer_question(
+                question=query_to_use,
+                context=retrieved,
+                relevant_foc=search_result.get("relevant_foc", None),
+                temperature=0.3,
+                is_eval=True,
+            )
             generated = generation_result.get("answer", "")
             sample["generated_answer"] = generated
 

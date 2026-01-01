@@ -56,22 +56,49 @@ class FocRetriever:
 
         return "\n".join(lines)
 
-    def _build_foc_by_results(self, results: List[Dict[str, Any]], clause_forest: ClauseForest) -> str:
+    def _build_foc_by_results(
+        self,
+        chosen_clause_ids: set[int],
+        results: List[Dict[str, Any]],
+        clause_forest: ClauseForest,
+    ) -> str:
+        """
+        Build FOC with clause and chosen chunk content;
+        Example:
+        we have a chosen chunk[chunk_id:123-345-678] with clause_id: 22 and clause_path: 3.10.22;
+        which contains the following content:
+        ```markdown
+        ## 第十条 责任免除\n\n### （一）被保险人故意犯罪 \n\n### （二）试验性治疗
+        ```
+        then we can build the FOC as follows:
+        ## 条款内容：
+        ### 主险 [clause_id:3] <1 chunk> [chunk_id:xxx-xxx-xxx]
+        #### 第二部分 保障内容 [clause_id:10] <1 chunk> [chunk_id:xxx-xxx-xxx]
+        ##### 第十条 责任免除 [clause_id:22] <1 chunk> [chunk_id:123-345-678]
+        ####### （一）被保险人故意犯罪 [clause_id:23] <no chunk>
+        ####### （二）试验性治疗 [clause_id:24] <no chunk>
+        """
         if not results:
             return ""
 
         lines = ["## 条款内容：\n\n"]
-        clause_ids: set[int] = set()
+        foc_clause_ids: set[int] = set()
         for result in results:
             for tree_id in result["clause_path"].split("."):
-                clause_ids.add(int(tree_id))
+                foc_clause_ids.add(int(tree_id))
 
-        for clause_id in sorted(clause_ids):
+        for clause_id in sorted(foc_clause_ids):
             tree_node = clause_forest.root.reverse_find_node(clause_id)
             if tree_node:
                 header = "#" * (tree_node.level + 2)
                 lines.append(f"{header} {tree_node.title} [clause_id:{tree_node.id}]\n")
                 lines.append(f"  - {tree_node.content}\n")
+                if tree_node.id not in chosen_clause_ids:
+                    continue
+                for child in tree_node.children:
+                    if not child.chunk_ids:
+                        lines.append(f"  - {child.title}\n")
+
         return "\n".join(lines)
 
     def _analyze_query_with_llm(self, query: str, forest_markdown: str) -> Dict[str, Any]:
@@ -96,7 +123,7 @@ class FocRetriever:
             result = json.loads(content.replace("```json", "").replace("```", ""))
             clause_ids = result.get("relevant_clause_ids", [])
 
-            logger.info(f"Reasoning: {reasoning}")
+            logger.debug(f"Reasoning: {reasoning}")
 
             return {
                 "relevant_clause_ids": clause_ids,
@@ -140,7 +167,7 @@ class FocRetriever:
 
         return chunk_ids
 
-    @cached(prefix="foc_llm_analysis", ttl=7200)
+    @cached(prefix="foc_llm_analysis", ttl=60 * 60 * 24)
     def retrieve_candidate_chunks(
         self,
         query: str,
@@ -197,17 +224,19 @@ class FocRetriever:
         non_foc_chunks = []
 
         foc_chunks.extend(foc_results)
-        foc_chunk_ids = [foc_result.get("id") for foc_result in foc_results]
+        chosen_clause_ids: set[int] = set()
+        for foc_result in foc_results:
+            chosen_clause_ids.add(int(foc_result.get("clause_id")))
 
         for result in vector_results:
-            chunk_id = result.get("id")
-            clause_id = result.get("clause_id")
-            if clause_id != "-1" and chunk_id not in foc_chunk_ids:  # clause but not in FOC chunks
+            clause_id = int(result.get("clause_id"))
+            if clause_id != -1 and clause_id not in chosen_clause_ids:  # clause but not in FOC chunks
                 foc_chunks.append(result)
-            elif clause_id == "-1":  # non-clause
+                chosen_clause_ids.add(clause_id)
+            elif clause_id == -1:  # non-clause
                 non_foc_chunks.append(result)
 
-        relevant_foc = self._build_foc_by_results(foc_chunks, clause_forest)
+        relevant_foc = self._build_foc_by_results(chosen_clause_ids, foc_chunks, clause_forest)
         all_results = foc_chunks + non_foc_chunks
 
         logger.info(
@@ -248,8 +277,6 @@ if __name__ == "__main__":
     splitter.split_document(rag_document)
     foc_retriever = FocRetriever()
     # queries = [
-    #     # "慢粒细胞白血病是否赔付？",
-    #     # "病理报告显示形态学编码 M8442/1，能赔重疾吗？",
     #     "TNM分期为I期的甲状腺癌是否可以获得主险和附加险同时赔付？",
     #     # "主险和附加险的保障范围有什么区别？",
     # ]

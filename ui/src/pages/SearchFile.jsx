@@ -287,7 +287,7 @@ function SearchFile({ fileInfo, onBack }) {
             {/* 条款森林显示区域 */}
             <div className="foc-display-area">
               <div className="foc-header">
-                <h3>🌲 条款森林结构</h3>
+                <h3>🌲 Clause Forest Structure</h3>
                 {focData && (
                   <div className="foc-view-toggle">
                     <button

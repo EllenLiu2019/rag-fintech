@@ -35,7 +35,7 @@ class ChatResponse(BaseModel):
     reasoning: Optional[str] = None
     sources: List[dict] = []
     tokens: Optional[int] = None
-    mode: Literal["dense", "hybrid"] = "dense"
+    foc_data: Optional[dict] = None
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -96,7 +96,7 @@ async def chat_qa(
         reasoning=reasoning,
         sources=retrieved_res["results"],
         tokens=tokens,
-        mode=request.mode,
+        foc_data=retrieved_res.get("foc_data"),
     )
 
 
@@ -130,9 +130,11 @@ async def chat_qa_stream(
                 foc_enhance=request.foc_enhance,
             )
 
-            # 2. Send chunks
+            # 2. Send chunks and foc_data
             if retrival_res["results"]:
                 yield f"data: {json.dumps({'type': 'chunks', 'data': retrival_res['results']}, ensure_ascii=False)}\n\n"
+                if retrival_res.get("foc_data"):
+                    yield f"data: {json.dumps({'type': 'foc_data', 'data': retrival_res['foc_data']}, ensure_ascii=False)}\n\n"
             else:
                 # No chunks found
                 yield f"data: {json.dumps({'type': 'error', 'data': {'message': '抱歉，没有找到相关的文档片段来回答您的问题。'}}, ensure_ascii=False)}\n\n"

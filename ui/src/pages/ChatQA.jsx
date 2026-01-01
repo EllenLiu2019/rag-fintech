@@ -3,6 +3,7 @@ import { apiBaseUrl } from '../../config/config'
 import BackIcon from '../components/icons/BackIcon'
 import ReactMarkdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
+import ClauseTree from '../components/ClauseTree'
 import './ChatQA.css'
 
 function ChatQA({ fileInfo, onBack }) {
@@ -35,8 +36,10 @@ function ChatQA({ fileInfo, onBack }) {
 
   // 右侧栏状态
   const [retrievedChunks, setRetrievedChunks] = useState([])
-  const [activeTab, setActiveTab] = useState('source') // 'source' or 'graph'
+  const [activeTab, setActiveTab] = useState('source') // 'source', 'forest', or 'graph'
   const [expandedContexts, setExpandedContexts] = useState({}) // 跟踪每个 chunk 的上下文展开状态
+  const [focData, setFocData] = useState(null) // 完整条款森林 JSON 数据
+  const [showFullForest, setShowFullForest] = useState(true) // 是否显示完整条款森林
 
   // 重试机制状态
   const [retryCount, setRetryCount] = useState(0)
@@ -235,6 +238,10 @@ function ChatQA({ fileInfo, onBack }) {
               }))
               setRetrievedChunks(formattedChunks)
               accumulators.retrievedSources = event.data
+            }
+            else if (event.type === 'foc_data') {
+              // 接收到条款森林数据
+              setFocData(event.data)
             } 
             else if (event.type === 'reasoning') {
               // 接收推理内容
@@ -309,6 +316,7 @@ function ChatQA({ fileInfo, onBack }) {
     setLoading(true)
     setError('')
     setRetrievedChunks([]) // 清空之前的检索结果
+    setFocData(null) // 清空之前的条款森林数据
     setRetryCount(0)
     setIsRetrying(false)
 
@@ -567,6 +575,13 @@ function ChatQA({ fileInfo, onBack }) {
       } else {
         // 如果没有检索结果，清空右侧栏
         setRetrievedChunks([])
+      }
+
+      // 设置条款森林数据（如果存在）
+      if (data.foc_data) {
+        setFocData(data.foc_data)
+      } else {
+        setFocData(null)
       }
 
       // 构建 AI 消息
@@ -1035,6 +1050,12 @@ function ChatQA({ fileInfo, onBack }) {
               Source Context
             </button>
             <button
+              className={`tab-button ${activeTab === 'forest' ? 'active' : ''}`}
+              onClick={() => setActiveTab('forest')}
+            >
+              Clause Forest
+            </button>
+            <button
               className={`tab-button ${activeTab === 'graph' ? 'active' : ''}`}
               onClick={() => setActiveTab('graph')}
             >
@@ -1176,6 +1197,61 @@ function ChatQA({ fileInfo, onBack }) {
                     <p className="hint">Send a message to see retrieved context here.</p>
                   </div>
                 )}
+              </div>
+            ) : activeTab === 'forest' ? (
+              <div className="clause-forest-tab">
+                <div className="foc-header">
+                  <h3>🌲 Clause Forest Structure</h3>
+                  {focData && (
+                    <div className="foc-view-toggle">
+                      <button
+                        className={`foc-toggle-btn ${showFullForest ? 'active' : ''}`}
+                        onClick={() => setShowFullForest(true)}
+                        title="显示完整条款森林"
+                      >
+                        完整结构
+                      </button>
+                      <button
+                        className={`foc-toggle-btn ${!showFullForest ? 'active' : ''}`}
+                        onClick={() => setShowFullForest(false)}
+                        disabled={retrievedChunks.length === 0}
+                        title="高亮显示搜索结果相关条款"
+                      >
+                        高亮相关
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="foc-content">
+                  {focData ? (
+                    <ClauseTree
+                      clauseForest={focData}
+                      highlightedClauseIds={
+                        showFullForest || retrievedChunks.length === 0
+                          ? []
+                          : (() => {
+                              // 从检索结果中提取所有相关的 clause IDs
+                              const clauseIds = new Set()
+                              retrievedChunks.forEach(chunk => {
+                                if (chunk.clause_path) {
+                                  chunk.clause_path.split('.').forEach(id => {
+                                    const numId = parseInt(id, 10)
+                                    if (!isNaN(numId)) {
+                                      clauseIds.add(numId)
+                                    }
+                                  })
+                                }
+                              })
+                              return Array.from(clauseIds)
+                            })()
+                      }
+                    />
+                  ) : (
+                    <div className="foc-empty-state">
+                      {loading ? '正在加载...' : '发送消息后，条款森林结构将显示在这里'}
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="knowledge-graph-tab">

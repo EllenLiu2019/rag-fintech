@@ -23,19 +23,34 @@ class LLMService:
         context: List[Dict[str, Any]],
         relevant_foc: Optional[str] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
+        **kwargs,
     ) -> List[Dict[str, str]]:
+        system_prompt_name = "QA_system_prompt"
+        user_prompt_name = "QA_user_prompt"
+
+        if kwargs.get("is_eval", False):
+            system_prompt_name = f"{system_prompt_name}_eval"
+
         conversation_history = conversation_history or []
 
         # format context
         context_parts = []
-        for idx, chunk in enumerate(context):
-            if chunk.get("clause_id", "-1") == "-1":
+        if relevant_foc:
+            for idx, chunk in enumerate(context):
+                if chunk.get("clause_id", "-1") == "-1":
+                    chunk_text = chunk.get("text", "")
+                    context_parts.append(f"[{idx + 1}]\n{chunk_text}")
+
+            context_str = "\n\n".join(context_parts)
+            context_str = f"## 保单内容：\n\n{context_str}---\n\n{relevant_foc}"
+        else:
+            for idx, chunk in enumerate(context):
                 chunk_text = chunk.get("text", "")
                 context_parts.append(f"[{idx + 1}]\n{chunk_text}")
 
-        context_str = "\n\n".join(context_parts)
-        if relevant_foc:
-            context_str = f"{relevant_foc}---\n\n## 以下信息为非条款内容:{context_str}"
+            context_str = "\n\n".join(context_parts)
+
+        logger.debug(f"Context: {context_str}")
 
         # format conversation history
         history_text = ""
@@ -49,14 +64,14 @@ class LLMService:
 
         # user message with context and current question
         user_content = self.prompt_manager.get(
-            "QA_user_prompt",
+            user_prompt_name,
             history_text=history_text,
             context_str=context_str,
             question=question,
         )
 
         messages = [
-            {"role": "system", "content": self.prompt_manager.get("QA_system_prompt")},
+            {"role": "system", "content": self.prompt_manager.get(system_prompt_name)},
             {"role": "user", "content": user_content},
         ]
         return messages
@@ -69,9 +84,10 @@ class LLMService:
         conversation_history: Optional[List[Dict[str, str]]] = None,
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
+        **kwargs,
     ) -> Dict[str, Any]:
 
-        messages = self._prepare_messages(question, context, relevant_foc, conversation_history)
+        messages = self._prepare_messages(question, context, relevant_foc, conversation_history, **kwargs)
 
         logger.info(f"Generating answer with temperature={temperature}, max_tokens={max_tokens}")
 
@@ -95,12 +111,13 @@ class LLMService:
         conversation_history: Optional[List[Dict[str, str]]] = None,
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
+        **kwargs,
     ) -> AsyncIterator[str]:
         """
         Stream generation of answer
         Yields: SSE event strings
         """
-        messages = self._prepare_messages(question, context, relevant_foc, conversation_history)
+        messages = self._prepare_messages(question, context, relevant_foc, conversation_history, **kwargs)
 
         logger.info(f"Streaming answer with temperature={temperature}, max_tokens={max_tokens}")
 

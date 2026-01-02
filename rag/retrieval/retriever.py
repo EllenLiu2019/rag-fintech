@@ -5,6 +5,7 @@ from rag.embedding import dense_embedder, sparse_embedder
 from rag.persistence import PersistentService
 from repository.vector import vector_store
 from repository.cache import cached
+from rag.retrieval.selector import merge_chunks
 from rag.retrieval.foc_retriever import foc_retriever
 from rag.retrieval.reranker import reranker
 from common import get_logger
@@ -62,9 +63,7 @@ class Retriever:
             vector_task = self._retrieve_vector_results(opt_query["optimized_queries"], kb_id, top_k, filters, mode)
             foc_results, vector_results = await asyncio.gather(foc_task, vector_task)
 
-            results, relevant_foc, foc_data = foc_retriever.merge_results(
-                foc_results["chunks"], vector_results[0], clause_forest
-            )
+            results, relevant_foc, foc_data = merge_chunks(foc_results["chunks"], vector_results[0], clause_forest)
         else:
             vector_results = await self._retrieve_vector_results(
                 opt_query["optimized_queries"], kb_id, top_k, filters, mode

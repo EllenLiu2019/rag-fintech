@@ -7,7 +7,7 @@ from rag.ingestion.extractor import extractor
 from rag.entity import RagDocument
 from rag.ingestion.parser.parser import ParseResult
 from rag.ingestion.parser.serializer_deserializer import serialize_documents
-from rag.ingestion.splitter.markdown_splitter import RagMarkdownSplitter
+from rag.ingestion.indexing.markdown_splitter import RagMarkdownSplitter
 from rag.embedding import dense_embedder, sparse_embedder
 from rag.persistence import PersistentService
 from repository.vector import vector_store

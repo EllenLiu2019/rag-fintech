@@ -6,7 +6,7 @@ import inspect
 import time
 
 from redis import Redis, RedisError, TimeoutError
-from rq import Queue
+from rq import Queue, Retry
 from rq.job import Job
 from rq.exceptions import NoSuchJobError
 
@@ -149,6 +149,7 @@ class RedisClient:
         return self.queue.enqueue(
             func,
             *args,
+            retry=Retry(max=2, interval=60),
             job_timeout=job_timeout,
             result_ttl=result_ttl,
             failure_ttl=failure_ttl,

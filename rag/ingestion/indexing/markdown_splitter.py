@@ -4,7 +4,7 @@ from llama_index.core.callbacks import CallbackManager, LlamaDebugHandler
 from llama_index.core.node_parser import MarkdownNodeParser
 from llama_index.core.schema import Document as LlamaDocument
 from rag.entity import RagDocument
-from rag.ingestion.splitter.base import BaseSplitter
+from rag.ingestion.indexing.base import BaseSplitter
 from common import get_logger
 from rag.entity import ClauseNode, ClauseForest
 

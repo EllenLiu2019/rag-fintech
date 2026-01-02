@@ -1,5 +1,4 @@
 import re
-import json
 from bs4 import BeautifulSoup, Tag
 from typing import Optional, Any
 from rag.ingestion.extractor.html_table_grid import HtmlTableGrid

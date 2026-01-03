@@ -174,7 +174,7 @@ foc_retriever = _create_foc_retriever()
 if __name__ == "__main__":
     from pathlib import Path
     from rag.ingestion.extractor.clause_forest_builder import ClauseForestBuilder
-    from rag.entity.document import RagDocument
+    from rag.entity import RagDocument
     from rag.ingestion.indexing.markdown_splitter import RagMarkdownSplitter
 
     with open(Path(__file__).parent.parent / "ingestion" / "extractor" / "data" / "policy_base.json", "r") as f:

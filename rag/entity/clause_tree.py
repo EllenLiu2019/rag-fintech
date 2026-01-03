@@ -157,9 +157,6 @@ class ClauseForest:
         self.root.get_nodes(lambda x: x.to_synopsis_dict(), result)
         return result
 
-    def to_dict(self) -> dict[str, Any]:
-        return self.serialize()
-
     def serialize(self) -> dict[str, Any]:
         trees_dict: dict[int, list[int]] = {}
         for node, (start_page, end_page) in self.trees.items():

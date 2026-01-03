@@ -14,6 +14,7 @@ from repository.rdb import rdb_client
 from rag.entity import RagDocument, ClauseForest
 from repository.s3 import s3_client
 from repository.cache import cached
+from rag.marshaller import deserialize, serialize
 
 logger = get_logger(__name__)
 
@@ -95,7 +96,7 @@ class PersistentService:
         rdb_document.confidence = rag_document.confidence
         rdb_document.token_num += rag_document.token_num if rag_document.token_num is not None else 0
         rdb_document.chunk_num += rag_document.chunk_num if rag_document.chunk_num is not None else 0
-        rdb_document.clause_forest = rag_document.clause_forest.to_dict() if rag_document.clause_forest else None
+        rdb_document.clause_forest = serialize(rag_document.clause_forest) if rag_document.clause_forest else None
 
         # Save the updated document (merge will update existing record)
         try:
@@ -145,4 +146,4 @@ class PersistentService:
         rdb_document = rdb_client.select_by_kwargs(RdbDocument, document_id=doc_id)
         if rdb_document is None:
             return None
-        return ClauseForest.deserialize(rdb_document.clause_forest)
+        return deserialize(rdb_document.clause_forest, target_type=ClauseForest)

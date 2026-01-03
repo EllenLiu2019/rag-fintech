@@ -6,7 +6,7 @@ from rag.ingestion.parser import parse_content
 from rag.ingestion.extractor import extractor
 from rag.entity import RagDocument
 from rag.ingestion.parser.parser import ParseResult
-from rag.ingestion.parser.serializer_deserializer import serialize_documents
+from rag.marshaller import serialize_batch
 from rag.ingestion.indexing.markdown_splitter import RagMarkdownSplitter
 from rag.embedding import dense_embedder, sparse_embedder
 from rag.persistence import PersistentService
@@ -48,7 +48,7 @@ class IngestionPipeline:
         self, filename: str, contents: bytes, content_type: str, parse_result: ParseResult
     ) -> RagDocument:
 
-        pages = serialize_documents(parse_result.documents)
+        pages = serialize_batch(parse_result.documents)
         # import json
         # import os
 

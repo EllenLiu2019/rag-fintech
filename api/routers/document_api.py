@@ -7,6 +7,7 @@ from common.exceptions import NotFoundError
 from common.error_codes import ErrorCodes
 from repository.s3 import s3_client
 from rag.ingestion import get_task, ingestion_pipeline
+from rag.marshaller import to_json
 
 logger = get_logger(__name__)
 
@@ -46,7 +47,7 @@ async def upload_file(
 
     return JSONResponse(
         status_code=202,
-        content=uploaded_doc.model_dump(),
+        content=to_json(uploaded_doc, indent=4, exclude_none=True),
     )
 
 
@@ -54,7 +55,7 @@ async def upload_file(
 async def get_process_status(job_id: str):
     """Get status of a document processing job."""
     ingestion_job = get_task(job_id)
-    return JSONResponse(content=ingestion_job.model_dump(mode="json"))
+    return JSONResponse(content=to_json(ingestion_job, indent=4, exclude_none=True))
 
 
 @router.get("/file-original")

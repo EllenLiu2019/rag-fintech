@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Tuple
 
 from rag.entity.clause_tree import ClauseForest
+from rag.marshaller import serialize
 from common import get_logger
 
 logger = get_logger(__name__)
@@ -34,7 +35,7 @@ def merge_chunks(
         f"Found {len(all_results)} chunks in total, including {len(foc_chunks)} FOC chunks and {len(non_foc_chunks)} non-FOC chunks"
     )
 
-    return all_results, relevant_foc, clause_forest.serialize()
+    return all_results, relevant_foc, serialize(clause_forest)
 
 
 def build_relevant_foc(

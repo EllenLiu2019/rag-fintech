@@ -11,7 +11,13 @@ from pymilvus import (
 from common import get_logger, file_utils
 from common.decorator import singleton
 from common.config_utils import get_base_config, load_yaml_conf
-from common.constants import MILVUS_MAPPING_CONF, VECTOR_STORE_NAME
+from common.constants import (
+    MILVUS_MAPPING_CONF,
+    MILVUS_GRAPH_MAPPING_CONF,
+    VECTOR_STORE_NAME,
+    VECTOR_GRAPH_KB,
+    VECTOR_DEFAULT_KB,
+)
 from repository.vector.doc_store_client import DocStoreClient, extract_entity_fields
 from common.exceptions import ConnectionError, VectorStoreError
 from common.error_codes import ErrorCodes
@@ -27,7 +33,10 @@ class VectorStoreClient(DocStoreClient):
         milvus_config = config or get_base_config("milvus", {})
         self.uri = milvus_config.get("host", "http://localhost:19530")
         self.token = milvus_config.get("token", "root:Milvus")
-        self.milvus_mapping = load_yaml_conf(file_utils.get_project_root_dir("conf", MILVUS_MAPPING_CONF))
+        self.milvus_mapping = {
+            VECTOR_DEFAULT_KB: load_yaml_conf(file_utils.get_project_root_dir("conf", MILVUS_MAPPING_CONF)),
+            VECTOR_GRAPH_KB: load_yaml_conf(file_utils.get_project_root_dir("conf", MILVUS_GRAPH_MAPPING_CONF)),
+        }
 
         logger.info(f"Use Milvus at {self.uri} as the doc engine.")
 
@@ -67,14 +76,19 @@ class VectorStoreClient(DocStoreClient):
     def createIdx(self, knowledgebaseId: str, vectorSize: int):
 
         collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseId}"
+        milvus_mapping = self.milvus_mapping.get(knowledgebaseId, {})
+        if not milvus_mapping:
+            raise ValueError(f"Knowledge base {knowledgebaseId} not found in milvus_mapping")
 
         schema = MilvusClient.create_schema(
             auto_id=False,
             enable_dynamic_field=True,
-            description=f"RAGFlow collection for {collection_name}",
+            description=f"{knowledgebaseId} knowledge base collection for {collection_name}",
         )
 
-        for field_name, field_config in self.milvus_mapping["fields"].items():
+        for field_name, field_config in milvus_mapping["fields"].items():
+            if field_name.startswith("_comment_"):
+                continue
             type_str = field_config["data_type"].upper()
             if not hasattr(DataType, type_str):
                 raise ValueError(f"Unsupported Milvus DataType: {type_str}")
@@ -107,7 +121,7 @@ class VectorStoreClient(DocStoreClient):
             schema.add_field(**field_kwargs)
 
         index_params = self.client.prepare_index_params()
-        for field_name, index_config in self.milvus_mapping["indexes"].items():
+        for field_name, index_config in milvus_mapping["indexes"].items():
             index_config_copy = index_config.copy()
 
             if field_name == "dense_vector":
@@ -158,7 +172,9 @@ class VectorStoreClient(DocStoreClient):
                 collection_name=collection_name,
                 data=dense_vectors,
                 anns_field=(
-                    f"dense_vector_{len(dense_vectors[0])}" if knowledgebaseIds[0] == "default_kb" else "dense_vector"
+                    f"dense_vector_{len(dense_vectors[0])}"
+                    if knowledgebaseIds[0] in [VECTOR_DEFAULT_KB, VECTOR_GRAPH_KB]
+                    else "dense_vector"
                 ),
                 filter=filter_expr,
                 limit=limit,
@@ -182,6 +198,10 @@ class VectorStoreClient(DocStoreClient):
                 details={"collection": collection_name, "error": str(e)},
             )
 
+        # Get schema for the knowledgebase to preserve field types
+        kb_id = knowledgebaseIds[0]
+        field_schema = self.milvus_mapping.get(kb_id, {}).get("fields", {})
+
         results = []
         for idx, hits in enumerate(search_res):
             results.append([])
@@ -191,7 +211,7 @@ class VectorStoreClient(DocStoreClient):
                         "id": str(hit.id),
                         "distance": hit.distance,
                         "score": hit.score,
-                        **extract_entity_fields(hit["entity"], selectFields),
+                        **extract_entity_fields(hit["entity"], selectFields, field_schema),
                     }
                 )
 
@@ -219,7 +239,9 @@ class VectorStoreClient(DocStoreClient):
         dense_search_params = {
             "data": dense_vectors,
             "anns_field": (
-                f"dense_vector_{len(dense_vectors[0])}" if knowledgebaseIds[0] == "default_kb" else "dense_vector"
+                f"dense_vector_{len(dense_vectors[0])}"
+                if knowledgebaseIds[0] in [VECTOR_DEFAULT_KB, VECTOR_GRAPH_KB]
+                else "dense_vector"
             ),
             # Optimize ef for serverless: lower ef = faster queries
             "param": {"ef": min(limit * 2, 100)},
@@ -267,6 +289,10 @@ class VectorStoreClient(DocStoreClient):
                 details={"collection": collection_name, "error": str(e)},
             )
 
+        # Get schema for the knowledgebase to preserve field types
+        kb_id = knowledgebaseIds[0]
+        field_schema = self.milvus_mapping.get(kb_id, {}).get("fields", {})
+
         results = []
         for idx, hits in enumerate(search_res):
             results.append([])
@@ -276,7 +302,7 @@ class VectorStoreClient(DocStoreClient):
                         "id": str(hit.id),
                         "distance": hit.distance,
                         "score": hit.score,
-                        **extract_entity_fields(hit["entity"], selectFields),
+                        **extract_entity_fields(hit["entity"], selectFields, field_schema),
                     }
                 )
 
@@ -296,7 +322,7 @@ class VectorStoreClient(DocStoreClient):
             self.createIdx(knowledgebaseId, vector_size)
 
         data_to_insert = []
-        field_names = self.milvus_mapping["fields"].keys()
+        field_names = self.milvus_mapping.get(knowledgebaseId, {}).get("fields", {}).keys()
 
         for chunk in chunks:
             item = {}
@@ -330,7 +356,7 @@ class VectorStoreClient(DocStoreClient):
 
     def delete(self, condition: dict, knowledgebaseId: str) -> int:
         collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseId}"
-        filter_expr = self._build_delete_expr(condition)
+        filter_expr = self._build_filter_expr(condition)
         res = self.client.delete(collection_name=collection_name, filter=filter_expr)
         return res
 
@@ -347,23 +373,41 @@ class VectorStoreClient(DocStoreClient):
     ) -> list[dict]:
         collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseIds[0]}"
         search_res = self.client.get(collection_name=collection_name, ids=chunkIds, output_fields=selectFields)
-        return self._extract_results(search_res, selectFields)
+        return self._extract_results(search_res, selectFields, knowledgebaseIds[0])
 
-    def _extract_results(self, search_res: list[dict], selectFields: list[str]) -> list[dict]:
+    def query(self, knowledgebaseId: str, filters: dict, selectFields: list[str]) -> list[dict]:
+        collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseId}"
+        if not self.indexExist(knowledgebaseId):
+            logger.warning(f"Index {knowledgebaseId} not found")
+            return []
+        filter_expr = self._build_filter_expr(filters)
+        try:
+            search_res = self.client.query(
+                collection_name=collection_name,
+                filter=filter_expr,
+                output_fields=selectFields,
+            )
+            return self._extract_results(search_res, selectFields, knowledgebaseId)
+        except Exception as e:
+            if "collection not found" in str(e).lower():
+                logger.warning(f"Collection {collection_name} not found")
+                return []
+            raise VectorStoreError(
+                message="Milvus query failed",
+                code=ErrorCodes.R_VECTOR_002,
+                details={"collection": collection_name, "error": str(e)},
+            ) from e
+
+    def _extract_results(self, search_res: list[dict], selectFields: list[str], kb_id: str = None) -> list[dict]:
+        # Get schema for the knowledgebase to preserve field types
+        field_schema = {}
+        if kb_id and kb_id in self.milvus_mapping:
+            field_schema = self.milvus_mapping[kb_id].get("fields", {})
+
         results = []
         for result in search_res:
-            results.append({**extract_entity_fields(result, selectFields)})
+            results.append({**extract_entity_fields(result, selectFields, field_schema)})
         return results
-
-    def _build_delete_expr(self, condition: dict) -> str:
-        parts = []
-        for k, v in condition.items():
-            if isinstance(v, list):
-                v_str = ", ".join([f'"{item}"' for item in v])
-                parts.append(f"{k} in [{v_str}]")
-            else:
-                parts.append(f'{k} == "{v}"')
-        return " && ".join(parts)
 
     def _build_filter_expr(self, filters: dict) -> str:
         parts = []

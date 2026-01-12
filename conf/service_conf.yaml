@@ -20,4 +20,10 @@ redis:
   queue_name: ingestion
   enable: True
 
+neo4j:
+  uri: neo4j://34.238.34.249:7687
+  username: neo4j
+  password: ${NEO4J_PASSWORD}
+  database: neo4j
+
 schema_path: rag/ingestion/extractor/schema/insurance.json

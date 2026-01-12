@@ -1,0 +1,65 @@
+{
+    "fields": {
+        "id": {"data_type": "int64", "is_primary": true},
+        "graph_type": {"data_type": "varchar", "max_length": 20},
+        
+        "_comment_entity_fields": "Entity specific fields",
+        "entity_name": {"data_type": "varchar", "max_length": 200, "nullable": true},
+        "entity_type": {"data_type": "varchar", "max_length": 100, "nullable": true},
+        "pagerank": {"data_type": "float", "nullable": true},
+        
+        "_comment_relationship_fields": "Relationship specific fields",
+        "source_id": {"data_type": "int64", "nullable": true},
+        "target_id": {"data_type": "int64", "nullable": true},
+        "source_entity": {"data_type": "varchar", "max_length": 200, "nullable": true},
+        "target_entity": {"data_type": "varchar", "max_length": 200, "nullable": true},
+        "rel_type": {"data_type": "varchar", "max_length": 100, "nullable": true},
+        
+        "_comment_common_fields": "Common fields",
+        "description": {"data_type": "varchar", "max_length": 65535},
+        "chunk_id": {"data_type": "varchar", "max_length": 500, "nullable": true},
+        "text": {"data_type": "varchar", "max_length": 65535},
+        "doc_id": {"data_type": "varchar", "max_length": 100},
+        "clause_id": {"data_type": "int32"},
+        
+        "_comment_vector_fields": "Vector fields",
+        "dense_vector": {"data_type": "float_vector", "dim": 1024},
+        "sparse_vector": {"data_type": "sparse_float_vector"}
+    },
+    "indexes": {
+        "dense_vector": {
+            "index_name": "dense_vector_index",
+            "index_type": "HNSW",
+            "metric_type": "COSINE",
+            "params": {
+                "m": 16,
+                "ef_construction": 200
+            }
+        },
+        "sparse_vector": {
+            "index_name": "sparse_vector_index",
+            "index_type": "SPARSE_INVERTED_INDEX",
+            "metric_type": "IP",
+            "params": {
+                "inverted_index_algo": "DAAT_MAXSCORE"
+            }
+        },
+        "graph_type": {
+            "index_name": "graph_type_index",
+            "index_type": "STL_SORT"
+        },
+        "doc_id": {
+            "index_name": "doc_id_index",
+            "index_type": "STL_SORT"
+        },
+        "entity_name": {
+            "index_name": "entity_name_index",
+            "index_type": "STL_SORT"
+        },
+        "rel_type": {
+            "index_name": "rel_type_index",
+            "index_type": "STL_SORT"
+        }
+    }
+}
+

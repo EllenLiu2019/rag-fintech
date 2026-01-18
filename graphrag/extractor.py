@@ -48,7 +48,7 @@ class Extractor:
                 # Run synchronous llm.generate in thread pool to avoid blocking
                 start = time.time()
                 reasoning, content, tokens = await asyncio.to_thread(self.llm.generate, messages=messages)
-                logger.warning(f"Time taken: {time.time() - start} seconds, Tokens used: {tokens}")
+                logger.info(f"Time taken: {time.time() - start} seconds, Tokens used: {tokens}")
                 return content or "", tokens
             except Exception as e:
                 logger.error(e)

@@ -1,15 +1,26 @@
 import os
 import re
 import json
+import uuid
+from pydantic import BaseModel, Field
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Optional, Dict, Any
+from datetime import datetime
+
 from common import get_logger, file_utils
 
 logger = get_logger(__name__)
 
 
-ORIGINAL_FILES_DIR = Path(file_utils.get_project_root_dir("repository", "s3", "original_files"))
-PARSED_FILES_DIR = Path(file_utils.get_project_root_dir("repository", "s3", "parsed_files"))
+ORIGINAL_DIR = Path(file_utils.get_project_root_dir("repository", "s3", "original"))
+PARSED_DIR = Path(file_utils.get_project_root_dir("repository", "s3", "parsed"))
+
+
+class StorageFile(BaseModel):
+    doc_id: str = Field(default="", description="document id")
+    filename: str = Field(default="", description="filename")
+    doc_type: str = Field(default="", description="document type")
+    file_path: str = Field(default="", description="file path")
 
 
 def sanitize_filename(filename: str) -> str:
@@ -26,116 +37,64 @@ def sanitize_filename(filename: str) -> str:
     return sanitized
 
 
-def get_file_db_path(filename: str) -> Path:
-    """获取文件的数据库存储路径"""
+def generate_doc_id(doc_type: str) -> str:
+    """generate unique id"""
+    timestamp = datetime.now().strftime("%m%d%H%M%S")
+    unique_id = str(uuid.uuid4())[:6]
+    return f"{doc_type}_{timestamp}_{unique_id}"
+
+
+def get_original_path(filename: str, doc_id: str, doc_type: str) -> Path:
+    """get original file path"""
     safe_filename = sanitize_filename(filename)
-    # 去掉文件扩展名，只保留文件名
+    return ORIGINAL_DIR / doc_type / doc_id / safe_filename
+
+
+def get_parsed_path(doc_id: str, filename: str, doc_type: str) -> Path:
+    """get parsed file path"""
+    safe_filename = sanitize_filename(filename)
     name_without_ext = os.path.splitext(safe_filename)[0]
-    return PARSED_FILES_DIR / f"{name_without_ext}.json"
+    return PARSED_DIR / doc_type / doc_id / f"{name_without_ext}.json"
 
 
-def save_parsed_file(filename: str, file_info: Dict) -> str:
-    """
-    将文件信息保存到 JSON 文件
-
-    Args:
-        filename: 原始文件名
-        file_info: 文件信息字典
-
-    Returns:
-        str: 文件信息存储路径（字符串格式，用于数据库存储）
-    """
+def save_original_file(filename: str, contents: bytes, doc_type: str) -> StorageFile:
     try:
-        db_path = get_file_db_path(filename)
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(db_path, "w", encoding="utf-8") as f:
-            json.dump(file_info, f, ensure_ascii=False, indent=2)
-
-        logger.info(f"file info saved to: {db_path}")
-        return str(db_path)
-    except Exception as e:
-        raise Exception(f"failed to save file info to '{filename}': {str(e)}")
-
-
-def load_file_info(filename: str) -> Optional[Dict]:
-    """
-    从 JSON 文件加载文件信息
-
-    Args:
-        filename: 原始文件名
-
-    Returns:
-        dict: 文件信息字典，如果文件不存在则返回 None
-    """
-    db_path = None  # Initialize to avoid UnboundLocalError
-    try:
-        db_path = get_file_db_path(filename)
-        if not db_path.exists():
-            logger.debug(f"JSON file not found: {db_path}")
-            return None
-
-        with open(db_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON decode error in file {db_path}: {str(e)}")
-        logger.error("   File may be corrupted. Consider deleting and re-uploading the file.")
-        # 可选：自动删除损坏的文件
-        if db_path and db_path.exists():
-            try:
-                db_path.unlink()
-                logger.warning(f"Deleted corrupted file: {db_path}")
-            except Exception as del_error:
-                logger.error(f"Failed to delete corrupted file: {str(del_error)}")
-        return None
-    except Exception as e:
-        logger.error(f"failed to load file info from {db_path if db_path else filename}: {str(e)}")
-        import traceback
-
-        logger.error(f"   error stack:\n{traceback.format_exc()}")
-        return None
-
-
-def get_original_file_path(filename: str) -> Path:
-    """
-    获取原始文件的存储路径
-
-    Args:
-        filename: 原始文件名
-
-    Returns:
-        Path: 文件存储路径
-    """
-    safe_filename = sanitize_filename(filename)
-    return ORIGINAL_FILES_DIR / safe_filename
-
-
-def save_file(filename: str, contents: bytes) -> str:
-    try:
-        file_path = get_original_file_path(filename)
+        doc_id = generate_doc_id(doc_type)
+        file_path = get_original_path(filename, doc_id, doc_type)
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(file_path, "wb") as f:
             f.write(contents)
 
         logger.info(f"original file saved to: {file_path}")
-        return str(file_path)
+        return StorageFile(doc_id=doc_id, filename=filename, doc_type=doc_type, file_path=str(file_path))
     except Exception as e:
         raise Exception(f"failed to save original file for '{filename}': {str(e)}")
 
 
-def load_original_file(filename: str) -> Optional[bytes]:
+def save_parsed_file(filename: str, file_info: dict[str, Any]) -> StorageFile:
+    try:
+        doc_id = file_info.get("document_id")
+        doc_type = file_info.get("doc_type")
+
+        db_path = get_parsed_path(doc_id, filename, doc_type)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(db_path, "w", encoding="utf-8") as f:
+            json.dump(file_info, f, ensure_ascii=False, indent=2)
+
+        logger.info(f"file info saved to: {db_path}")
+        return StorageFile(doc_id=doc_id, filename=filename, doc_type=doc_type, file_path=str(db_path))
+    except Exception as e:
+        raise Exception(f"failed to save file info to '{filename}': {str(e)}")
+
+
+def load_original_file(filename: str, doc_id: str, doc_type: str) -> Optional[bytes]:
     """
-    从磁盘加载原始文件
-
-    Args:
-        filename: 原始文件名
-
-    Returns:
-        bytes: 文件内容，如果文件不存在则返回 None
+    load original file from disk
     """
     try:
-        file_path = get_original_file_path(filename)
+        file_path = get_original_path(filename, doc_id, doc_type)
         if not file_path.exists():
             logger.debug(f"original file not found: {file_path}")
             return None
@@ -150,26 +109,31 @@ def load_original_file(filename: str) -> Optional[bytes]:
         return None
 
 
-def list_stored_files() -> List[str]:
+def load_parsed_file(filename: str, doc_id: str, doc_type: str) -> Optional[Dict]:
     """
-    列出所有已存储的文件名（从 JSON 文件名提取）
-
-    Returns:
-        list: 文件名列表
+    load file info from JSON file
     """
     try:
-        files = []
-        for json_file in PARSED_FILES_DIR.glob("*.json"):
-            # 从 JSON 文件中读取原始文件名
+        db_path = get_parsed_path(doc_id, filename, doc_type)
+        if not db_path.exists():
+            logger.debug(f"JSON file not found: {db_path}")
+            return None
+
+        with open(db_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error in file {db_path}: {str(e)}")
+        logger.error("   File may be corrupted. Consider deleting and re-uploading the file.")
+        if db_path and db_path.exists():
             try:
-                with open(json_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if "filename" in data:
-                        files.append(data["filename"])
-            except Exception:
-                # 如果读取失败，使用文件名（去掉 .json 扩展名）
-                files.append(json_file.stem)
-        return files
+                db_path.unlink()
+                logger.warning(f"Deleted corrupted file: {db_path}")
+            except Exception as del_error:
+                logger.error(f"Failed to delete corrupted file: {str(del_error)}")
+        return None
     except Exception as e:
-        logger.error(f"failed to list stored files: {str(e)}")
-        return []
+        logger.error(f"failed to load file info from {db_path if db_path else filename}: {str(e)}")
+        import traceback
+
+        logger.error(f"   error stack:\n{traceback.format_exc()}")
+        return None

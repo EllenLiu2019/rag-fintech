@@ -8,6 +8,7 @@ DROP TABLE IF EXISTS rag_fintech.document;
 CREATE TABLE rag_fintech.document (
     id                          BIGSERIAL      PRIMARY KEY,
     document_id                 VARCHAR(100)   UNIQUE,
+    doc_type                    VARCHAR(60)    NOT NULL,
     file_name                   VARCHAR(255)   NOT NULL,
     doc_status                  VARCHAR(60)    NOT NULL DEFAULT 'uploaded',
     file_location               VARCHAR(500),
@@ -23,7 +24,8 @@ CREATE TABLE rag_fintech.document (
     confidence                  JSONB,
     clause_forest               JSONB,
     CONSTRAINT fk_document_kb FOREIGN KEY (kb_name) REFERENCES rag_fintech.knowledgebase(kb_name) ON DELETE RESTRICT,
-    CONSTRAINT chk_doc_status CHECK (doc_status IN ('uploaded', 'processing', 'completed', 'failed'))
+    CONSTRAINT chk_doc_status CHECK (doc_status IN ('uploaded', 'processing', 'completed', 'failed')),
+    CONSTRAINT chk_doc_type CHECK (doc_type IN ('policy', 'claim', 'medical'))
 );
 
 -- create indexes

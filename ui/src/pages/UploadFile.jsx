@@ -6,14 +6,19 @@ import FileDropzone from '../components/FileDropzone'
 import FileSummary from '../components/FileSummary'
 import FileList from '../components/FileList'
 import StatusMessage from '../components/StatusMessage'
+import DocumentTypeSelector from '../components/DocumentTypeSelector'
+import DocumentList from '../components/DocumentList'
 
 /**
  * UploadFile 组件
  * 文件上传页面
  */
-export const UploadFile = ({ onUploadSuccess }) => {
+export const UploadFile = ({ onUploadSuccess, onGoToClaim }) => {
   const [file, setFile] = useState(null)
   const [isDragActive, setIsDragActive] = useState(false)
+  const [docType, setDocType] = useState('policy') // 'policy' | 'claim'
+  const [viewMode, setViewMode] = useState('upload') // 'upload' | 'list'
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
   const fileInputRef = useRef(null)
 
   const {
@@ -25,29 +30,37 @@ export const UploadFile = ({ onUploadSuccess }) => {
     setError,
     isUploading,
   } = useFileUpload({
+    docType: docType,
     onSuccess: (uploadedFile, successMessage, responseData) => {
-      // 上传成功后保存文件信息和 job_id 并跳转
-      console.log('Upload success - responseData:', responseData) // Debug log
       const fileInfo = responseData
         ? {
             filename: responseData.file_name || uploadedFile.name,
             size: responseData.size || uploadedFile.size,
-            content_type: responseData.content_type || uploadedFile.type,
-            task_id: responseData.task_id, 
+            task_id: responseData.task_id,
+            doc_id: responseData.doc_id,
+            doc_type: docType,
           }
         : {
             filename: uploadedFile.name,
             size: uploadedFile.size,
-            content_type: uploadedFile.type,
             task_id: null,
+            doc_id: null,
+            doc_type: docType,
           }
-      
-      console.log('FileInfo with task_id:', fileInfo) // Debug log
+
+      // 保存到 localStorage（临时方案，等待后端 API）
+      const storedDocs = localStorage.getItem('uploaded_documents')
+      const documents = storedDocs ? JSON.parse(storedDocs) : []
+      documents.push({
+        ...fileInfo,
+        status: 'queued',
+        created_at: new Date().toISOString(),
+      })
+      localStorage.setItem('uploaded_documents', JSON.stringify(documents))
 
       setFile(null)
       resetFileInput()
-
-      // 立即跳转，在 ParseFile 页面显示处理进度
+      setRefreshTrigger(prev => prev + 1) // 触发列表刷新
       onUploadSuccess(fileInfo)
     },
     onError: (error) => {
@@ -140,6 +153,17 @@ export const UploadFile = ({ onUploadSuccess }) => {
     }
   }
 
+  const handleSelectDocument = (document) => {
+    const fileInfo = {
+      filename: document.filename || document.file_name,
+      size: document.size,
+      task_id: document.task_id,
+      doc_id: document.doc_id,
+      doc_type: document.doc_type,
+    }
+    onUploadSuccess(fileInfo)
+  }
+
   return (
     <main className="home-container">
       <div className="home-content">
@@ -158,29 +182,79 @@ export const UploadFile = ({ onUploadSuccess }) => {
                 通过拖放或文件选择器上传文档，立即启动知识入库流程，为 RAG 提供实时支持。
               </p>
             </div>
+            <div className="header-actions">
+              <div className="view-mode-toggle">
+                <button
+                  type="button"
+                  className={`mode-button ${viewMode === 'upload' ? 'active' : ''}`}
+                  onClick={() => setViewMode('upload')}
+                >
+                  上传
+                </button>
+                <button
+                  type="button"
+                  className={`mode-button ${viewMode === 'list' ? 'active' : ''}`}
+                  onClick={() => setViewMode('list')}
+                >
+                  文档列表
+                </button>
+              </div>
+            </div>
           </header>
 
-          <div className="upload-card">
-            <FileDropzone
-              isDragActive={isDragActive}
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onFileInputChange={handleFileInputChange}
-              fileInputRef={fileInputRef}
+          {viewMode === 'upload' && (
+            <div className="doc-type-selector-wrapper">
+              <DocumentTypeSelector
+                value={docType}
+                onChange={setDocType}
+                options={['policy', 'claim']}
+              />
+            </div>
+          )}
+
+          {viewMode === 'list' && (
+            <div className="doc-type-selector-wrapper">
+              <DocumentTypeSelector
+                value={docType}
+                onChange={setDocType}
+                options={['all', 'policy', 'claim']}
+              />
+            </div>
+          )}
+
+          {viewMode === 'upload' && (
+            <>
+              <div className="upload-card">
+                <FileDropzone
+                  isDragActive={isDragActive}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onFileInputChange={handleFileInputChange}
+                  fileInputRef={fileInputRef}
+                />
+
+                <FileSummary file={file} status={status} onClear={clearFile} />
+              </div>
+
+              <FileList
+                file={file}
+                isUploading={isUploading}
+                onFileUpload={handleFileUpload}
+                onSampleFileUpload={handleSampleFileUpload}
+              />
+
+              <StatusMessage feedback={feedback} status={status} />
+            </>
+          )}
+
+          {viewMode === 'list' && (
+            <DocumentList
+              docTypeFilter={docType}
+              onSelectDocument={handleSelectDocument}
+              refreshTrigger={refreshTrigger}
             />
-
-            <FileSummary file={file} status={status} onClear={clearFile} />
-          </div>
-
-          <FileList
-            file={file}
-            isUploading={isUploading}
-            onFileUpload={handleFileUpload}
-            onSampleFileUpload={handleSampleFileUpload}
-          />
-
-          <StatusMessage feedback={feedback} status={status} />
+          )}
         </section>
       </div>
     </main>

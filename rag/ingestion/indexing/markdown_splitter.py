@@ -32,7 +32,7 @@ class RagMarkdownSplitter(BaseSplitter):
         self.title_matchers: dict[str, re.Pattern] = {}
         self.candidates: dict[int, set[ClauseNode]] = {}
 
-    def split_document(self, doc: RagDocument) -> list[dict[str, Any]]:
+    def split_document(self, doc: RagDocument) -> None:
 
         doc_metadata = {k: v for k, v in doc.to_document_metadata().items() if v is not None}
 
@@ -50,7 +50,7 @@ class RagMarkdownSplitter(BaseSplitter):
 
         if not marked_text_parts:
             logger.warning("No text content found in document pages")
-            return []
+            return
 
         marked_text = "\n\n".join(marked_text_parts)
 
@@ -109,7 +109,7 @@ class RagMarkdownSplitter(BaseSplitter):
 
         doc.chunk_num += len(chunks)
 
-        return chunks
+        doc.chunks = chunks
 
     def _extract_page_markers(self, text: str) -> tuple[int, int]:
         page_pattern = re.escape(PAGE_MARKER) + r"(\d+)\]"

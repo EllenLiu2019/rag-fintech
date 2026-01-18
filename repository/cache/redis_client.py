@@ -166,22 +166,28 @@ class RedisClient:
     def update_progress(self, job_id: str, step: int, message: str):
         """Update job progress in Redis."""
         try:
-            return self.client.hset(
-                f"job:{job_id}:progress",
+            key = f"job:{job_id}:progress"
+            result = self.client.hset(
+                key,
                 mapping={
                     "step": step,
                     "message": message,
                     "updated_at": time.time(),
                 },
             )
+            logger.debug(f"Updated progress in Redis: key={key}, step={step}, message={message}, result={result}")
+            return result
         except Exception as e:
-            logger.error(f"Failed to update job progress {job_id}: {e}")
+            logger.error(f"Failed to update job progress {job_id}: {e}", exc_info=True)
 
     def get_progress(self, job_id: str):
         try:
-            return self.client.hgetall(f"job:{job_id}:progress")
+            key = f"job:{job_id}:progress"
+            result = self.client.hgetall(key)
+            logger.debug(f"Get progress from Redis: key={key}, result={result}")
+            return result
         except Exception as e:
-            logger.error(f"Failed to get progress for job_id {job_id}: {e}")
+            logger.error(f"Failed to get progress for job_id {job_id}: {e}", exc_info=True)
             return {}
 
 

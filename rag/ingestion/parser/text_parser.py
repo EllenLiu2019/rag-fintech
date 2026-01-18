@@ -32,7 +32,7 @@ class TextParser(BaseParser):
         try:
             loader = TextLoader(filename, encoding="utf-8")
             documents = loader.load()
-            return ParseResult(documents=documents, job_id="text_parser")
+            return ParseResult(documents=documents, job_id="text_parser", content_type=content_type)
         except Exception as e:
             error_msg = f"text file decoding failed: {str(e)}"
             logger.error(error_msg)

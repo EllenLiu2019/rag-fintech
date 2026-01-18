@@ -26,7 +26,7 @@
                 "strategy": "exact",   
                 "values": ["投保人"],
                 "target": 0,
-                "type": "object"
+                "type": "kv_pair"
             },
             "db_mapping": {
                 "tables": ["policy_holder"],
@@ -64,7 +64,7 @@
                 "strategy": "exact",
                 "values": ["被保险人"],
                 "target": 0,
-                "type": "object"
+                "type": "kv_pair"
             },
             "db_mapping": {
                 "tables": ["insured"],

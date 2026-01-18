@@ -11,6 +11,7 @@ import { apiBaseUrl } from '../../config/config';
  */
 export const useFileUpload = ({
   uploadUrl = '/api/process',
+  docType = 'policy', // 'policy' | 'claim'
   onSuccess,
   onError,
 } = {}) => {
@@ -43,24 +44,32 @@ export const useFileUpload = ({
     const controller = new AbortController()
     uploadControllerRef.current = controller
 
-    // 🔍 调试信息：检查请求参数
-    const fullUrl = apiBaseUrl + uploadUrl
-    console.group('🔍 文件上传调试信息')
-    console.log('📤 准备上传文件:', {
-      fileName: fileToUpload.name,
-      fileSize: fileToUpload.size,
-      fileType: fileToUpload.type,
-      uploadUrl: uploadUrl,
-      apiBaseUrl: apiBaseUrl,
-      fullUrl: fullUrl,
-      method: 'POST'
-    })
-    console.log('📋 FormData 内容:', formData)
-    
     try {
-      console.log('🌐 开始发送请求到:', fullUrl)
+      // 根据 docType 选择正确的上传 URL
+      let actualUrl = uploadUrl
+      if (docType === 'claim') {
+        actualUrl = '/api/claim/process'
+      } else {
+        actualUrl = '/api/process'
+      }
+      const finalUrl = apiBaseUrl + actualUrl
       
-      const response = await fetch(fullUrl, {
+      // 🔍 调试信息：检查请求参数
+      console.group('🔍 文件上传调试信息')
+      console.log('📤 准备上传文件:', {
+        fileName: fileToUpload.name,
+        fileSize: fileToUpload.size,
+        fileType: fileToUpload.type,
+        docType: docType,
+        uploadUrl: actualUrl,
+        apiBaseUrl: apiBaseUrl,
+        fullUrl: finalUrl,
+        method: 'POST'
+      })
+      console.log('📋 FormData 内容:', formData)
+      console.log('🌐 开始发送请求到:', finalUrl)
+      
+      const response = await fetch(finalUrl, {
         method: 'POST',
         body: formData,
         signal: controller.signal,
@@ -114,29 +123,18 @@ export const useFileUpload = ({
       }
     } catch (error) {
       // 🔍 详细的错误调试信息
+      const actualUrl = docType === 'claim' ? '/api/claim/process' : '/api/process'
+      const finalUrl = apiBaseUrl + actualUrl
       console.error('❌ 上传失败，错误详情:', {
         name: error.name,
         message: error.message,
         stack: error.stack,
-        fullUrl: fullUrl,
+        fullUrl: finalUrl,
         apiBaseUrl: apiBaseUrl,
-        uploadUrl: uploadUrl,
+        uploadUrl: actualUrl,
+        docType: docType,
         errorType: error.constructor.name
       })
-      
-      // 🔍 检查常见错误原因
-      if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
-        console.group('🔧 诊断信息')
-        console.log('当前环境:', import.meta.env.MODE)
-        console.log('API Base URL:', apiBaseUrl)
-        console.log('完整请求 URL:', fullUrl)
-        console.log('文件信息:', {
-          name: fileToUpload?.name,
-          size: fileToUpload?.size,
-          type: fileToUpload?.type
-        })
-        console.groupEnd()
-      }
       
       if (error.name === 'AbortError') {
         console.log('⚠️ 上传已取消')
@@ -157,7 +155,7 @@ export const useFileUpload = ({
       console.groupEnd()
       uploadControllerRef.current = null
     }
-  }, [status, apiBaseUrl, onSuccess, onError])
+  }, [status, apiBaseUrl, uploadUrl, docType, onSuccess, onError])
 
   /**
    * 取消上传

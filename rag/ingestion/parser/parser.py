@@ -11,6 +11,7 @@ logger = get_logger(__name__)
 class ParseResult(BaseModel):
     documents: List[Document] = Field(description="Parsed documents")
     job_id: str = Field(description="Job ID")
+    content_type: str = Field(description="Content type", default="application/pdf")
 
 
 class ContentParser:

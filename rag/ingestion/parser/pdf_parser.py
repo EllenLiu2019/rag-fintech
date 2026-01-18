@@ -42,7 +42,7 @@ class PDFParser(BaseParser):
                 do_not_cache=True,
                 strict_mode_reconstruction=True,
                 strict_mode_buggy_font=True,
-                user_prompt=self.prompt_manager.get("parse_prompt"),
+                user_prompt=None,
                 system_prompt_append=self.prompt_manager.get("parse_prompt"),
                 hide_footers=True,
                 preserve_very_small_text=True,
@@ -64,7 +64,7 @@ class PDFParser(BaseParser):
             else:
                 logger.warning("no documents returned from LlamaParse")
 
-            return ParseResult(documents=markdown_documents, job_id=result.job_id)
+            return ParseResult(documents=markdown_documents, job_id=result.job_id, content_type=content_type)
         except Exception as e:
             logger.error(f"PDF parsing failed: {str(e)}")
             raise ValueError(f"PDF parsing failed: {str(e)}")

@@ -26,6 +26,7 @@ class ErrorCodes:
     S_INGESTION_007 = "S_ING_007"  # Failed to get task
     S_INGESTION_008 = "S_ING_008"  # Failed to update job progress
     S_INGESTION_009 = "S_ING_009"  # Schema path not found
+    S_INGESTION_010 = "S_ING_010"  # Failed to build graph
     S_RETRIEVAL_001 = "S_RET_001"  # Retrieval failed
     S_RETRIEVAL_002 = "S_RET_002"  # Reranking failed
     S_GENERATION_001 = "S_GEN_001"  # Generation failed

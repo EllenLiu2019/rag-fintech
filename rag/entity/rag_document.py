@@ -2,11 +2,18 @@ import uuid
 from typing import Any, Optional
 from pydantic import BaseModel, Field, field_validator
 from datetime import datetime, timezone
+from enum import Enum
 
 from common import get_logger
 from rag.entity.clause_tree import ClauseForest
 
 logger = get_logger(__name__)
+
+
+class DocumentType(Enum):
+    POLICY = "policy"
+    CLAIM = "claim"
+    MEDICAL_RECORD = "medical"
 
 
 class RagDocument(BaseModel):
@@ -24,6 +31,8 @@ class RagDocument(BaseModel):
     page_count: int = 0
     upload_time: Optional[str] = None
     clause_forest: Optional[ClauseForest] = Field(default=None, description="clause forest structure")
+    doc_type: DocumentType = Field(default=DocumentType.POLICY, description="document type")
+    chunks: list[dict[str, Any]] = Field(default_factory=list, description="chunks")
 
     @field_validator("pages", mode="before")
     @classmethod
@@ -48,15 +57,16 @@ class RagDocument(BaseModel):
         cls,
         document_id: str,
         parsed_documents: list[dict[str, Any]],
-        business_data: dict[str, Any],
-        confidence: dict[str, Any],
-        token_num: int,
-        filename: str,
-        file_size: int,
+        business_data: dict[str, Any] = {},
+        confidence: dict[str, Any] = {},
+        token_num: int = 0,
+        filename: str = "",
+        file_size: int = 0,
         content_type: Optional[str] = None,
         chunk_num: int = 0,
         job_id: str = "",
         clause_forest: Optional[ClauseForest] = None,
+        doc_type: DocumentType = DocumentType.POLICY,
     ) -> "RagDocument":
         return cls(
             document_id=document_id,
@@ -72,6 +82,7 @@ class RagDocument(BaseModel):
             upload_time=datetime.now(tz=timezone.utc).isoformat(),
             job_id=job_id,
             clause_forest=clause_forest,
+            doc_type=doc_type,
         )
 
     def to_document_metadata(self) -> dict[str, Any]:
@@ -85,6 +96,7 @@ class RagDocument(BaseModel):
         """
         return {
             "document_id": self.document_id,
+            "doc_type": self.doc_type.value,
             "job_id": self.job_id,
             "filename": self.filename,
             "file_size": self.file_size,

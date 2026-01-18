@@ -9,6 +9,7 @@ from common.exceptions import (
     DocumentNotFoundError,
 )
 from common.error_codes import ErrorCodes
+from common.constants import VECTOR_DEFAULT_KB
 from repository.rdb.models.models import Document as RdbDocument, KnowledgeBase, LLM
 from repository.rdb import rdb_client
 from rag.entity import RagDocument, ClauseForest
@@ -21,31 +22,28 @@ logger = get_logger(__name__)
 
 class PersistentService:
     @staticmethod
-    async def upload_file(file: UploadFile) -> RdbDocument:
+    async def upload_file(file: UploadFile, doc_type: str) -> RdbDocument:
         logger.info(f"Uploading file: {file.filename}")
         contents = await file.read()
 
         try:
-            file_path = s3_client.save_file(file.filename, contents)
+            storage_file = s3_client.save_original_file(file.filename, contents, doc_type)
         except Exception as e:
             raise FileStorageError(
                 message=f"Failed to save original file: {file.filename}",
                 code=ErrorCodes.R_FILE_001,
-                details={"filename": file.filename, "error": str(e)},
+                details={"filename": file.filename, "doc_type": doc_type, "error": str(e)},
             ) from e
 
-        if file.content_type == "application/pdf":
-            kb_name = "default_kb"
-        else:
-            kb_name = "unknown"
-
         document = RdbDocument(
-            file_name=file.filename,
-            file_location=file_path,
+            document_id=storage_file.doc_id,
+            file_name=storage_file.filename,
+            doc_type=storage_file.doc_type,
+            file_location=storage_file.file_path,
             content_type=file.content_type,
             file_size=len(contents),
             doc_status="uploaded",
-            kb_name=kb_name,
+            kb_name=VECTOR_DEFAULT_KB,
         )
 
         try:
@@ -54,41 +52,42 @@ class PersistentService:
             raise DatabaseError(
                 message=f"Failed to save document to database: {file.filename}",
                 code=ErrorCodes.R_DB_002,
-                details={"filename": file.filename, "error": str(e)},
+                details={"filename": file.filename, "doc_type": doc_type, "error": str(e)},
             ) from e
 
-        logger.info(f"File {file.filename} saved to RDB: id={rdb_document.id} with original file location: {file_path}")
+        logger.info(
+            f"File {file.filename} saved to RDB: id={rdb_document.id} with original file location: {storage_file.file_path}"
+        )
 
         return rdb_document
 
     @staticmethod
-    def update_document(filename: str, rag_document: RagDocument, rdb_id: int):
-        file_name = f"{filename}-{rag_document.job_id}"
+    def update_document(rag_document: RagDocument, rdb_id: int):
+        file_name = rag_document.filename
         logger.info(f"Updating file {file_name} in RDB: id={rdb_id}")
 
         parsed_file = rag_document.to_parsed_file()
         try:
-            parsed_file_path = s3_client.save_parsed_file(file_name, parsed_file)
+            storage_file = s3_client.save_parsed_file(file_name, parsed_file)
         except Exception as e:
             raise FileStorageError(
                 message=f"Failed to save parsed file info: {file_name}",
                 code=ErrorCodes.R_FILE_001,
-                details={"filename": file_name, "error": str(e)},
+                details={"filename": file_name, "doc_type": parsed_file.get("doc_type"), "error": str(e)},
             ) from e
 
         # Update document attributes
         rdb_document = rdb_client.select_by_id(RdbDocument, rdb_id)
         if rdb_document is None:
             raise DocumentNotFoundError(
-                message=f"Document not found: {rdb_id}",
+                message=f"Document not found: {rag_document.document_id} (rdb_id: {rdb_id})",
                 code=ErrorCodes.R_DB_003,
                 details={"rdb_id": rdb_id},
             )
 
-        rdb_document.document_id = rag_document.document_id
         rdb_document.file_name = file_name
         rdb_document.doc_status = "completed"
-        rdb_document.doc_location = parsed_file_path
+        rdb_document.doc_location = storage_file.file_path
         rdb_document.content_type = rag_document.content_type
         rdb_document.page_count = len(rag_document.pages)
         rdb_document.upload_time = rag_document.upload_time
@@ -103,7 +102,7 @@ class PersistentService:
             updated_doc = rdb_client.save(rdb_document)
 
             logger.info(
-                f"File {file_name} updated in RDB: id={updated_doc.id} with parsed file location: {parsed_file_path}"
+                f"File {file_name} updated in RDB: id={updated_doc.id} with parsed file location: {storage_file.file_path}"
             )
         except Exception as e:
             raise DatabaseError(

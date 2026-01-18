@@ -1,7 +1,7 @@
 import os
 import hashlib
 import time
-from typing import List, Any
+from typing import List, Any, Optional
 
 from rag.llm.embedding_model import embedding_model
 from common import constants, get_logger, get_model_registry
@@ -18,7 +18,7 @@ class DenseEmbedder:
         api_key = os.getenv(model["provider"].upper() + constants.API_KEY_SUFFIX)
         self.model = embedding_model[model["provider"]](key=api_key, model_name=model["model_name"])
 
-    def embed_chunks(self, chunks: list[dict], rag_document: RagDocument) -> list[dict]:
+    def embed_chunks(self, chunks: list[dict], rag_document: Optional[RagDocument] = None) -> list[dict]:
         """
         Embed chunks with optional batch caching.
         Note: Chunk embedding typically happens during ingestion,
@@ -36,7 +36,8 @@ class DenseEmbedder:
             for i, chunk in enumerate(chunks):
                 chunk["dense_vector"] = embeddings[i].tolist()
 
-            rag_document.token_num += tokens
+            if rag_document:
+                rag_document.token_num += tokens
 
             logger.info(f"Embedding completed. Total tokens: {tokens}")
 

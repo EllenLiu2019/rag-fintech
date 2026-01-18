@@ -168,7 +168,10 @@ class RuleExtractor:
                     ),
                     None,
                 )
-                if not valid_row_id:
+                if (
+                    not valid_row_id
+                    or self.table_mapping_strategy[valid_row_id].get("match", {}).get("type") != "kv_pair"
+                ):
                     continue
 
                 kv_count = self._extract_kv_pair(row, valid_row_id)

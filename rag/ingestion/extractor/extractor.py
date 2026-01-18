@@ -59,7 +59,7 @@ class Extractor:
 
             llm_tokens = 0
             if missing_fields:
-                llm_results = self._fallback_to_llm_extraction(documents, extracted_results, missing_fields)
+                llm_results = self._fallback_to_llm_extraction(documents[:2], extracted_results, missing_fields)
                 if llm_results:
                     extracted_results = llm_results["content"]
                     llm_tokens = llm_results.get("tokens", 0)
@@ -133,11 +133,8 @@ extractor = _create_extractor()
 
 if __name__ == "__main__":
     from pathlib import Path
-    from common.model_registry import get_model_registry
 
-    with open(Path(__file__).parent / "data" / "policy_mini.json", "r") as f:
+    with open(Path(__file__).parent / "data" / "policy_base.json", "r") as f:
         policy_base_1 = json.load(f)
-    registry = get_model_registry()
-    model_config = registry.get_chat_model("query_lite")
-    extractor = Extractor(model=model_config.to_dict())
-    extractor.extract(policy_base_1["pages"], source_file="policy_mock.json")
+    extractor = _create_extractor()
+    extractor.extract(policy_base_1["pages"], source_file="policy_base.json")

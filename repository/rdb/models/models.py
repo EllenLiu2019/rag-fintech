@@ -49,7 +49,8 @@ class Document(Base):
     __table_args__ = {"schema": "rag_fintech"}
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    document_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, unique=True, index=True)
+    document_id: Mapped[Optional[str]] = mapped_column(String(60), nullable=False, unique=True, index=True)
+    doc_type: Mapped[str] = mapped_column(String(60), nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     doc_status: Mapped[str] = mapped_column(String(60), nullable=False, default="uploaded")
     file_location: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)

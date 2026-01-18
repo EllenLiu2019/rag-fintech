@@ -415,6 +415,8 @@ class VectorStoreClient(DocStoreClient):
             if isinstance(v, list):
                 v_str = ", ".join([f'"{item}"' for item in v])
                 parts.append(f"{k} in [{v_str}]")
+            elif isinstance(v, int):
+                parts.append(f"{k} == {v}")
             else:
                 parts.append(f'{k} == "{v}"')
         return " and ".join(parts) if parts else ""

@@ -3,21 +3,23 @@ parse_prompt:
   version: "0.0.1"
   description: "system prompt for LlamaCloud parse"
   template: |
-    For table parsing, there are indentity information need to be extracted: <'insurance policy holder' marked as '投保人'> & <'insured' marked as '被保险人'>. 
+    # Tables Parsing Instructions:
     
-    Guidelines:
-
-    DOs:
+    ## indentity information
+    there are indentity information need to be extracted: <'insurance policy holder' marked as '投保人'> & <'insured' marked as '被保险人'>. 
+    ### extraction rules
     1) the information of '投保人' and '被保险人' must be in their own separate tables. 
     2) Use ONLY '<table><tr><td>...</td></tr></table>' structure for each entity's identity information.
 
-    DON'Ts:
-    1) Put the information of '投保人' and '被保险人' in the same table.
-    2) Use '<thead>' or '<th>' or '<tbody>' tags.
+    ## coverage & cvg_premium information
+    there are coverage & cvg_premium information need to be extracted in their own separate tables.
+    ### extraction rules
+    1) coverage information: the information of '保险名称' and '保险责任' and '最高保险金额（元）' and '详细说明' must be in header row and each column must be separated by '<th>...</th>'.
+    2) cvg_premium information: the information of '条款名称' and '保险费（元）' must be in header row and each column must be separated by '<th>...</th>'.
     
     ---
-    
-    Example:
+    ## Example
+    ### Example 1: indentity information
     <table>
     <tr>
     <td rowspan=\"3\">投保人</td>
@@ -42,25 +44,21 @@ parse_prompt:
     </tr>
     </table>
     
+    ### Example 2: coverage & cvg_premium information
     <table>
+    <tr><th>保险名称</th><th>保险责任</th><th>最高保险金额（元）</th><th>详细说明</th></tr>
     <tr>
-    <td rowspan=\"3\">被保险人</td>
-    <td>被保险人</td>
-    <td>Song Qihui</td>
-    <td>性别</td>
-    <td>女</td>
-    <td>出生日期</td>
-    <td>1973-09-20</td>
+    <td>个人癌症医疗保险（互联网2022版A款）</td>
+    <td>恶性肿瘤质子重离子医疗保险金</td>
+    <td>2,000,000</td>
+    <td>首次投保或非连续投保等待期:90天<br>免赔额:0元/年<br>社保目录内医疗费用赔付比例:100%<br>社保目录外医疗费用赔付比例:100%</td>
     </tr>
     <tr>
-    <td>证件类型</td>
-    <td>身份证</td>
-    <td>证件号码</td>
-    <td colspan=\"3\">8234567891R</td>
-    </tr>
-    <tr>
-    <td>与投保人关系</td>
-    <td colspan=\"6\">父母</td>
+    <td>附加恶性肿瘤特定药械费用医疗保险（互联网2022版A款）</td>
+    <td>恶性肿瘤院外特定药品费用医疗保险金</td>
+    <td>2,000,000</td>
+    <td>首次投保或非连续投保等待期:90天<br>免赔额:0元/年<br>社保目录内医疗费用赔付比例:100%<br>社保目录外医疗费用赔付比例:100%</td>
     </tr>
     </table>
+    ---
 

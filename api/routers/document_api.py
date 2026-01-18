@@ -1,3 +1,4 @@
+import mimetypes
 from fastapi import APIRouter, File, UploadFile, Query
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
@@ -6,8 +7,9 @@ from common import get_logger
 from common.exceptions import NotFoundError
 from common.error_codes import ErrorCodes
 from repository.s3 import s3_client
-from rag.ingestion import get_task, ingestion_pipeline
-from rag.marshaller import to_json
+from rag.ingestion.pipeline import pipeline_runner
+from rag.ingestion import get_task
+from rag.entity import DocumentType
 
 logger = get_logger(__name__)
 
@@ -19,9 +21,9 @@ router = APIRouter(
 
 
 class UploadedDoc(BaseModel):
-    file_name: str
     task_id: str
-    content_type: str
+    doc_id: str
+    file_name: str
     message: str
 
 
@@ -36,18 +38,18 @@ async def upload_file(
     """
     logger.info(f"Received file upload request: {file.filename}")
 
-    task_id = await ingestion_pipeline(file)
+    ingestion_job = await pipeline_runner(file, DocumentType.POLICY)
 
     uploaded_doc = UploadedDoc(
+        task_id=ingestion_job.job_id,
+        doc_id=ingestion_job.doc_id,
         file_name=file.filename,
-        task_id=task_id,
-        content_type=file.content_type,
         message=f"File '{file.filename}' accepted",
     )
 
     return JSONResponse(
         status_code=202,
-        content=to_json(uploaded_doc, indent=4, exclude_none=True),
+        content=uploaded_doc.model_dump(mode="json", exclude_none=True),
     )
 
 
@@ -55,57 +57,78 @@ async def upload_file(
 async def get_process_status(job_id: str):
     """Get status of a document processing job."""
     ingestion_job = get_task(job_id)
-    return JSONResponse(content=to_json(ingestion_job, indent=4, exclude_none=True))
+    return JSONResponse(content=ingestion_job.model_dump(mode="json", exclude_none=True))
 
 
-@router.get("/file-original")
-async def get_original_file(filename: str = Query(..., description="文件名")):
+@router.get("/original-file")
+async def get_original_file(
+    filename: str = Query(..., description="文件名"),
+    doc_id: str = Query(..., description="文档ID"),
+    doc_type: str = Query(default="policy", description="文档类型: policy 或 claim"),
+):
     """
     Get original uploaded file (PDF, TXT, etc.)
-
-    - **filename**: Name of the file to retrieve
     """
-    logger.info(f"Received original file request: {filename}")
+    logger.info(f"Received original file request: filename={filename}, doc_id={doc_id}, doc_type={doc_type}")
+
+    # Validate and convert doc_type
+    try:
+        document_type = DocumentType(doc_type.lower())
+    except ValueError:
+        raise NotFoundError(
+            message=f"无效的文档类型: {doc_type}",
+            code=ErrorCodes.A_NOTFOUND_001,
+            details={"doc_type": doc_type},
+        )
 
     # Load original file from disk
-    file_contents = s3_client.load_original_file(filename)
+    file_contents = s3_client.load_original_file(filename, doc_id, document_type.value)
     if file_contents is None:
         raise NotFoundError(
             message=f"文件 '{filename}' 未找到",
             code=ErrorCodes.A_NOTFOUND_001,
-            details={"filename": filename},
+            details={"filename": filename, "doc_id": doc_id},
         )
 
-    # Get file info to determine content_type
-    file_info = s3_client.load_file_info(filename)
-    content_type = (
-        file_info.get("content_type", "application/octet-stream") if file_info else "application/octet-stream"
-    )
+    # Determine content_type from file extension
+    content_type, _ = mimetypes.guess_type(filename)
+    if content_type is None:
+        content_type = "application/octet-stream"
 
     logger.info(f"Original file found: {filename}; size: {len(file_contents)} bytes; content_type: {content_type}")
 
-    # Return file content
     return Response(
         content=file_contents,
-        media_type=content_type,
         headers={
+            "Content-Type": content_type,
             "Content-Disposition": f'inline; filename="{filename}"',
             "Content-Length": str(len(file_contents)),
         },
     )
 
 
-@router.get("/file-parsed")
-async def get_file_parsed(filename: str = Query(..., description="文件名")):
+@router.get("/parsed-file")
+async def get_parsed_file(
+    filename: str = Query(..., description="文件名"),
+    doc_id: str = Query(..., description="文档ID"),
+    doc_type: str = Query(default="policy", description="文档类型: policy 或 claim"),
+):
     """
     Get parsed content of uploaded file
-
-    - **filename**: Name of the file to retrieve
     """
-    stored_files = s3_client.list_stored_files()
-    logger.info(f"Received file content request: filename={filename}, stored_files={stored_files}")
+    logger.info(f"Received parsed file request: filename={filename}, doc_id={doc_id}, doc_type={doc_type}")
 
-    file_info = s3_client.load_file_info(filename)
+    # Validate and convert doc_type
+    try:
+        document_type = DocumentType(doc_type.lower())
+    except ValueError:
+        raise NotFoundError(
+            message=f"无效的文档类型: {doc_type}",
+            code=ErrorCodes.A_NOTFOUND_001,
+            details={"doc_type": doc_type},
+        )
+
+    file_info = s3_client.load_parsed_file(filename, doc_id, document_type.value)
     if file_info is None:
         raise NotFoundError(
             message=f"文件 '{filename}' 未找到",
@@ -135,6 +158,5 @@ async def get_file_parsed(filename: str = Query(..., description="文件名")):
             "confidence": confidence,
             "document_id": document_id,
             "size": file_info["file_size"],
-            "content_type": file_info["content_type"],
         },
     )

@@ -21,7 +21,12 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
   const fetchFileContent = useCallback(async () => {
     if (!fileInfo?.filename) {
       setError('未找到文件信息')
-      setLoading(false)
+      setLoadingParsed(false)
+      return
+    }
+
+    // 防止重复调用：如果已经获取过相同文件的内容，直接返回
+    if (hasFetchedRef.current && filenameRef.current === fileInfo.filename) {
       return
     }
 
@@ -30,11 +35,21 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
       setError('')
       setProgressMessage('正在加载文件内容...')
 
-      // 调用后端 API 获取文件解析后的内容
-      const response = await fetch(`${apiBaseUrl}/api/file-parsed?filename=${encodeURIComponent(fileInfo.filename)}`)
+      // 标记为已获取，防止重复调用
+      hasFetchedRef.current = true
+      filenameRef.current = fileInfo.filename
+
+      // 检查 doc_id 是否存在
+      if (!fileInfo.doc_id) {
+        throw new Error('文档ID缺失，无法获取解析后的文件内容。请重新上传文件。')
+      }
+
+      const url = `${apiBaseUrl}/api/parsed-file?filename=${encodeURIComponent(fileInfo.filename)}&doc_id=${encodeURIComponent(fileInfo.doc_id)}&doc_type=${fileInfo.doc_type}`
+      const response = await fetch(url)
       
       if (!response.ok) {
-        throw new Error('获取文件内容失败')
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || '获取文件内容失败')
       }
 
       const data = await response.json()
@@ -61,22 +76,21 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
         setContent('文件内容为空')
       }
       
+      // 成功获取内容后，清除任务状态，让内容正常显示
+      setJobStatus(null)
       setProgressMessage('')
     } catch (err) {
       console.error('获取文件内容失败:', err)
       setError(err.message || '获取文件内容失败')
       hasFetchedRef.current = false // 失败时重置，允许重试
+      filenameRef.current = null
     } finally {
       setLoadingParsed(false)
     }
-  }, [fileInfo?.filename])
+  }, [fileInfo?.filename, fileInfo?.doc_id, fileInfo?.doc_type])
 
   // 轮询任务状态
   useEffect(() => {
-    // console.log('ParseFile useEffect - task_id:', fileInfo?.task_id) // Debug log
-    // console.log('ParseFile useEffect - hasFetchedRef:', hasFetchedRef.current) // Debug log
-    
-    // 如果有 task_id，开始轮询（重置 hasFetchedRef 以允许新任务）
     if (fileInfo?.task_id) {
       // 如果文件名改变，重置状态
       if (filenameRef.current !== fileInfo.filename) {
@@ -85,74 +99,78 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
       }
       
       if (!hasFetchedRef.current) {
-        // console.log('Starting polling for task_id:', fileInfo.task_id) // Debug log
-      
-      const pollJobStatus = async () => {
-        try {
-          const url = `${apiBaseUrl}/api/process/${fileInfo.task_id}`
-          // console.log('Polling job status:', url) // Debug log
-          
-          const response = await fetch(url)
-          if (!response.ok) {
-            throw new Error('获取任务状态失败')
-          }
-
-          const jobData = await response.json()
-          // console.log('Job status response:', jobData) // Debug log
-          setJobStatus(jobData)
-
-          // 更新进度消息
-          if (jobData.step && jobData.step > 0) {
-            setProgressMessage(`processing... step ${jobData.step}/8, ${jobData.message}`)
-          }
-
-          // 检查任务状态
-          if (jobData.status === 'finished') {
-            // 任务完成，停止轮询并获取文件内容
-            if (pollingIntervalRef.current) {
-              clearInterval(pollingIntervalRef.current)
-              pollingIntervalRef.current = null
+        const pollJobStatus = async () => {
+          try {
+            const response = await fetch(`${apiBaseUrl}/api/process/${fileInfo.task_id}`)
+            if (!response.ok) {
+              throw new Error('获取任务状态失败')
             }
-            hasFetchedRef.current = true
-            filenameRef.current = fileInfo.filename
-            fetchFileContent()
-          } else if (jobData.status === 'failed') {
-            // 任务失败
-            if (pollingIntervalRef.current) {
-              clearInterval(pollingIntervalRef.current)
-              pollingIntervalRef.current = null
+
+            const jobData = await response.json()
+            setJobStatus(jobData)
+
+            // 更新进度消息
+            if (jobData.step && jobData.step > 0) {
+              setProgressMessage(`processing... step ${jobData.step}/7, ${jobData.message}`)
             }
-            setError(jobData.error || '文件处理失败')
-            setLoadingParsed(false)
-          } else if (jobData.status === 'not_found') {
-            // 任务不存在
-            if (pollingIntervalRef.current) {
-              clearInterval(pollingIntervalRef.current)
-              pollingIntervalRef.current = null
+
+            // 检查任务状态
+            if (jobData.status === 'finished') {
+              // 任务完成，停止轮询并获取文件内容
+              if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current)
+                pollingIntervalRef.current = null
+              }
+              // 只有在还没有获取过内容时才调用 fetchFileContent
+              // fetchFileContent 内部已经有防重复调用的逻辑
+              if (!hasFetchedRef.current || filenameRef.current !== fileInfo.filename) {
+                fetchFileContent()
+              }
+            } else if (jobData.status === 'failed') {
+              // 任务失败
+              if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current)
+                pollingIntervalRef.current = null
+              }
+              setError(jobData.error || '文件处理失败')
+              setLoadingParsed(false)
+            } else if (jobData.status === 'not_found') {
+              // 但文件可能已经解析过，尝试直接获取解析后的文件内容
+              if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current)
+                pollingIntervalRef.current = null
+              }
+              // 尝试获取解析后的文件内容
+              // 如果文件已经解析过，即使任务信息丢失也能正常显示
+              if (!hasFetchedRef.current || filenameRef.current !== fileInfo.filename) {
+                fetchFileContent().catch((err) => {
+                  // 如果获取失败，再显示错误
+                  console.error('获取解析文件失败:', err)
+                  setError('任务不存在，且无法获取解析后的文件内容')
+                  setLoadingParsed(false)
+                })
+              }
             }
-            setError('任务不存在')
-            setLoadingParsed(false)
-          }
-          // queued, started 状态继续轮询
-        } catch (err) {
-          console.error('轮询任务状态失败:', err)
-          // 轮询失败不中断，继续尝试
-        }
-      }
-
-      // 立即执行一次
-      pollJobStatus()
-
-      // 每 2 秒轮询一次
-      pollingIntervalRef.current = setInterval(pollJobStatus, 2000)
-
-        // 清理函数
-        return () => {
-          if (pollingIntervalRef.current) {
-            clearInterval(pollingIntervalRef.current)
-            pollingIntervalRef.current = null
+            // queued, started 状态继续轮询
+          } catch (err) {
+            console.error('轮询任务状态失败:', err)
+            // 轮询失败不中断，继续尝试
           }
         }
+
+        // 立即执行一次
+        pollJobStatus()
+
+        // 每 2 秒轮询一次
+        pollingIntervalRef.current = setInterval(pollJobStatus, 2000)
+
+          // 清理函数
+          return () => {
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current)
+              pollingIntervalRef.current = null
+            }
+          }
       }
     } else if (fileInfo?.filename && !fileInfo?.task_id) {
       // 没有 task_id，直接获取文件内容（兼容旧逻辑）
@@ -221,15 +239,6 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
           </div>
           {/* 功能面板 */}
           <div className="function-panel">
-            <button className="function-button">
-              Chunk File
-            </button>
-            <button className="function-button">
-              Embedding File
-            </button>
-            <button className="function-button">
-              Indexing with Vector Database
-            </button>
             <button 
               className="function-button" 
               onClick={() => onSearch({ 
@@ -259,7 +268,7 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
               <h3>original file</h3>
             </div>
             <div className="pdf-display">
-              {fileInfo?.content_type === 'application/pdf' ? (
+              {fileInfo?.filename?.toLowerCase().endsWith('.pdf') ? (
                 pdfLoadError ? (
                   <div className="pdf-placeholder">
                     <p>⚠️ PDF 加载失败</p>
@@ -269,7 +278,7 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
                   </div>
                 ) : (
                   <iframe
-                    src={`${apiBaseUrl}/api/file-original?filename=${encodeURIComponent(fileInfo.filename)}`}
+                    src={`${apiBaseUrl}/api/original-file?filename=${encodeURIComponent(fileInfo.filename)}${fileInfo.doc_id ? `&doc_id=${encodeURIComponent(fileInfo.doc_id)}` : ''}&doc_type=${fileInfo.doc_type || (fileInfo.doc_id?.startsWith('claim_') ? 'claim' : 'policy')}`}
                     title="PDF Viewer"
                     className="pdf-iframe"
                     allow="fullscreen"
@@ -300,7 +309,7 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
                 <div className="error-state">
                   <p>❌ {error}</p>
                 </div>
-              ) : loadingParsed || (jobStatus && jobStatus.status !== 'finished') ? (
+              ) : loadingParsed || (jobStatus && jobStatus.status !== 'finished' && jobStatus.status !== 'not_found' && !content) ? (
                 <div className="loading-state">
                   <div className="spinner"></div>
                   <p>{progressMessage || (jobStatus?.status === 'queued' ? '任务已提交，等待处理...' : 
@@ -308,7 +317,7 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
                   {jobStatus && (
                     <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#888' }}>
                       <div>状态: {jobStatus.status}</div>
-                      {jobStatus.step > 0 && <div>step: {jobStatus.step}/8, {jobStatus.message}</div>}
+                      {jobStatus.step > 0 && <div>step: {jobStatus.step}/7, {jobStatus.message}</div>}
                     </div>
                   )}
                 </div>

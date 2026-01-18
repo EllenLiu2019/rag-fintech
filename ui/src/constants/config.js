@@ -4,16 +4,16 @@
  */
 
 export const FILE_UPLOAD_CONFIG = {
-  MAX_SIZE_MB: 3,
-  MAX_SIZE_BYTES: 3 * 1024 * 1024,
+  MAX_SIZE_MB: 4,
+  MAX_SIZE_BYTES: 4 * 1024 * 1024,
   ACCEPTED_TYPES: '.txt,.pdf,.doc,.docx',
 }
 
 export const SAMPLE_FILE = {
-  name: 'policy_mini.pdf',
-  size: 1.9 * 1024 * 1024,
+  name: 'policy_base.pdf',
+  size: 2.1 * 1024 * 1024,
   type: 'application/pdf',
-  path: '/data/policy_mini.pdf',
+  path: '/data/policy_base.pdf',
 }
 
 export const ROUTES = {
@@ -21,6 +21,7 @@ export const ROUTES = {
   PARSE: 'parse',
   SEARCH: 'search',
   CHAT: 'chat',
+  CLAIM_UPLOAD: 'claim-upload',
 }
 
 export const TIMING = {

@@ -1,0 +1,51 @@
+claim_extraction:
+  name: "claim_extraction"
+  version: "0.0.1"
+  description: "extract medical entities information from text"
+  template: |
+    你是一位资深的医疗保险理赔审核专家。你的任务是从理赔申请材料（病理报告或出院小结）中，精准提取关键理赔因子，输出为标准的 JSON 格式。
+
+    ## 理赔申请材料：
+    {{ text }}
+
+    ## 提取信息步骤：
+    1. 提取患者信息：
+      - name: 患者姓名
+      - gender: 患者性别
+      - age: 患者年龄
+    2. 提取医院信息：
+      - hospital: 医院全称
+      - report_date: 优先提取“报告日期”或“签发日期”。格式 YYYY-MM-DD。
+    3. 提取疾病信息（核心信息）：
+      - primary_diagnosis: 提取最严重的那个**主诊断名称**（例如：甲状腺乳头状癌）。忽略伴随的良性病变（如结节性甲状腺肿、桥本氏甲状腺炎），除非没有恶性诊断。
+      - diagnosis_en: 将主诊断准确翻译为英文医学术语（如 Papillary Thyroid Carcinoma）。
+      - diagnosis_description: 疾病描述，直接使用诊断报告中的疾病描述，包含肿瘤大小、位置、是否转移、TNM分期(若有)等详细信息，不要进行推断
+    4.  关键病理指标（用于计算赔付比例）：
+      - tumor_max_diameter_cm: 在“肉眼所见”或“病理诊断”中寻找肿瘤大小（如 1.2cm×1.0cm×0.8cm）。**必须提取最大径的数值**（类型：Float），单位统一转换为厘米(cm)。如果未提及，返回 null。
+         **示例逻辑：看到 "1.2cm×1.0cm"，应提取 1.2。**
+      - is_lymph_metastasis: 检查淋巴结是否转移。如果报告提及“转移(0/6)”或“未见转移”，返回 false；如果提及“转移(1/5)”或“可见癌转移”，返回 true。
+      - tnm_stage_code: 提取报告中明确写出的 TNM 分期代码（如 pT1bN0Mx、T1N0M0、I期 等）。如果报告未提及，返回 null。
+      - tnm_stage_description: 提取报告中明确写出的 TNM 分期描述（如 I期、II期、III期、IV期 等）。如果报告未提及，返回 null。
+
+    ## 输出格式要求：
+    1.  直接输出 JSON，不要包含 Markdown 格式标记（如 ```json ... ```）。
+    2.  如果某个字段在文中找不到，请填 null。
+    3.  不要进行推断或臆造数据。
+
+    ## 输出示例：
+    {
+      "name": "张三",
+      "gender": "男",
+      "age": 30,
+      "hospital": "北京协和医院",
+      "report_date": "2026-01-01",
+      "primary_diagnosis": "甲状腺乳头状癌",
+      "diagnosis_en": "Papillary Thyroid Carcinoma",
+      pathology_details": {
+        "tumor_max_diameter_cm": 1.0,
+        "is_lymph_metastasis": false,
+        "tnm_stage_code": "pT1aN0Mx",
+        "tnm_stage_description": "I期"
+      },
+      "diagnosis_description": "肿瘤大小为0.8cm*1.0cm*0.8cm，位置为右叶下极，未转移，TNM分期为pT1aN0Mx (I期)。",
+    }

@@ -1,12 +1,16 @@
 import asyncio
+import json
+from typing import Any
 
 from common import get_logger
-from .base_pipeline import BasePipeline
+from rag.ingestion.pipeline.base_pipeline import BasePipeline
 from rag.ingestion.parser import ParseResult
 from rag.entity import RagDocument, DocumentType
-from rag.retrieval.pre_optimizer import GlossaryInjector
 from rag.marshaller import serialize_batch
 from rag.persistence import PersistentService
+from rag.llm.chat_model import chat_model
+from common.prompt_manager import get_prompt_manager
+from common.model_registry import get_model_registry
 
 logger = get_logger(__name__)
 
@@ -22,7 +26,14 @@ class ClaimPipeline(BasePipeline):
 
     def __init__(self, doc_type: DocumentType = DocumentType.CLAIM):
         super().__init__(doc_type)
-        self.glossary_injector = GlossaryInjector()
+        registry = get_model_registry()
+        model_config = registry.get_chat_model("qa_reasoner")
+        model = model_config.to_dict()
+        self.llm = chat_model[model["provider"]](
+            model_name=model["model_name"],
+            base_url=model["base_url"],
+        )
+        self.prompt_manager = get_prompt_manager()
 
     def validate_input(self, filename: str, content_type: str):
         super().validate_input(filename, content_type)
@@ -46,12 +57,14 @@ class ClaimPipeline(BasePipeline):
 
         pages = serialize_batch(parse_result.documents)
 
+        extract_result = await self._medical_extract(pages)
+
         rag_document = RagDocument.from_extraction_result(
             document_id=document_id,
             parsed_documents=pages,
-            business_data={},
-            confidence={},
-            token_num=0,
+            business_data=extract_result["content"],
+            confidence={"overall_confidence": extract_result["reasoning"]},
+            token_num=extract_result["tokens"],
             filename=filename,
             file_size=len(contents),
             content_type=parse_result.content_type,
@@ -60,6 +73,23 @@ class ClaimPipeline(BasePipeline):
         )
 
         return rag_document
+
+    async def _medical_extract(self, pages: list[dict[str, Any]]) -> dict[str, Any]:
+        """
+        extract medical entities
+        """
+        text = "\n".join([page["text"] for page in pages])
+        prompt = self.prompt_manager.get("claim_extraction", text=text)
+        reasoning, content, tokens = await asyncio.to_thread(
+            self.llm.generate,
+            messages=[{"role": "system", "content": prompt}],
+        )
+        content = json.loads(content.replace("```json", "").replace("```", ""))
+        return {
+            "content": content,
+            "tokens": tokens,
+            "reasoning": reasoning,
+        }
 
     async def post_process(self, rag_document: RagDocument) -> None:
         """

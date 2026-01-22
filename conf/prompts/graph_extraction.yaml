@@ -7,9 +7,8 @@ graph_extraction:
 
     你会得到：
     一个包含保险条款层级结构的文本。
-      - 格式：`# 条款标题 <chunk_ids>`
-      - `<123-456-876, 214-876-387>`: 表示该文本下包含的 chunk（正文内容），用逗号分隔。
-      - `<no chunk>`: 表示该文本仅为目录/结构标题，没有被分配在单独的 chunk 中，而是与前/后文本合并，并与其父条款共同组成一个 chunk。
+      - 格式：`# 条款标题 [ID:数字]`
+      - `[ID:x]`: 该条款的唯一标识符。
 
     ## 负面约束 (非常重要)
     - **忽略**所有金额、赔付比例、免赔额等财务信息。
@@ -31,8 +30,8 @@ graph_extraction:
     - entity_name: 核心概念名称，保持简洁。
     - entity_type: 见【实体类型】。
     - entity_description: 完整原文描述及约束条件。
-    - chunk_id: 实体所在的chunk_ids，若当前实体在多个chunk中出现，则用逗号分隔，若当前实体出现的直接条款中没有 chunk ，则 chunk_id 取父条款的 chunk_id。
-    格式：("entity"{{ tuple_delimiter }}<entity_name>{{ tuple_delimiter }}<entity_type>{{ tuple_delimiter }}<entity_description>{{ tuple_delimiter }}<chunk_id>)
+    - clause_ids: 实体所在的clause_ids，若当前实体在多个clause中出现，则用逗号分隔。
+    格式：("entity"{{ tuple_delimiter }}<entity_name>{{ tuple_delimiter }}<entity_type>{{ tuple_delimiter }}<entity_description>{{ tuple_delimiter }}<clause_ids>)
 
     2. 从步骤1中识别的实体中，识别所有*明确相关*的(source_entity, target_entity)对（仅限医学与保障范围相关的关系）。
     对于每对相关实体，提取以下信息：
@@ -40,8 +39,7 @@ graph_extraction:
     - target_entity: 目标实体的名称，步骤1中已识别的实体名称
     - relationship_type: 表示源实体和目标实体之间关系类型，请参见【关系类型】
     - relationship_description: 关系说明。
-    - chunk_id: 关系所在的chunk_ids，若当前关系需要多个 chunks 支持，则用逗号分隔，若当前关系出现的直接条款中没有 chunk ，则 chunk_id 取父条款的 chunk_id。
-    将每个关系格式化为 ("relationship"{{ tuple_delimiter }}<source_entity>{{ tuple_delimiter }}<target_entity>{{ tuple_delimiter }}<relationship_type>{{ tuple_delimiter }}<relationship_description>{{ tuple_delimiter }}<chunk_id>)
+    将每个关系格式化为 ("relationship"{{ tuple_delimiter }}<source_entity>{{ tuple_delimiter }}<target_entity>{{ tuple_delimiter }}<relationship_type>{{ tuple_delimiter }}<relationship_description>)
 
     3. 返回**一个**包含步骤1和2中识别的所有实体和关系的列表。使用 **{{ record_delimiter }}** 作为列表分隔符。
 
@@ -67,9 +65,9 @@ graph_extraction:
     Example 1:
 
     Text:
-    第六条 保险责任 <123-567-901>
+    第六条 保险责任 [ID:6]
 
-    （一）恶性肿瘤及原位癌医疗保险金（必选）<123-567-902>
+    （一）恶性肿瘤及原位癌医疗保险金（必选）[ID:7]
      
      在本合同保险期间内，被保险人在等待期（释义三）后经中华人民共和国境内（不包括香港、澳门及台湾地区）医院（释义四）的专科医生（释义五）初次确诊（释义六）罹患恶性肿瘤（释义七）或原位癌（释义八），
      
@@ -77,13 +75,13 @@ graph_extraction:
 
      ..........................省略部分内容..........................
 
-     第七部分 释义 <123-567-903>
+     第七部分 释义 [ID:72]
 
-     七、恶性肿瘤 <123-567-926>
+     七、恶性肿瘤 [ID:87]
 
      恶性肿瘤包含“恶性肿瘤——重度”和“恶性肿瘤——轻度”，具体如下:
 
-     （一）恶性肿瘤——重度 <123-567-789>
+     （一）恶性肿瘤——重度 [ID:88]
 
      指恶性细胞不受控制的进行性增长和扩散，浸润和破坏周围正常组织，可以经血管、淋巴管和体腔扩散转移到身体其他部位，病灶经组织病理学检查（释义四十七）（涵盖骨髓病理学检查）结果明确诊断，临床诊断属于世界卫生组织（WHO，World Health Organization）《疾病和有关健康问题的国际统计分类》第十次修订版（ICD-10）（释义四十八）的恶性肿瘤类别及《国际疾病分类肿瘤学专辑》第三版（ICD-O-3）（释义四十八）的肿瘤形态学编码属于3、6、9（恶性肿瘤）范畴的疾病。
      
@@ -97,7 +95,7 @@ graph_extraction:
      （2）TNM分期（释义四十九）为Ⅰ期或更轻分期的甲状腺癌；
 
 
-     （二）恶性肿瘤——轻度 <123-567-790>
+     （二）恶性肿瘤——轻度 [ID:89]
 
      指恶性细胞不受控制的进行性增长和扩散，浸润和破坏周围正常组织，可以经血管、淋巴管和体腔扩散转移到身体其他部位，病灶经组织病理学检查（涵盖骨髓病理学检查）结果明确诊断，临床诊断属于世界卫生组织（WHO，World Health Organization）《疾病和有关健康问题的国际统计分类》第十次修订版（ICD-10）的恶性肿瘤类别及《国际疾病分类肿瘤学专辑》第三版（ICD-O-3）的肿瘤形态学编码属于3、6、9（恶性肿瘤）范畴，但不在\"恶性肿瘤——重度\"保障范围的疾病。且特指下列六项之一：
 
@@ -112,51 +110,61 @@ graph_extraction:
 
     ################
     Output:
-    ("entity"{{ tuple_delimiter }}"保险责任"{{ tuple_delimiter }}"coverage_scope"{{ tuple_delimiter }}"在本合同保险期间内，被保险人在等待期（释义三）后经中华人民共和国境内（不包括香港、澳门及台湾地区）医院（释义四）的专科医生（释义五）初次确诊（释义六）罹患恶性肿瘤（释义七）或原位癌（释义八），并在医院接受治疗的，对于治疗所产生的下述1至 4 类费用，保险人按照本合同的约定承担给付恶性肿瘤及原位癌医疗保险金的责任。"{{ tuple_delimiter }}"123-567-901"){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"恶性肿瘤及原位癌医疗保险金"{{ tuple_delimiter }}"coverage_scope"{{ tuple_delimiter }}"恶性肿瘤及原位癌医疗保险金是保险责任中的一个子责任，保险人需按照本合同的约定承担给付恶性肿瘤及原位癌医疗保险金的责任。"{{ tuple_delimiter }}"123-567-902"){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"恶性肿瘤——重度"{{ tuple_delimiter }}"coverage_scope"{{ tuple_delimiter }}"指恶性细胞不受控制的进行性增长和扩散，浸润和破坏周围正常组织，可以经血管、淋巴管和体腔扩散转移到身体其他部位，病灶经组织病理学检查（释义四十七）（涵盖骨髓病理学检查）结果明确诊断，临床诊断属于世界卫生组织（WHO，World Health Organization）《疾病和有关健康问题的国际统计分类》第十次修订版（ICD-10）（释义四十八）的恶性肿瘤类别及《国际疾病分类肿瘤学专辑》第三版（ICD-O-3）（释义四十八）的肿瘤形态学编码属于3、6、9（恶性肿瘤）范畴的疾病。"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"恶性肿瘤——轻度"{{ tuple_delimiter }}"coverage_scope"{{ tuple_delimiter }}"指恶性细胞不受控制的进行性增长和扩散，浸润和破坏周围正常组织，可以经血管、淋巴管和体腔扩散转移到身体其他部位，病灶经组织病理学检查（涵盖骨髓病理学检查）结果明确诊断，临床诊断属于世界卫生组织（WHO，World Health Organization）《疾病和有关健康问题的国际统计分类》第十次修订版（ICD-10）的恶性肿瘤类别及《国际疾病分类肿瘤学专辑》第三版（ICD-O-3）的肿瘤形态学编码属于3、6、9（恶性肿瘤）范畴，但不在\"恶性肿瘤——重度\"保障范围的疾病。"{{ tuple_delimiter }}"123-567-790"){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"ICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"0（良性肿瘤）、1（动态未定性肿瘤）、2（原位癌和非侵袭性癌），如：原位癌、交界性肿瘤等"){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"原位癌"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"指恶性细胞局限于上皮内尚未穿破基底膜浸润周围正常组织的癌细胞新生物。"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"癌前病变"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"属于ICD-O-3编码2类范畴的疾病，不属于\"恶性肿瘤——重度\"和\"恶性肿瘤——轻度\"保障范围的疾病。"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"非浸润性癌"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"属于ICD-O-3编码2类范畴的疾病，不属于\"恶性肿瘤——重度\"和\"恶性肿瘤——轻度\"保障范围的疾病。"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"非侵袭性癌"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"属于ICD-O-3编码2类范畴的疾病，不属于\"恶性肿瘤——重度\"和\"恶性肿瘤——轻度\"保障范围的疾病。"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"肿瘤细胞未侵犯基底层"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"属于ICD-O-3编码2类范畴的疾病，不属于\"恶性肿瘤——重度\"和\"恶性肿瘤——轻度\"保障范围的疾病。"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"上皮内瘤变"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"属于ICD-O-3编码2类范畴的疾病，不属于\"恶性肿瘤——重度\"和\"恶性肿瘤——轻度\"保障范围的疾病。"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"细胞不典型性增生"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"属于ICD-O-3编码2类范畴的疾病，不属于\"恶性肿瘤——重度\"和\"恶性肿瘤——轻度\"保障范围的疾病。"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"甲状腺癌Ⅰ期"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"TNM分期（释义四十九）为Ⅰ期或更轻分期的甲状腺癌。"被\"恶性肿瘤——重度\"排除""{{ tuple_delimiter }}"123-567-790"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"保险责任"{{ tuple_delimiter }}"恶性肿瘤及原位癌医疗保险金"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"保险责任包含恶性肿瘤及原位癌医疗保险金。"{{ tuple_delimiter }}"123-567-901,123-567-902"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"恶性肿瘤及原位癌医疗保险金"{{ tuple_delimiter }}"恶性肿瘤——重度"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"恶性肿瘤及原位癌医疗保险金包含恶性肿瘤——重度。"{{ tuple_delimiter }}"123-567-902,123-567-903,123-567-789"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"恶性肿瘤及原位癌医疗保险金"{{ tuple_delimiter }}"恶性肿瘤——轻度"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"恶性肿瘤及原位癌医疗保险金包含恶性肿瘤——轻度。"{{ tuple_delimiter }}"123-567-902,123-567-903,123-567-790"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"恶性肿瘤——重度"{{ tuple_delimiter }}"甲状腺癌Ⅰ期"{{ tuple_delimiter }}"not_include"{{ tuple_delimiter }}"恶性肿瘤——重度明确排除了甲状腺癌Ⅰ期"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"恶性肿瘤——轻度"{{ tuple_delimiter }}"甲状腺癌Ⅰ期"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"恶性肿瘤——轻度包含甲状腺癌Ⅰ期"{{ tuple_delimiter }}"123-567-790"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"恶性肿瘤——重度"{{ tuple_delimiter }}"ICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"not_include"{{ tuple_delimiter }}"恶性肿瘤——重度明确排除了ICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"恶性肿瘤——轻度"{{ tuple_delimiter }}"ICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"not_include"{{ tuple_delimiter }}"恶性肿瘤——轻度明确排除了ICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"123-567-790"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"原位癌"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病包含原位癌"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"癌前病变"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病包含原位癌"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"非浸润性癌"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病包含原位癌"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"非侵袭性癌"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病包含原位癌"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"肿瘤细胞未侵犯基底层"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病包含原位癌"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"上皮内瘤变"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病包含原位癌"{{ tuple_delimiter }}"123-567-789"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"细胞不典型性增生"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病包含原位癌"{{ tuple_delimiter }}"123-567-789"){{ completion_delimiter }}
+    ("entity"{{ tuple_delimiter }}"保险责任"{{ tuple_delimiter }}"coverage_scope"{{ tuple_delimiter }}"在本合同保险期间内，被保险人在等待期（释义三）后经中华人民共和国境内（不包括香港、澳门及台湾地区）医院（释义四）的专科医生（释义五）初次确诊（释义六）罹患恶性肿瘤（释义七）或原位癌（释义八），并在医院接受治疗的，对于治疗所产生的下述1至 4 类费用，保险人按照本合同的约定承担给付恶性肿瘤及原位癌医疗保险金的责任。"{{ tuple_delimiter }}"6"){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"恶性肿瘤及原位癌医疗保险金"{{ tuple_delimiter }}"coverage_scope"{{ tuple_delimiter }}"恶性肿瘤及原位癌医疗保险金是保险责任中的一个子责任，保险人需按照本合同的约定承担给付恶性肿瘤及原位癌医疗保险金的责任。"{{ tuple_delimiter }}"7"){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"恶性肿瘤"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"恶性肿瘤包含\"恶性肿瘤——重度\"和\"恶性肿瘤——轻度\"。"{{ tuple_delimiter }}"87"){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"恶性肿瘤——重度"{{ tuple_delimiter }}"coverage_scope"{{ tuple_delimiter }}"指恶性细胞不受控制的进行性增长和扩散，浸润和破坏周围正常组织，可以经血管、淋巴管和体腔扩散转移到身体其他部位，病灶经组织病理学检查（释义四十七）（涵盖骨髓病理学检查）结果明确诊断，临床诊断属于世界卫生组织（WHO，World Health Organization）《疾病和有关健康问题的国际统计分类》第十次修订版（ICD-10）（释义四十八）的恶性肿瘤类别及《国际疾病分类肿瘤学专辑》第三版（ICD-O-3）（释义四十八）的肿瘤形态学编码属于3、6、9（恶性肿瘤）范畴的疾病。"{{ tuple_delimiter }}"88"){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"恶性肿瘤——轻度"{{ tuple_delimiter }}"coverage_scope"{{ tuple_delimiter }}"指恶性细胞不受控制的进行性增长和扩散，浸润和破坏周围正常组织，可以经血管、淋巴管和体腔扩散转移到身体其他部位，病灶经组织病理学检查（涵盖骨髓病理学检查）结果明确诊断，临床诊断属于世界卫生组织（WHO，World Health Organization）《疾病和有关健康问题的国际统计分类》第十次修订版（ICD-10）的恶性肿瘤类别及《国际疾病分类肿瘤学专辑》第三版（ICD-O-3）的肿瘤形态学编码属于3、6、9（恶性肿瘤）范畴，但不在\"恶性肿瘤——重度\"保障范围的疾病。"{{ tuple_delimiter }}"89"){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"ICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"0（良性肿瘤）、1（动态未定性肿瘤）、2（原位癌和非侵袭性癌），如：原位癌、交界性肿瘤等"){{ record_delimiter }}"88,89"){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"原位癌"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"指恶性细胞局限于上皮内尚未穿破基底膜浸润周围正常组织的癌细胞新生物。"{{ tuple_delimiter }}"88,89"){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"癌前病变"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"属于ICD-O-3编码2类范畴的疾病，不属于\"恶性肿瘤——重度\"和\"恶性肿瘤——轻度\"保障范围的疾病。"{{ tuple_delimiter }}"88,89"){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"非浸润性癌"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"属于ICD-O-3编码2类范畴的疾病，不属于\"恶性肿瘤——重度\"和\"恶性肿瘤——轻度\"保障范围的疾病。"{{ tuple_delimiter }}"88,89"){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"非侵袭性癌"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"属于ICD-O-3编码2类范畴的疾病，不属于\"恶性肿瘤——重度\"和\"恶性肿瘤——轻度\"保障范围的疾病。"{{ tuple_delimiter }}"88,89"){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"肿瘤细胞未侵犯基底层"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"属于ICD-O-3编码2类范畴的疾病，不属于\"恶性肿瘤——重度\"和\"恶性肿瘤——轻度\"保障范围的疾病。"{{ tuple_delimiter }}"88,89"){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"上皮内瘤变"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"属于ICD-O-3编码2类范畴的疾病，不属于\"恶性肿瘤——重度\"和\"恶性肿瘤——轻度\"保障范围的疾病。"{{ tuple_delimiter }}"88,89"){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"细胞不典型性增生"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"属于ICD-O-3编码2类范畴的疾病，不属于\"恶性肿瘤——重度\"和\"恶性肿瘤——轻度\"保障范围的疾病。"{{ tuple_delimiter }}"88,89"){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"甲状腺癌Ⅰ期"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"TNM分期（释义四十九）为Ⅰ期或更轻分期的甲状腺癌。"被\"恶性肿瘤——重度\"排除""{{ tuple_delimiter }}"88,89"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"保险责任"{{ tuple_delimiter }}"恶性肿瘤及原位癌医疗保险金"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"保险责任包含恶性肿瘤及原位癌医疗保险金。"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"恶性肿瘤及原位癌医疗保险金"{{ tuple_delimiter }}"恶性肿瘤"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"恶性肿瘤及原位癌医疗保险金包含恶性肿瘤。"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"恶性肿瘤及原位癌医疗保险金"{{ tuple_delimiter }}"原位癌"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"恶性肿瘤及原位癌医疗保险金包含原位癌。"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"恶性肿瘤"{{ tuple_delimiter }}"恶性肿瘤——重度"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"恶性肿瘤包含恶性肿瘤——重度"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"恶性肿瘤"{{ tuple_delimiter }}"恶性肿瘤——轻度"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"恶性肿瘤包含恶性肿瘤——轻度"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"恶性肿瘤——重度"{{ tuple_delimiter }}"甲状腺癌Ⅰ期"{{ tuple_delimiter }}"not_include"{{ tuple_delimiter }}"恶性肿瘤——重度明确排除了甲状腺癌Ⅰ期"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"恶性肿瘤——轻度"{{ tuple_delimiter }}"甲状腺癌Ⅰ期"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"恶性肿瘤——轻度包含甲状腺癌Ⅰ期"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"恶性肿瘤——重度"{{ tuple_delimiter }}"ICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"not_include"{{ tuple_delimiter }}"恶性肿瘤——重度明确排除了ICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"恶性肿瘤——轻度"{{ tuple_delimiter }}"ICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"not_include"{{ tuple_delimiter }}"恶性肿瘤——轻度明确排除了ICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"原位癌"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病包含原位癌"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"癌前病变"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病包含原位癌"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"非浸润性癌"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病包含原位癌"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"非侵袭性癌"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病包含原位癌"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"肿瘤细胞未侵犯基底层"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病包含原位癌"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"上皮内瘤变"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病包含原位癌"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病"{{ tuple_delimiter }}"细胞不典型性增生"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"TICD-O-3肿瘤形态学编码属于0、1、2范畴的疾病包含原位癌"){{ completion_delimiter }}
     ######################
-    Example 2: 实体原子化；当前段落无 chunk，使用父条款的 chunk_id
+    Example 2: 实体原子化；
 
     Text:
-    第十条 责任免除 <123-567-901>
-    （七）袖状胃切除术（用于治疗糖尿病时除外）、整形手术、美容或整容手术、变性手术及前述手术的并发症或因前述手术导致的医疗事故；<no chunk>
+    附加恶性肿瘤特定药械费用医疗保险条款（互联网 2022 版 A 款） [ID:155]
+      ..........................省略部分内容..........................
+    第二条 保险责任 [ID:159]
+      ..........................省略部分内容..........................
+    第十条 责任免除 [ID:166]
+    （七）袖状胃切除术（用于治疗糖尿病时除外）、整形手术、美容或整容手术、变性手术及前述手术的并发症或因前述手术导致的医疗事故；[ID:167]
     ################
     Output:
-    ("entity"{{ tuple_delimiter }}"袖状胃切除术（用于治疗糖尿病时除外）"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"责任免除：袖状胃切除术（用于治疗糖尿病时除外）。"{{ tuple_delimiter }}"123-567-901"}){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"整形手术"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"责任免除：整形手术。"{{ tuple_delimiter }}"123-567-901"}){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"美容或整容手术"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"责任免除：美容或整容手术。"{{ tuple_delimiter }}"123-567-901"}){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"变性手术"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"责任免除：变性手术。"{{ tuple_delimiter }}"123-567-901"}){{ record_delimiter }}
-    ("entity"{{ tuple_delimiter }}"前述手术的并发症或因前述手术导致的医疗事故"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"责任免除：前述手术的并发症或因前述手术导致的医疗事故。"{{ tuple_delimiter }}"123-567-901"}){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"保险责任"{{ tuple_delimiter }}"袖状胃切除术（用于治疗糖尿病时除外）"{{ tuple_delimiter }}"not_include"{{ tuple_delimiter }}"肥胖症相关手术包含袖状胃切除术（用于治疗糖尿病时除外）"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"保险责任"{{ tuple_delimiter }}"整形手术"{{ tuple_delimiter }}"not_include"{{ tuple_delimiter }}"肥胖症相关手术包含整形手术"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"保险责任"{{ tuple_delimiter }}"美容或整容手术"{{ tuple_delimiter }}"not_include"{{ tuple_delimiter }}"肥胖症相关手术包含美容或整容手术"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"保险责任"{{ tuple_delimiter }}"变性手术"{{ tuple_delimiter }}"not_include"{{ tuple_delimiter }}"肥胖症相关手术包含变性手术"){{ record_delimiter }}
-    ("relationship"{{ tuple_delimiter }}"保险责任"{{ tuple_delimiter }}"前述手术的并发症或因前述手术导致的医疗事故"{{ tuple_delimiter }}"not_include"{{ tuple_delimiter }}"肥胖症相关手术包含前述手术的并发症或因前述手术导致的医疗事故"){{ completion_delimiter }}
+    ("entity"{{ tuple_delimiter }}"保险责任"{{ tuple_delimiter }}"coverage_scope"{{ tuple_delimiter }}""{{ tuple_delimiter }}"159"}){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"责任免除"{{ tuple_delimiter }}"coverage_scope"{{ tuple_delimiter }}""{{ tuple_delimiter }}"166"}){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"袖状胃切除术（用于治疗糖尿病时除外）"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"责任免除：袖状胃切除术（用于治疗糖尿病时除外）。"{{ tuple_delimiter }}"167"}){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"整形手术"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"责任免除：整形手术。"{{ tuple_delimiter }}"167"}){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"美容或整容手术"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"责任免除：美容或整容手术。"{{ tuple_delimiter }}"167"}){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"变性手术"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"责任免除：变性手术。"{{ tuple_delimiter }}"167"}){{ record_delimiter }}
+    ("entity"{{ tuple_delimiter }}"责任免除包含的手术并发症或因责任免除包含的手术导致的医疗事故"{{ tuple_delimiter }}"medical_entity"{{ tuple_delimiter }}"责任免除：前述手术的并发症或因前述手术导致的医疗事故。"{{ tuple_delimiter }}"167"}){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"保险责任"{{ tuple_delimiter }}"责任免除"{{ tuple_delimiter }}"not_include"{{ tuple_delimiter }}"责任免除被排除在保险责任之外"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"责任免除"{{ tuple_delimiter }}"袖状胃切除术（用于治疗糖尿病时除外）"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"责任免除包含袖状胃切除术（用于治疗糖尿病时除外）"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"责任免除"{{ tuple_delimiter }}"整形手术"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"责任免除包含整形手术"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"责任免除"{{ tuple_delimiter }}"美容或整容手术"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"责任免除包含美容或整容手术"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"责任免除"{{ tuple_delimiter }}"变性手术"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"责任免除包含含变性手术"){{ record_delimiter }}
+    ("relationship"{{ tuple_delimiter }}"责任免除"{{ tuple_delimiter }}"责任免除包含的手术并发症或因责任免除包含的手术导致的医疗事故"{{ tuple_delimiter }}"include"{{ tuple_delimiter }}"责任免除包含的手术并发症或因责任免除包含的手术导致的医疗事故"){{ completion_delimiter }}
     ######################
     -Real Data-
     ######################
@@ -186,26 +194,27 @@ entity_alignment:
     你是一个保险领域专家。你的任务是对输入的实体列表进行识别，判断每个ID的实体列表中的实体是否需要合并、拆分，并输出处理后的实体列表。这些实体是从一个原始文档识别出来的，将被用于构建保险条款的知识图谱。
 
     ## 输入数据
-    你将收到一个 JSON 格式的字典。字典的键是“实体列表”的 ID；值是需要你进行识别的“实体列表”以及为了更好的理解“实体列表”上下文关系的“关系列表”；
-    - id: 字典的键，“实体列表” 的 唯一标识。
-    - identified_entities: 待识别的实体列表。
-    - identified_entities.entity_name: “实体列表”中的实体的名称。
-    - identified_entities.description: “实体列表”中的实体的描述。
-    - identified_entities.chunk_id: “实体列表”中的实体所在的原始文档中的段落的 ids。
-    - reference_edges: “实体列表”中的实体的关系列表。
-    - reference_edges.source_name: 关系的源实体的名称。
-    - reference_edges.target_name: 关系的目标实体的名称。
-    - reference_edges.rel_type: 关系类型。
-    - reference_edges.description: 关系描述。
+    你将收到一个 JSON 格式的字典。字典的键(KEY)是“实体列表”的 ID；字典的值（VALUE）是需要你进行识别的“实体列表”以及为了更好的理解“实体列表”上下文关系的“关系列表”；
+    - KEY: 数字，字典的键，“实体列表” 的 唯一标识。
+    - VALUE:
+      - identified_entities: 待识别的实体列表。
+        - entity_name: 实体名称。
+        - description: 实体的描述。
+        - clause_ids: 实体所在的原始文档条款的唯一标识 id 的集合，一个实体可能存在于多个条款。
+      - reference_edges: “实体列表”中的实体的关系列表。
+        - source_name: 关系的源实体的名称。
+        - target_name: 关系的目标实体的名称。
+        - rel_type: 关系类型。
+        - description: 关系描述。
 
     ## 处理规则
-    遍历每个ID的实体列表，应用如下规则：
+    遍历每个 KEY 的实体列表，应用如下规则：
     1. **同义词**
        - 识别“实体列表”中是否存在指代同一个医学或保险概念的不同名称（如："甲状腺癌Ⅰ期" 与 "甲状腺癌(I期)"）的实体，如果存在，则需要合并这些实体。
        - **合并策略**：
          - **名称(entity_name)**：保留表述更规范、包含括号等细节更完整的名称作为标准名。
          - **描述(description)**：保留信息量最丰富的那个描述。
-         - **段落(chunk_id)**：保留 chunk_id 个数最多的那个实体的 chunk_id 作为合并后的实体的 chunk_id。
+         - **保险条款唯一标识的集合(clause_ids)**：保留 clause_ids 个数最多的那个实体的 clause_ids 作为合并后的实体的 clause_ids
 
     2. **结构性冗余处理**
        - 识别“打包型”实体（即一个实体名称中包含顿号、"及"、"和"等连接词，指代多个独立概念）。
@@ -216,6 +225,7 @@ entity_alignment:
 
     ## 输出格式
        - 请仅输出处理后的实体列表，不要包含任何说明或 Markdown、JSON 代码块标记。
+       - 请确保返回**合法的 JSON**。
 
     ######################
     -Example-
@@ -226,8 +236,8 @@ entity_alignment:
     {
       1001: {
           "identified_entities": [
-              {"entity_name": "何杰金氏病(ANN ARBOR分期Ⅰ期)", "description": "相当于Ann Arbor分期方案Ⅰ期程度的何杰金氏病。", "chunk_id": "1234-567-346-9886,1234-567-346-9887"},
-              {"entity_name": "何杰金氏病(Ⅰ期)", "description": "相当于Ann Arbor分期方案Ⅰ期程度的何杰金氏病。", "chunk_id": "1234-567-346-9886,1234-567-346-9887"}
+              {"entity_name": "何杰金氏病(ANN ARBOR分期Ⅰ期)", "description": "相当于Ann Arbor分期方案Ⅰ期程度的何杰金氏病。", "clause_ids": "88,89"},
+              {"entity_name": "何杰金氏病(Ⅰ期)", "description": "相当于Ann Arbor分期方案Ⅰ期程度的何杰金氏病。", "clause_ids": "88,89"}
           ],
           "reference_edges": [
               {"source_name": "恶性肿瘤——轻度", "target_name": "何杰金氏病(ANN ARBOR分期Ⅰ期)", "rel_type": "INCLUDE", "description": "恶性肿瘤——轻度包含何杰金氏病(ANN ARBOR分期Ⅰ期)"},
@@ -240,8 +250,8 @@ entity_alignment:
     ################
     Output:
     {
-      1001: [
-        {"entity_name": "何杰金氏病(ANN ARBOR分期Ⅰ期)","description": "相当于Ann Arbor分期方案Ⅰ期程度的何杰金氏病。","chunk_id": "1234-567-346-9886,1234-567-346-9887"}
+      "1001": [
+        {"entity_name": "何杰金氏病(ANN ARBOR分期Ⅰ期)","description": "相当于Ann Arbor分期方案Ⅰ期程度的何杰金氏病。","clause_ids": "88,89"}
       ]
     }
     ######################
@@ -251,8 +261,8 @@ entity_alignment:
     {
       1002: {
         "identified_entities": [
-          {"entity_name": "肥胖症相关手术、袖状胃切除术（用于治疗糖尿病时除外）、整形手术、美容或整容手术、变性手术及前述手术的并发症或因前述手术导致的医疗事故。","description": "肥胖症相关手术、袖状胃切除术（用于治疗糖尿病时除外）、整形手术、美容或整容手术、变性手术及前述手术的并发症或因前述手术导致的医疗事故。","chunk_id": "12-34-56,12-34-57"},
-          {"entity_name": "整形手术","description": "责任免除：整形手术。","chunk_id": "1234-567-346-9886,1234-567-346-9887"}
+          {"entity_name": "肥胖症相关手术、袖状胃切除术（用于治疗糖尿病时除外）、整形手术、美容或整容手术、变性手术及前述手术的并发症或因前述手术导致的医疗事故。","description": "肥胖症相关手术、袖状胃切除术（用于治疗糖尿病时除外）、整形手术、美容或整容手术、变性手术及前述手术的并发症或因前述手术导致的医疗事故。","clause_ids": "29"},
+          {"entity_name": "整形手术","description": "责任免除：整形手术。","clause_ids": "29"}
         ],
         "reference_edges": [
           {"source_name": "保险责任", "target_name": "肥胖症相关手术、袖状胃切除术（用于治疗糖尿病时除外）、整形手术、美容或整容手术、变性手术及前述手术的并发症或因前述手术导致的医疗事故。", "rel_type": "NOT_INCLUDE", "description": "保险责任不包含的相关治疗手术"},
@@ -263,12 +273,12 @@ entity_alignment:
     ################
     Output:
     { 
-      1002: [
-        {"entity_name": "美容或整容手术","description": "责任免除：美容或整容手术。","chunk_id": "1234-567-346-9886,1234-567-346-9887"},
-        {"entity_name": "肥胖症相关手术","description": "责任免除：肥胖症相关手术。","chunk_id": "1234-567-346-9886,1234-567-346-9887"},
-        {"entity_name": "袖状胃切除术（用于治疗糖尿病时除外）","description": "责任免除：袖状胃切除术（用于治疗糖尿病时除外）。","chunk_id": "1234-567-346-9886,1234-567-346-9887"},
-        {"entity_name": "变性手术","description": "责任免除：变性手术。","chunk_id": "1234-567-346-9886,1234-567-346-9887"},
-        {"entity_name": "前述手术的并发症或因前述手术导致的医疗事故","description": "责任免除：前述手术的并发症或因前述手术导致的医疗事故。","chunk_id": "1234-567-346-9886,1234-567-346-9887"}
+      "1002": [
+        {"entity_name": "美容或整容手术","description": "责任免除：美容或整容手术。","clause_ids": "29"},
+        {"entity_name": "肥胖症相关手术","description": "责任免除：肥胖症相关手术。","clause_ids": "29"},
+        {"entity_name": "袖状胃切除术（用于治疗糖尿病时除外）","description": "责任免除：袖状胃切除术（用于治疗糖尿病时除外）。","clause_ids": "29"},
+        {"entity_name": "变性手术","description": "责任免除：变性手术。","clause_ids": "29"},
+        {"entity_name": "前述手术的并发症或因前述手术导致的医疗事故","description": "责任免除：前述手术的并发症或因前述手术导致的医疗事故。","clause_ids": "29"}
       ]
     }
     ######################

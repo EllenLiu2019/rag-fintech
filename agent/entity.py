@@ -1,0 +1,116 @@
+from dataclasses import dataclass, field
+from typing import Dict, Any, List
+from enum import Enum
+
+
+class ClaimStatus(Enum):
+    ELIGIBLE = "eligible"
+    NOT_ELIGIBLE = "not_eligible"
+    PARTIAL = "partial"
+    NEED_MORE_INFO = "need_info"
+    UNDER_REVIEW = "under_review"
+
+
+@dataclass
+class MedicalEntity:
+    entity_type: str  # diagnosis, procedure, symptom, medication
+    term_cn: str
+    term_en: str
+    icd10_concepts: List[str] = field(default_factory=list)  # ICD-10
+    snomed_concepts: List[str] = field(default_factory=list)  # SNOMED
+    aligned_concept: Dict[str, Any] = field(default_factory=dict)  # aligned concept
+    attributes: Dict[str, Any] = field(default_factory=dict)  # TNM & max_diameter_cm & is_lumph
+    description: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "entity_type": self.entity_type,
+            "term_cn": self.term_cn,
+            "term_en": self.term_en,
+            "snomed_concepts": self.snomed_concepts,
+            "icd10_concepts": self.icd10_concepts,
+            "aligned_concept": self.aligned_concept,
+            "attributes": self.attributes,
+            "description": self.description,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MedicalEntity":
+        return cls(
+            entity_type=data.get("entity_type", ""),
+            term_cn=data.get("term_cn", ""),
+            term_en=data.get("term_en", ""),
+            snomed_concepts=data.get("snomed_concepts", []),
+            icd10_concepts=data.get("icd10_concepts", []),
+            aligned_concept=data.get("aligned_concept", {}),
+            attributes=data.get("attributes", {}),
+            description=data.get("description", ""),
+        )
+
+
+@dataclass
+class ClaimRequest:
+    patient_id: str
+    policy_doc_id: str  # 保单文档ID
+    medical_entities: List[MedicalEntity]  # 患者医疗实体
+    claim_type: str  # medical
+    claim_date: str
+    additional_info: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "patient_id": self.patient_id,
+            "policy_doc_id": self.policy_doc_id,
+            "medical_entities": [entity.to_dict() for entity in self.medical_entities],
+            "claim_type": self.claim_type,
+            "claim_date": self.claim_date,
+            "additional_info": self.additional_info,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ClaimRequest":
+        return cls(
+            patient_id=data.get("patient_id", ""),
+            policy_doc_id=data.get("policy_doc_id", ""),
+            medical_entities=[MedicalEntity.from_dict(entity) for entity in data.get("medical_entities", [])],
+            claim_type=data.get("claim_type", ""),
+            claim_date=data.get("claim_date", ""),
+            additional_info=data.get("additional_info", {}),
+        )
+
+
+@dataclass
+class ClaimDecision:
+    status: ClaimStatus
+    eligible_items: List[Dict[str, Any]]
+    excluded_items: List[Dict[str, Any]]
+    matched_clauses: List[Dict[str, Any]]
+    explanation: str
+    recommendations: List[str]
+    reasoning: str
+    tokens: int
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "status": self.status.value,
+            "eligible_items": self.eligible_items,
+            "excluded_items": self.excluded_items,
+            "matched_clauses": self.matched_clauses,
+            "explanation": self.explanation,
+            "recommendations": self.recommendations,
+            "reasoning": self.reasoning,
+            "tokens": self.tokens,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ClaimDecision":
+        return cls(
+            status=ClaimStatus(data.get("status", "under_review")),
+            eligible_items=data.get("eligible_items", []),
+            excluded_items=data.get("excluded_items", []),
+            matched_clauses=data.get("matched_clauses", []),
+            explanation=data.get("explanation", ""),
+            recommendations=data.get("recommendations", []),
+            reasoning=data.get("reasoning", ""),
+            tokens=data.get("tokens", 0),
+        )

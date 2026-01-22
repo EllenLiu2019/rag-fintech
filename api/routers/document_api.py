@@ -38,7 +38,7 @@ async def upload_file(
     """
     logger.info(f"Received file upload request: {file.filename}")
 
-    ingestion_job = await pipeline_runner(file, DocumentType.POLICY)
+    ingestion_job = await pipeline_runner(file, DocumentType.POLICY, graph_enabled=True)
 
     uploaded_doc = UploadedDoc(
         task_id=ingestion_job.job_id,

@@ -5,6 +5,7 @@ import UploadFile from './pages/UploadFile'
 import ParseFile from './pages/ParseFile'
 import SearchFile from './pages/SearchFile'
 import ChatQA from './pages/ChatQA'
+import ClaimProcess from './pages/ClaimProcess'
 
 /**
  * App 组件
@@ -63,6 +64,22 @@ function App() {
     setCurrentPage(ROUTES.PARSE)
   }
 
+  // 跳转到理赔处理页面
+  const handleSubmitClaim = (detailedFileInfo) => {
+    if (detailedFileInfo) {
+      setUploadedFileInfo(curr => {
+        const newInfo = { ...curr, ...detailedFileInfo }
+        return newInfo
+      })
+    }
+    setCurrentPage(ROUTES.CLAIM_PROCESS)
+  }
+
+  // 从理赔处理页面返回解析页面
+  const handleBackToParseFromClaim = () => {
+    setCurrentPage(ROUTES.PARSE)
+  }
+
 
   // 根据当前页面渲染对应组件
   return (
@@ -73,6 +90,7 @@ function App() {
           onBack={handleBackToUpload} 
           onSearch={handleGoToSearch}
           onChat={handleGoToChat}
+          onSubmitClaim={handleSubmitClaim}
         />
       )}
       {currentPage === ROUTES.SEARCH && (
@@ -85,6 +103,12 @@ function App() {
         <ChatQA 
           fileInfo={uploadedFileInfo} 
           onBack={handleBackToParseFromChat} 
+        />
+      )}
+      {currentPage === ROUTES.CLAIM_PROCESS && (
+        <ClaimProcess 
+          fileInfo={uploadedFileInfo} 
+          onBack={handleBackToParseFromClaim} 
         />
       )}
       {currentPage === ROUTES.UPLOAD && (

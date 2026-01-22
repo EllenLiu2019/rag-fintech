@@ -49,3 +49,17 @@ claim_extraction:
       },
       "diagnosis_description": "肿瘤大小为0.8cm*1.0cm*0.8cm，位置为右叶下极，未转移，TNM分期为pT1aN0Mx (I期)。",
     }
+
+missing_data:
+  name: "missing_data"
+  version: "0.0.1"
+  description: "missing data prompt"
+  template: |
+    在上次的提取中遗漏了信息，请在”已提取数据“中添加遗漏的字段，格式保持一致
+
+    ## 已提取数据：
+    {{ content }}
+
+    ## 遗漏的字段：
+    {{ missing_data }}
+

@@ -22,6 +22,7 @@ export const ROUTES = {
   SEARCH: 'search',
   CHAT: 'chat',
   CLAIM_UPLOAD: 'claim-upload',
+  CLAIM_PROCESS: 'claim-process',
 }
 
 export const TIMING = {

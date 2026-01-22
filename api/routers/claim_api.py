@@ -3,9 +3,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from common import get_logger
-from common.exceptions import ParsingError
+from common.exceptions import ParsingError, DocumentNotFoundError
 from rag.ingestion.pipeline import pipeline_runner
 from rag.entity import DocumentType
+from agent.claims_orchestrator import ClaimsOrchestrator
 
 logger = get_logger(__name__)
 
@@ -23,7 +24,11 @@ class UploadClaim(BaseModel):
     message: str
 
 
-@router.post("/process")
+class SubmitClaimRequest(BaseModel):
+    doc_id: str
+
+
+@router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
 ):
@@ -45,3 +50,20 @@ async def upload_file(
     except Exception as e:
         logger.error(f"Failed to process claim upload: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"理赔材料处理失败: {str(e)}")
+
+
+@router.post("/submit")
+async def submit_claim(
+    request: SubmitClaimRequest,
+):
+    logger.info(f"Received claim processing request for doc_id: {request.doc_id}")
+    try:
+        orchestrator = ClaimsOrchestrator()
+        claim_decision = await orchestrator.evaluate_claim(request.doc_id)
+
+        return JSONResponse(status_code=200, content=claim_decision.to_dict())
+    except (DocumentNotFoundError, HTTPException):
+        raise
+    except Exception as e:
+        logger.error(f"Failed to process claim: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"理赔处理失败: {str(e)}")

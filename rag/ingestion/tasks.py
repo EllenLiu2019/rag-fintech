@@ -26,10 +26,12 @@ class IngestionJob(BaseModel):
 
 def enqueue_task(func: Callable, *args, **kwargs) -> IngestionJob:
     job_timeout = kwargs.pop("job_timeout", 600)
+    # Extract document_id for job tracking (don't pass to the actual function)
+    doc_id = kwargs.get("document_id", None)
 
     try:
         if not redis_client.redis_enabled:
-            raise IngestionError(ErrorCodes.S_INGESTION_006, message="Redis is disabled, cannot enqueue task")
+            raise IngestionError(message="Redis is disabled, cannot enqueue task", code=ErrorCodes.S_INGESTION_006)
         job = redis_client.enqueue(
             func,
             *args,
@@ -37,11 +39,15 @@ def enqueue_task(func: Callable, *args, **kwargs) -> IngestionJob:
             **kwargs,
         )
         logger.info(f"Queued task {func.__name__} with job id {job.id}")
-        ingestion_job = IngestionJob(job_id=job.id, doc_id=kwargs.get("document_id"))
+        # Only pass doc_id if it exists, otherwise let Pydantic use default value
+        if doc_id is not None:
+            ingestion_job = IngestionJob(job_id=job.id, doc_id=doc_id)
+        else:
+            ingestion_job = IngestionJob(job_id=job.id)
         return ingestion_job
     except Exception as e:
         logger.error(f"Failed to enqueue task {func.__name__}: {e}")
-        raise IngestionError(ErrorCodes.S_INGESTION_005, message=f"Failed to enqueue task {func.__name__}: {e}")
+        raise IngestionError(message=f"Failed to enqueue task {func.__name__}: {e}", code=ErrorCodes.S_INGESTION_005)
 
 
 def get_task(job_id: str) -> IngestionJob:
@@ -86,8 +92,10 @@ def get_task(job_id: str) -> IngestionJob:
 
         if job.is_failed:
             ingestion_job.error = str(job.exc_info) if job.exc_info else "Unknown error"
+            ingestion_job.status = "failed"
         elif job.is_finished:
             ingestion_job.result = "Document processed successfully"
+            ingestion_job.status = "finished"
 
         return ingestion_job
     except Exception as e:

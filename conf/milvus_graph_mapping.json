@@ -7,6 +7,7 @@
         "entity_name": {"data_type": "varchar", "max_length": 200, "nullable": true},
         "entity_type": {"data_type": "varchar", "max_length": 100, "nullable": true},
         "pagerank": {"data_type": "float", "nullable": true},
+        "clause_ids": {"data_type": "varchar", "max_length": 200, "nullable": true},
         
         "_comment_relationship_fields": "Relationship specific fields",
         "source_id": {"data_type": "int64", "nullable": true},
@@ -17,10 +18,9 @@
         
         "_comment_common_fields": "Common fields",
         "description": {"data_type": "varchar", "max_length": 65535},
-        "chunk_id": {"data_type": "varchar", "max_length": 500, "nullable": true},
         "text": {"data_type": "varchar", "max_length": 65535},
         "doc_id": {"data_type": "varchar", "max_length": 100},
-        "clause_id": {"data_type": "int32"},
+        "root_id": {"data_type": "int32"},
         
         "_comment_vector_fields": "Vector fields",
         "dense_vector": {"data_type": "float_vector", "dim": 1024},

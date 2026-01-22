@@ -3,6 +3,7 @@ import json
 from collections import defaultdict
 from typing import Any
 import asyncio
+import re
 
 from graphrag.extractor import Extractor
 from common import get_logger
@@ -24,20 +25,21 @@ class EntityAlignment(Extractor):
         self.merged_graph = merged_graph
         self.graph_lock = graph_lock
 
-    async def __call__(self, clause_id: int):
+    async def __call__(self, root_id: int):
         candidate_attrs: dict[int, dict[str, Any]] = defaultdict()
         sim_entities: dict[int, list[dict]] = defaultdict(list)
         sim_entities_prompt: dict[int, dict[str, Any]] = defaultdict(lambda: defaultdict())
         aligned_entities = defaultdict()
 
         for node_id, node_attrs in self.merged_graph.nodes(data=True):
-            if node_attrs["clause_id"] != clause_id:
+            if node_attrs["root_id"] != root_id:
                 continue
             candidate_attrs[node_id] = {
                 "entity_name": node_attrs["entity_name"],
                 "entity_type": node_attrs["entity_type"],
-                "clause_id": node_attrs["clause_id"],
                 "doc_id": node_attrs["doc_id"],
+                "root_id": node_attrs["root_id"],
+                "clause_ids": node_attrs["clause_ids"],
             }
 
         await self._search_similar_entities(
@@ -63,10 +65,22 @@ class EntityAlignment(Extractor):
 
             try:
                 # Clean up markdown code blocks from response
-                cleaned_response = response.replace("```json", "").replace("```", "")
+                cleaned_response = response.replace("```json", "").replace("```", "").strip()
+
                 aligned_entities = json.loads(cleaned_response)
             except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse LLM response as JSON: {e}. Response: {response[:200]}")
+                # Pattern: match numeric keys like "123:" or "  123:" at the start of a line
+                fixed_response = re.sub(r"(\s+)(\d+)(\s*):", r'\1"\2"\3:', cleaned_response)
+
+                try:
+                    aligned_entities = json.loads(fixed_response)
+                    logger.warning("Fixed LLM JSON response with unquoted numeric keys")
+                except json.JSONDecodeError as e2:
+                    logger.error(f"Failed to parse LLM response as JSON: {e}. Response: {response[:200]}")
+                    logger.debug(f"Attempted fix also failed: {e2}")
+                    return
+            except Exception as e:
+                logger.error(f"Unexpected error parsing LLM response: {e}")
                 return
 
         async with self.graph_lock:
@@ -105,7 +119,7 @@ class EntityAlignment(Extractor):
                 sparse_vectors=sparse_vectors,
                 limit=5,
                 knowledgebaseIds=[VECTOR_GRAPH_KB],
-                filters={"doc_id": attrs["doc_id"], "graph_type": "entity", "clause_id": attrs["clause_id"]},
+                filters={"doc_id": attrs["doc_id"], "graph_type": "entity", "root_id": attrs["root_id"]},
             )
             results = search_results[0]
 
@@ -122,7 +136,7 @@ class EntityAlignment(Extractor):
                 nodes = {
                     "entity_name": result["entity_name"],
                     "description": result["description"],
-                    "chunk_id": result["chunk_id"],
+                    "clause_ids": result["clause_ids"].split(",") if result["clause_ids"] else [],
                 }
                 sim_entities[node_id].append(dict(id=found_id, **nodes))
 
@@ -178,7 +192,7 @@ class EntityAlignment(Extractor):
             for aligned_entity in aligned_entities:
                 aligned_entity["id"] = generate_entity_id(
                     aligned_entity["entity_name"],
-                    candidate_attrs[node_id]["clause_id"],
+                    candidate_attrs[node_id]["root_id"],
                     candidate_attrs[node_id]["doc_id"],
                 )
 
@@ -226,7 +240,8 @@ class EntityAlignment(Extractor):
                 if aligned_entity["id"] not in sim_entity_ids:
                     aligned_entity["entity_type"] = candidate_attrs[node_id]["entity_type"]
                     aligned_entity["doc_id"] = candidate_attrs[node_id]["doc_id"]
-                    aligned_entity["clause_id"] = candidate_attrs[node_id]["clause_id"]
+                    aligned_entity["root_id"] = candidate_attrs[node_id]["root_id"]
+                    aligned_entity["clause_ids"] = sorted(set(aligned_entity.get("clause_ids", "")))
                     self.merged_graph.add_node(aligned_entity["id"], **aligned_entity)
 
                     # Transfer edges from all removed candidates to this new entity
@@ -242,7 +257,7 @@ class EntityAlignment(Extractor):
                                     edge_info["source_entity"],
                                     edge_info["target_entity"],
                                     edge_info["rel_type"],
-                                    candidate_attrs[node_id]["clause_id"],
+                                    candidate_attrs[node_id]["root_id"],
                                     candidate_attrs[node_id]["doc_id"],
                                 )
                                 self.merged_graph.add_edge(aligned_entity["id"], successor_id, **edge_info)
@@ -257,7 +272,7 @@ class EntityAlignment(Extractor):
                                     edge_info["source_entity"],
                                     edge_info["target_entity"],
                                     edge_info["rel_type"],
-                                    candidate_attrs[node_id]["clause_id"],
+                                    candidate_attrs[node_id]["root_id"],
                                     candidate_attrs[node_id]["doc_id"],
                                 )
                                 self.merged_graph.add_edge(predecessor_id, aligned_entity["id"], **edge_info)
@@ -266,5 +281,5 @@ class EntityAlignment(Extractor):
                     existing_node = self.merged_graph.nodes[aligned_entity["id"]]
                     existing_node["entity_name"] = aligned_entity["entity_name"]
                     existing_node["description"] = aligned_entity["description"]
-                    existing_node["chunk_id"] = aligned_entity["chunk_id"]
+                    existing_node["clause_ids"] = sorted(set(aligned_entity.get("clause_ids", [])))
                     self.merged_graph.nodes[aligned_entity["id"]].update(existing_node)

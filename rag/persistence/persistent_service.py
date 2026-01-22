@@ -146,3 +146,15 @@ class PersistentService:
         if rdb_document is None:
             return None
         return deserialize(rdb_document.clause_forest, target_type=ClauseForest)
+
+    @staticmethod
+    @cached(prefix="get_document", ttl=3600)
+    def get_document(doc_id: str) -> RdbDocument:
+        rdb_document = rdb_client.select_by_kwargs(RdbDocument, document_id=doc_id)
+        if rdb_document is None:
+            raise DocumentNotFoundError(
+                message=f"Document not found: {doc_id}",
+                code=ErrorCodes.R_DB_003,
+                details={"doc_id": doc_id},
+            )
+        return rdb_document

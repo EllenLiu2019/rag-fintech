@@ -65,15 +65,15 @@ class Extractor:
             error_count = 0
             max_errors = int(os.environ.get("GRAPHRAG_MAX_ERRORS", 3))
 
-            async def worker(clause_id: int, clause_text: str):
+            async def worker(root_id: int, clause_text: str):
                 nonlocal error_count
                 async with chat_limiter:
                     logger.debug(f"Acquired chat limiter, {chat_limiter._value} slots remaining")
                     try:
-                        await self.process_single_content(clause_id, clause_text, out_results)
+                        await self.process_single_content(root_id, clause_text, out_results)
                     except Exception as e:
                         error_count += 1
-                        error_msg = f"Error processing clause {clause_id}: {str(e)}"
+                        error_msg = f"Error processing root {root_id}: {str(e)}"
                         logger.warning(error_msg)
                         if self.callback:
                             self.callback(msg=error_msg)
@@ -81,11 +81,11 @@ class Extractor:
                         if error_count > max_errors:
                             raise Exception(f"Maximum error count ({max_errors}) reached. Last errors: {str(e)}")
 
-            tasks = [worker(clause_id, clause_text) for clause_id, clause_text in clauses.items()]
+            tasks = [worker(root_id, clause_text) for root_id, clause_text in clauses.items()]
             await asyncio.gather(*tasks)
 
             if error_count > 0:
-                warning_msg = f"Completed with {error_count} errors (out of {len(clauses)} clauses processed)"
+                warning_msg = f"Completed with {error_count} errors (out of {len(clauses)} roots processed)"
                 logger.warning(warning_msg)
                 if self.callback:
                     self.callback(msg=warning_msg)
@@ -97,22 +97,22 @@ class Extractor:
         maybe_nodes = defaultdict(lambda: defaultdict(list))
         maybe_edges = defaultdict(lambda: defaultdict(list))
         sum_token_count = 0
-        for clause_id, (m_nodes, m_edges, token_count) in out_results.items():
+        for root_id, (m_nodes, m_edges, token_count) in out_results.items():
             for entity_name, entities in m_nodes.items():
-                maybe_nodes[clause_id][entity_name].extend(entities)
+                maybe_nodes[root_id][entity_name].extend(entities)
             for (src_id, tgt_id), relations in m_edges.items():
-                maybe_edges[clause_id][(src_id, tgt_id)].extend(relations)
+                maybe_edges[root_id][(src_id, tgt_id)].extend(relations)
             sum_token_count += token_count
         if self.callback:
             self.callback(
                 msg=f"Entities and relationships extraction done, {len(maybe_nodes)} nodes, {len(maybe_edges)} edges."
             )
-        logger.info(f"extracted {len(maybe_nodes)} nodes, {len(maybe_edges)} edges.")
+        logger.info(f"extracted {len(maybe_nodes)} roots.")
 
         entity_tasks = []
-        for clause_id, entities in maybe_nodes.items():
+        for root_id, entities in maybe_nodes.items():
             for en_nm, ents in entities.items():
-                entity_tasks.append(self._merge_nodes(doc_id, clause_id, en_nm, ents))
+                entity_tasks.append(self._merge_nodes(doc_id, root_id, en_nm, ents))
         entity_results = await asyncio.gather(*entity_tasks)
         entities_data = [r for r in entity_results if r is not None]
 
@@ -120,9 +120,9 @@ class Extractor:
             self.callback(msg="Entities merging done.")
 
         relationship_tasks = []
-        for clause_id, edges in maybe_edges.items():
+        for root_id, edges in maybe_edges.items():
             for (src, tgt), rels in edges.items():
-                relationship_tasks.append(self._merge_edges(doc_id, clause_id, src, tgt, rels))
+                relationship_tasks.append(self._merge_edges(doc_id, root_id, src, tgt, rels))
         relationship_results = await asyncio.gather(*relationship_tasks)
         relationships_data = [r for r in relationship_results if r is not None]
 
@@ -182,7 +182,7 @@ class Extractor:
     async def _merge_nodes(
         self,
         doc_id: str,
-        clause_id: int,
+        root_id: int,
         entity_name: str,
         entities: list[dict],
     ) -> dict[str, Any] | None:
@@ -190,7 +190,7 @@ class Extractor:
             return
 
         # Generate unique numeric ID
-        entity_id = generate_entity_id(entity_name, clause_id, doc_id)
+        entity_id = generate_entity_id(entity_name, root_id, doc_id)
 
         entity_type = sorted(
             Counter([dp["entity_type"] for dp in entities]).items(),
@@ -200,8 +200,7 @@ class Extractor:
         description = GRAPH_FIELD_SEP.join(sorted(set([entity["description"] for entity in entities])))
         description = await self._handle_entity_relation_summary(entity_name, description)
 
-        chunk_ids = [cid for entity in entities for cid in entity.get("chunk_id", [])]
-        chunk_id = ",".join(sorted(set(chunk_ids))) if chunk_ids else ""
+        clause_ids = sorted(set([cid for entity in entities for cid in entity.get("clause_ids", [])]))
 
         return dict(
             id=entity_id,  # Numeric primary key
@@ -209,14 +208,14 @@ class Extractor:
             entity_type=entity_type,
             description=description,
             doc_id=doc_id,
-            clause_id=clause_id,
-            chunk_id=chunk_id,
+            root_id=root_id,
+            clause_ids=clause_ids,
         )
 
     async def _merge_edges(
         self,
         doc_id: str,
-        clause_id: int,
+        root_id: int,
         src: str,
         tgt: str,
         edges_data: list[dict],
@@ -224,8 +223,8 @@ class Extractor:
         if not edges_data:
             return
 
-        source_id = generate_entity_id(src, clause_id, doc_id)
-        target_id = generate_entity_id(tgt, clause_id, doc_id)
+        source_id = generate_entity_id(src, root_id, doc_id)
+        target_id = generate_entity_id(tgt, root_id, doc_id)
 
         rel_type_cnt = sorted(
             Counter([dp["rel_type"] for dp in edges_data]).items(),
@@ -234,7 +233,7 @@ class Extractor:
         )
         rel_type = rel_type_cnt[0][0]
 
-        relationship_id = generate_relationship_id(src, tgt, rel_type, clause_id, doc_id)
+        relationship_id = generate_relationship_id(src, tgt, rel_type, root_id, doc_id)
 
         description = GRAPH_FIELD_SEP.join(sorted(set([edge["description"] for edge in edges_data])))
         description = await self._handle_entity_relation_summary(f"{src} -> {tgt}", description)
@@ -247,7 +246,7 @@ class Extractor:
             rel_type=rel_type,
             description=description,
             doc_id=doc_id,
-            clause_id=clause_id,
+            root_id=root_id,
         )
 
     async def _handle_entity_relation_summary(self, entity_or_relation_name: str, description: str) -> str:

@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 
 class PipelineRunner:
 
-    async def __call__(self, file: UploadFile, doc_type: DocumentType):
+    async def __call__(self, file: UploadFile, doc_type: DocumentType, **kwargs):
 
         rdb_document = await PersistentService.upload_file(file, doc_type.value)
 
@@ -27,6 +27,7 @@ class PipelineRunner:
             update_progress,
             rdb_document_id=rdb_document.id,  # Pass as keyword argument
             document_id=rdb_document.document_id,
+            **kwargs,
         )
 
         logger.info(f"Enqueued document ingestion job: {job.job_id}")

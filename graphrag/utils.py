@@ -67,7 +67,7 @@ def tidy_graph(graph: nx.DiGraph, callback, check_attribute: bool = True):
 def do_merge_graph(new_graph: nx.DiGraph, existing_graph: nx.DiGraph):
     """Merge new_graph into existing_graph in place.
 
-    Works with directed graphs. Node IDs are numeric identifiers based on (entity_name, doc_id, clause_id).
+    Works with directed graphs. Node IDs are numeric identifiers based on (entity_name, doc_id, root_id).
     """
 
     for node_id, attr in new_graph.nodes(data=True):
@@ -76,6 +76,15 @@ def do_merge_graph(new_graph: nx.DiGraph, existing_graph: nx.DiGraph):
             continue
         node = existing_graph.nodes[node_id]
         node["description"] += GRAPH_FIELD_SEP + attr["description"]
+
+        # Merge clause_ids (ensure both are lists)
+        existing_clause_ids = node.get("clause_ids", [])
+        new_clause_ids = attr.get("clause_ids", [])
+        if isinstance(existing_clause_ids, str):
+            existing_clause_ids = [cid.strip() for cid in existing_clause_ids.split(",") if cid.strip()]
+        if isinstance(new_clause_ids, str):
+            new_clause_ids = [cid.strip() for cid in new_clause_ids.split(",") if cid.strip()]
+        node["clause_ids"] = sorted(set(existing_clause_ids + new_clause_ids))
 
     for source, target, attr in new_graph.edges(data=True):
         edge = existing_graph.get_edge_data(source, target)
@@ -104,12 +113,12 @@ def handle_single_entity_extraction(record_attributes: list[str]):
         return None
     entity_type = clean_str(record_attributes[2].upper())
     entity_description = clean_str(record_attributes[3])
-    chunk_ids = clean_str(record_attributes[4]).split(",")
+    clause_ids = clean_str(record_attributes[4]).split(",")
     return dict(
         entity_name=entity_name,
         entity_type=entity_type,
         description=entity_description,
-        chunk_id=chunk_ids,
+        clause_ids=clause_ids,
     )
 
 
@@ -122,7 +131,6 @@ def handle_single_relationship_extraction(record_attributes: list[str]):
         tgt_id=clean_str(record_attributes[2]),
         rel_type=clean_str(record_attributes[3].upper()),
         description=clean_str(record_attributes[4]),
-        chunk_id=clean_str(record_attributes[5]).split(","),
     )
 
 
@@ -153,14 +161,19 @@ def to_graph(doc_id: str, chunks: list[dict]) -> nx.DiGraph:
 
     for chunk in chunks:
         if chunk["graph_type"] == "entity":
+            clause_ids_raw = chunk.get("clause_ids", "")
+            if isinstance(clause_ids_raw, str):
+                clause_ids = [cid.strip() for cid in clause_ids_raw.split(",") if cid.strip()]
+            else:
+                clause_ids = clause_ids_raw
             entity = {
                 "id": chunk["id"],
                 "entity_name": chunk["entity_name"],
                 "entity_type": chunk["entity_type"],
                 "description": chunk["description"],
                 "doc_id": chunk["doc_id"],
-                "clause_id": chunk["clause_id"],
-                "chunk_id": chunk["chunk_id"],
+                "root_id": chunk["root_id"],
+                "clause_ids": clause_ids,
             }
             entities.append(entity)
         elif chunk["graph_type"] == "relationship":
@@ -173,8 +186,7 @@ def to_graph(doc_id: str, chunks: list[dict]) -> nx.DiGraph:
                 "rel_type": chunk["rel_type"],
                 "description": chunk["description"],
                 "doc_id": chunk["doc_id"],
-                "clause_id": chunk["clause_id"],
-                "chunk_id": chunk["chunk_id"],
+                "root_id": chunk["root_id"],
             }
             relationships.append(relationship)
     return get_graph(doc_id, entities, relationships)
@@ -264,12 +276,7 @@ def build_foc(clause_forest: ClauseForest) -> list[dict[str, Any]]:
 
     def build_tree(node: ClauseNode) -> str:
         header = "#" * (node.level + 2)
-        if len(node.chunk_ids) == 0:
-            chunk_str = "\\<no chunk\\>"
-        else:
-            chunk_str = f"\\<{','.join(node.chunk_ids)}\\>"
-
-        markdown = f"{header} {node.title} {chunk_str}\n {node.content}\n"
+        markdown = f"{header} {node.title} [ID:{node.id}] \n {node.content}\n"
 
         for child in node.children:
             markdown += build_tree(child)
@@ -281,10 +288,10 @@ def build_foc(clause_forest: ClauseForest) -> list[dict[str, Any]]:
     return result
 
 
-def generate_entity_id(entity_name: str, clause_id: int, doc_id: str) -> int:
+def generate_entity_id(entity_name: str, root_id: int, doc_id: str) -> int:
     """
     Generate a unique numeric ID for an entity based on its composite key.
-    Uses SHA256 hash of (entity_name, clause_id, doc_id) to ensure consistency.
+    Uses SHA256 hash of (entity_name, root_id, doc_id) to ensure consistency.
 
     ID is a 64-bit integer (first 16 hex digits of SHA256) to be compatible with Neo4j.
     Neo4j's PackStream protocol supports signed 64-bit integers:
@@ -299,7 +306,7 @@ def generate_entity_id(entity_name: str, clause_id: int, doc_id: str) -> int:
     Returns a positive 64-bit integer.
     """
     # Create composite key
-    composite_key = f"{doc_id}:{clause_id}:{entity_name}"
+    composite_key = f"{doc_id}:{root_id}:{entity_name}"
     # Generate SHA256 hash
     hash_value = sha256(composite_key.encode("utf-8")).hexdigest()
     # Take first 15 hex digits (60 bits) to ensure we stay within 64-bit signed integer range
@@ -308,12 +315,12 @@ def generate_entity_id(entity_name: str, clause_id: int, doc_id: str) -> int:
     return entity_id
 
 
-def generate_relationship_id(src: str, tgt: str, rel_type: str, clause_id: int, doc_id: str) -> int:
+def generate_relationship_id(src: str, tgt: str, rel_type: str, root_id: int, doc_id: str) -> int:
     """
     Generate a unique numeric ID for a relationship based on its composite key.
-    Uses SHA256 hash of (src, tgt, clause_id, doc_id) to ensure consistency.
+    Uses SHA256 hash of (src, tgt, root_id, doc_id) to ensure consistency.
     """
-    composite_key = f"{doc_id}:{clause_id}:{src}:{tgt}:{rel_type}"
+    composite_key = f"{doc_id}:{root_id}:{src}:{tgt}:{rel_type}"
     hash_value = sha256(composite_key.encode("utf-8")).hexdigest()
     relationship_id = int(hash_value[:15], 16)
     return relationship_id

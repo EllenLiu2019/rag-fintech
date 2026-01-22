@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import './ParseFile.css'
 
-function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
+function ParseFile({ fileInfo, onBack, onSearch, onChat, onSubmitClaim }) {
   const [content, setContent] = useState('')
   const [parsedFileInfo, setParsedFileInfo] = useState(null) 
   const [loadingParsed, setLoadingParsed] = useState(true) // 只控制解析内容的加载状态
@@ -256,6 +256,19 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat }) {
               })}
             >
               Intelligent Q&A
+            </button>
+            <button 
+              className="function-button" 
+              onClick={() => {
+                const combinedInfo = { 
+                  ...fileInfo, 
+                  ...parsedFileInfo 
+                }
+                console.log('Combined info:', combinedInfo)
+                onSubmitClaim(combinedInfo)
+              }}
+            >
+              Submit Claim
             </button>
           </div>
         </div>

@@ -151,13 +151,12 @@ class JSONMarshaller:
             if target_type in cls._custom_deserializers:
                 return cls._custom_deserializers[target_type](data)
 
-            # Check for custom deserialization methods first (before BaseModel default)
-            # This allows BaseModel subclasses to override deserialization behavior
-            if isinstance(target_type, type) and issubclass(target_type, Deserializable):
-                if hasattr(target_type, "from_dict"):
-                    return target_type.from_dict(data)
-                elif hasattr(target_type, "deserialize"):
-                    return target_type.deserialize(data)
+            # Check for custom deserialization methods first (even for dataclasses)
+            # This allows any class to override deserialization behavior
+            if hasattr(target_type, "deserialize") and callable(getattr(target_type, "deserialize", None)):
+                return target_type.deserialize(data)
+            elif hasattr(target_type, "from_dict") and callable(getattr(target_type, "from_dict", None)):
+                return target_type.from_dict(data)
 
             # Use BaseModel default deserialization if no custom method
             if issubclass(target_type, BaseModel):
@@ -167,7 +166,7 @@ class JSONMarshaller:
                     logger.error(f"Failed to deserialize as {target_type.__name__}: {e}")
                     raise ValueError(f"Invalid data for {target_type.__name__}: {e}") from e
 
-            # Dataclass
+            # Dataclass (fallback if no custom deserialize method)
             if is_dataclass(target_type):
                 try:
                     return target_type(**data)

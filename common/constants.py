@@ -15,13 +15,13 @@ VECTOR_RETRIEVE_FIELDS = ["id", "text", "clause_id", "clause_path"]
 VECTOR_GET_FIELDS = ["id", "text", "clause_id", "clause_path", "dense_vector_1024"]
 
 
-VECTOR_GRAPH_SIMILAR_FIELDS = ["id", "entity_name", "description", "chunk_id"]
+VECTOR_GRAPH_SIMILAR_FIELDS = ["id", "entity_name", "description", "clause_ids"]
 VECTOR_GRAPH_FIELDS = [
     "id",
     "graph_type",
     "entity_name",
     "entity_type",
-    "chunk_id",
+    "clause_ids",
     "source_id",
     "target_id",
     "source_entity",
@@ -29,7 +29,7 @@ VECTOR_GRAPH_FIELDS = [
     "rel_type",
     "description",
     "doc_id",
-    "clause_id",
+    "root_id",
 ]
 
 ACTIVE_VALUE = "A"

@@ -48,7 +48,7 @@ export const useFileUpload = ({
       // 根据 docType 选择正确的上传 URL
       let actualUrl = uploadUrl
       if (docType === 'claim') {
-        actualUrl = '/api/claim/process'
+        actualUrl = '/api/claim/upload'
       } else {
         actualUrl = '/api/process'
       }
@@ -123,7 +123,7 @@ export const useFileUpload = ({
       }
     } catch (error) {
       // 🔍 详细的错误调试信息
-      const actualUrl = docType === 'claim' ? '/api/claim/process' : '/api/process'
+      const actualUrl = docType === 'claim' ? '/api/claim/upload' : '/api/process'
       const finalUrl = apiBaseUrl + actualUrl
       console.error('❌ 上传失败，错误详情:', {
         name: error.name,

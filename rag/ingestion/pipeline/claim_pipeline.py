@@ -1,6 +1,7 @@
 import asyncio
 import json
 from typing import Any
+from datetime import datetime, timezone
 
 from common import get_logger
 from rag.ingestion.pipeline.base_pipeline import BasePipeline
@@ -11,8 +12,21 @@ from rag.persistence import PersistentService
 from rag.llm.chat_model import chat_model
 from common.prompt_manager import get_prompt_manager
 from common.model_registry import get_model_registry
+from agent.entity import MedicalEntity, ClaimRequest
 
 logger = get_logger(__name__)
+
+MANDATORY_FIELDS = [
+    "name",
+    "gender",
+    "age",
+    "hospital",
+    "report_date",
+    "primary_diagnosis",
+    "diagnosis_en",
+    "pathology_details",
+    "diagnosis_description",
+]
 
 
 class ClaimPipeline(BasePipeline):
@@ -85,11 +99,31 @@ class ClaimPipeline(BasePipeline):
             messages=[{"role": "system", "content": prompt}],
         )
         content = json.loads(content.replace("```json", "").replace("```", ""))
+        missing_data = self._validate_content(content)
+        if missing_data:
+            logger.info(f"Extracting missing data: {missing_data}")
+            missing_prompt = self.prompt_manager.get(
+                "missing_data", content=content, missing_data=json.dumps(missing_data)
+            )
+            history = [{"role": "system", "content": prompt}, {"role": "assistant", "content": content}]
+            history.append({"role": "user", "content": missing_prompt})
+            reasoning, content, tokens = await asyncio.to_thread(
+                self.llm.generate,
+                messages=history,
+            )
+            content = json.loads(content.replace("```json", "").replace("```", ""))
         return {
             "content": content,
             "tokens": tokens,
             "reasoning": reasoning,
         }
+
+    def _validate_content(self, content: dict[str, Any]) -> dict[str, Any]:
+        """
+        validate content
+        """
+        missing_fields = [field for field in MANDATORY_FIELDS if not content.get(field)]
+        return missing_fields
 
     async def post_process(self, rag_document: RagDocument) -> None:
         """
@@ -98,7 +132,23 @@ class ClaimPipeline(BasePipeline):
         logger.info("Normalizing medical entities with SNOMED")
 
         # normalize medical entities with SNOMED
-        # snomed_entities = await self.glossary_injector.ner(text_content)
+        claim_data = rag_document.business_data
+        medical_entity = MedicalEntity(
+            entity_type="diagnosis",
+            term_cn=claim_data["primary_diagnosis"],
+            term_en=claim_data["diagnosis_en"],
+            attributes=claim_data.get("pathology_details", {}),
+            description=claim_data["diagnosis_description"],
+        )
+        claim_request = ClaimRequest(
+            patient_id=claim_data["name"],
+            policy_doc_id="policy_0119223547_a02169",
+            medical_entities=[medical_entity],
+            claim_type="medical",
+            claim_date=datetime.now(tz=timezone.utc).isoformat(),
+        )
+        rag_document.business_data = claim_request.to_dict()
+        # claim_decision = await self.claims_orchestrator.evaluate_claim(claim_request)
 
     async def persist(self, rag_document: RagDocument, **kwargs) -> None:
         """

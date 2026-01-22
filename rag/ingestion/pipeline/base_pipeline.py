@@ -75,14 +75,15 @@ class BasePipeline(ABC):
             if job_id and callback:
                 callback(job_id, 7, "Completed")
 
-            if self.doc_type == DocumentType.POLICY and rag_document.clause_forest:
-                graph_job_id = enqueue_task(
-                    build_graph,
-                    rag_document.document_id,
-                    rag_document.clause_forest,
-                    job_timeout=1800,
-                )
-                logger.info(f"Enqueued graph build job: {graph_job_id}")
+            if kwargs.get("graph_enabled", False):
+                if self.doc_type == DocumentType.POLICY and rag_document.clause_forest:
+                    graph_job_id = enqueue_task(
+                        build_graph,
+                        rag_document.clause_forest,
+                        job_timeout=1800,
+                        document_id=rag_document.document_id,
+                    )
+                    logger.info(f"Enqueued graph build job: {graph_job_id}")
 
             logger.info(f"Completed {self.doc_type.value} ingestion: {rag_document.document_id}")
 
@@ -151,7 +152,8 @@ class BasePipeline(ABC):
         pass
 
 
-def build_graph(document_id: str, clause_forest: ClauseForest):
+def build_graph(clause_forest: ClauseForest, **kwargs):
+    document_id = kwargs.get("document_id")
     logger.info(f"Starting graph build for document: {document_id}")
 
     try:
@@ -160,4 +162,4 @@ def build_graph(document_id: str, clause_forest: ClauseForest):
         logger.info(f"Completed graph build for document: {document_id}")
     except Exception as e:
         logger.error(f"Failed to build graph: {e}")
-        raise IngestionError(ErrorCodes.S_INGESTION_010, message=f"Failed to build graph: {e}")
+        raise IngestionError(message=f"Failed to build graph: {e}", code=ErrorCodes.S_INGESTION_010)

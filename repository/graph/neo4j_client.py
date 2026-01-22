@@ -1,4 +1,5 @@
 import neo4j
+import networkx as nx
 
 from common.config_utils import get_base_config
 from common import get_logger
@@ -61,6 +62,7 @@ class Neo4jClient:
         """Import entities into Neo4j"""
         with self.driver.session(database=self.database) as session:
             for row in entities:
+                clause_ids = ",".join(sorted(set(row.get("clause_ids", []))))
                 session.run(
                     """
                     MERGE (n:Entity {id: $id})
@@ -68,16 +70,16 @@ class Neo4jClient:
                         n.entity_type = $entity_type,
                         n.description = $description,
                         n.doc_id = $doc_id,
-                        n.clause_id = $clause_id,
-                        n.chunk_id = $chunk_id
+                        n.root_id = $root_id,
+                        n.clause_ids = $clause_ids
                     """,
                     id=row["id"],
                     entity_name=row["entity_name"],
                     entity_type=row["entity_type"],
                     description=row["description"],
                     doc_id=row["doc_id"],
-                    clause_id=row["clause_id"],
-                    chunk_id=row.get("chunk_id", ""),
+                    root_id=row["root_id"],
+                    clause_ids=clause_ids,
                 )
 
     def import_relationships(self, relationships):
@@ -96,7 +98,7 @@ class Neo4jClient:
                     MERGE (e1)-[r:{rel_type}]->(e2)
                     SET r.id = $id,
                         r.description = $description,
-                        r.clause_id = $clause_id,
+                        r.root_id = $root_id,
                         r.doc_id = $doc_id
                     """
                     session.run(
@@ -105,7 +107,7 @@ class Neo4jClient:
                         source_id=row["source_id"],
                         target_id=row["target_id"],
                         description=row["description"],
-                        clause_id=row["clause_id"],
+                        root_id=row["root_id"],
                         doc_id=row["doc_id"],
                     )
                 else:
@@ -116,7 +118,7 @@ class Neo4jClient:
                     SET r.rel_type = $rel_type,
                         r.id = $id,
                         r.description = $description,
-                        r.clause_id = $clause_id,
+                        r.root_id = $root_id,
                         r.doc_id = $doc_id
                     """
                     session.run(
@@ -126,7 +128,7 @@ class Neo4jClient:
                         target_id=row["target_id"],
                         rel_type=rel_type,
                         description=row["description"],
-                        clause_id=row["clause_id"],
+                        root_id=row["root_id"],
                         doc_id=row["doc_id"],
                     )
 
@@ -142,8 +144,8 @@ class Neo4jClient:
                        n.entity_type AS entity_type,
                        n.description AS description,
                        n.doc_id AS doc_id,
-                       n.clause_id AS clause_id,
-                       n.chunk_id AS chunk_id
+                       n.root_id AS root_id,
+                       n.clause_ids AS clause_ids
                 """,
                 doc_id=doc_id,
             )
@@ -166,7 +168,8 @@ class Neo4jClient:
                          ELSE coalesce(r.rel_type, 'RELATED_TO')
                        END AS rel_type,
                        r.description AS description,
-                       r.clause_id AS clause_id,
+                       r.root_id AS root_id,
+                       r.clause_ids AS clause_ids,
                        r.doc_id AS doc_id
                 """,
                 doc_id=doc_id,
@@ -177,64 +180,83 @@ class Neo4jClient:
 
         return entities, relationships
 
-    def load_full_graph(self):
-        """Load entire graph from Neo4j and return NetworkX graph"""
-        import networkx as nx
-
-        graph = nx.Graph()
+    def get_relationship_subgraph(
+        self,
+        start_entity: str,
+        target_entity: str,
+        doc_id: str,
+        root_id: int,
+        rel_types: list[str],
+        max_depth: int = 5,
+    ):
+        graph = nx.DiGraph()
 
         with self.driver.session(database=self.database, default_access_mode=neo4j.READ_ACCESS) as session:
-            # Load all entities
-            entities_result = session.run(
-                """
-                MATCH (n:Entity)
-                RETURN n.id AS id,
-                       n.entity_name AS entity_name,
-                       n.entity_type AS entity_type,
-                       n.description AS description,
-                       n.doc_id AS doc_id,
-                       n.clause_id AS clause_id,
-                       n.chunk_id AS chunk_id
-                """
+            rel_pattern = "|".join(rel_types)
+            where_clause = "ALL(n IN nodes(path) WHERE n.doc_id = $doc_id AND n.root_id = $root_id)"
+
+            result = session.run(
+                f"""
+                MATCH path = (start:Entity {{entity_name: $start_entity, doc_id: $doc_id}})
+                             -[r:{rel_pattern}*1..{max_depth}]->
+                             (target:Entity {{entity_name: $target_entity, doc_id: $doc_id}})
+                WHERE {where_clause}
+                RETURN path,
+                       length(path) AS path_length
+                ORDER BY path_length
+                LIMIT 10
+                """,
+                start_entity=start_entity,
+                target_entity=target_entity,
+                doc_id=doc_id,
+                root_id=root_id,
             )
 
-            # Add nodes to graph
-            for record in entities_result:
-                node_data = dict(record)
-                entity_name = node_data.pop("entity_name")
-                graph.add_node(entity_name, **node_data)
+            for record in result:
+                path = record["path"]
 
-            # Load all relationships (support multiple relationship types)
-            relationships_result = session.run(
-                """
-                MATCH (e1:Entity)-[r]->(e2:Entity)
-                WHERE type(r) IN ['INCLUDE', 'NOT_INCLUDE', 'RELATED_TO']
-                RETURN r.id AS id,
-                       e1.entity_name AS source_entity,
-                       e2.entity_name AS target_entity,
-                       CASE 
-                         WHEN type(r) IN ['INCLUDE', 'NOT_INCLUDE'] THEN type(r)
-                         ELSE coalesce(r.rel_type, 'RELATED_TO')
-                       END AS rel_type,
-                       r.description AS description,
-                       r.clause_id AS clause_id,
-                       r.doc_id AS doc_id
-                """
-            )
+                for node in path.nodes:
+                    node_id = node.get("id")
+                    if node_id not in graph:
+                        clause_ids = [cid.strip() for cid in node.get("clause_ids", "").split(",") if cid.strip()]
+                        graph.add_node(
+                            node_id,
+                            entity_name=node.get("entity_name"),
+                            entity_type=node.get("entity_type"),
+                            description=node.get("description"),
+                            doc_id=node.get("doc_id"),
+                            root_id=node.get("root_id"),
+                            clause_ids=clause_ids,
+                        )
 
-            # Add edges to graph
-            for record in relationships_result:
-                edge_data = dict(record)
-                source = edge_data.pop("source_entity")
-                target = edge_data.pop("target_entity")
-                graph.add_edge(source, target, **edge_data)
+                for rel in path.relationships:
+                    source_id = rel.start_node.get("id")
+                    target_id = rel.end_node.get("id")
+                    source_entity = rel.start_node.get("entity_name")
+                    target_entity = rel.end_node.get("entity_name")
 
-        logger.info(f"Loaded full graph: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges")
+                    graph.add_edge(
+                        source_id,
+                        target_id,
+                        rel_type=rel.type,
+                        source_id=source_id,
+                        target_id=target_id,
+                        source_entity=source_entity,
+                        target_entity=target_entity,
+                        description=rel.get("description"),
+                        doc_id=rel.get("doc_id"),
+                        root_id=rel.get("root_id"),
+                    )
+
+        logger.info(
+            f"Loaded relationship subgraph for start_entity={start_entity}, target_entity={target_entity}, "
+            f"doc_id={doc_id}, rel_types={rel_types}: "
+            f"{graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges"
+        )
         return graph
 
     def get_entity_subgraph(self, entity_name: str, max_depth: int = 2):
         """Get subgraph around a specific entity within max_depth hops"""
-        import networkx as nx
 
         graph = nx.Graph()
 
@@ -251,8 +273,8 @@ class Neo4jClient:
                        node.entity_type AS entity_type,
                        node.description AS description,
                        node.doc_id AS doc_id,
-                       node.clause_id AS clause_id,
-                       node.chunk_id AS chunk_id
+                       node.root_id AS root_id,
+                       node.clause_ids AS clause_ids
                 """.replace(
                     "{max_depth}", str(max_depth)
                 ),
@@ -273,7 +295,7 @@ class Neo4jClient:
                     MATCH (e1:Entity)-[r]->(e2:Entity)
                     WHERE e1.entity_name IN $node_names 
                       AND e2.entity_name IN $node_names
-                      AND type(r) IN ['INCLUDE', 'NOT_INCLUDE', 'RELATED_TO']
+                      AND type(r) IN ['INCLUDE', 'NOT_INCLUDE']
                     RETURN r.id AS id,
                            e1.entity_name AS source_entity,
                            e2.entity_name AS target_entity,
@@ -282,7 +304,8 @@ class Neo4jClient:
                              ELSE coalesce(r.rel_type, 'RELATED_TO')
                            END AS rel_type,
                            r.description AS description,
-                           r.clause_id AS clause_id,
+                           r.root_id AS root_id,
+                           r.clause_ids AS clause_ids,
                            r.doc_id AS doc_id
                     """,
                     node_names=node_names,

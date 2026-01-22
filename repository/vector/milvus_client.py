@@ -354,11 +354,13 @@ class VectorStoreClient(DocStoreClient):
         self.client.upsert(collection_name=collection_name, data=newValue)
         return True
 
-    def delete(self, condition: dict, knowledgebaseId: str) -> int:
+    def delete(self, condition: dict, knowledgebaseId: str) -> None:
         collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseId}"
+        if not self.indexExist(knowledgebaseId):
+            logger.warning(f"Index {knowledgebaseId} not found")
+            return
         filter_expr = self._build_filter_expr(condition)
-        res = self.client.delete(collection_name=collection_name, filter=filter_expr)
-        return res
+        self.client.delete(collection_name=collection_name, filter=filter_expr)
 
     def get(self, chunkId: str, knowledgebaseIds: list[str]) -> dict | None:
         collection_name = f"{VECTOR_STORE_NAME}_{knowledgebaseIds[0]}"

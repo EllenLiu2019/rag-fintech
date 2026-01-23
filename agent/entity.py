@@ -13,24 +13,28 @@ class ClaimStatus(Enum):
 
 @dataclass
 class MedicalEntity:
+    """Custom runtime context schema."""
+
     entity_type: str  # diagnosis, procedure, symptom, medication
+    patient_age: int
     term_cn: str
     term_en: str
     icd10_concepts: List[str] = field(default_factory=list)  # ICD-10
     snomed_concepts: List[str] = field(default_factory=list)  # SNOMED
-    aligned_concept: Dict[str, Any] = field(default_factory=dict)  # aligned concept
     attributes: Dict[str, Any] = field(default_factory=dict)  # TNM & max_diameter_cm & is_lumph
-    description: str = ""
+    agent_reasoning: Dict[str, Any] = field(default_factory=dict)
+    description: str = field(default="")
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "entity_type": self.entity_type,
+            "patient_age": self.patient_age,
             "term_cn": self.term_cn,
             "term_en": self.term_en,
             "snomed_concepts": self.snomed_concepts,
             "icd10_concepts": self.icd10_concepts,
-            "aligned_concept": self.aligned_concept,
             "attributes": self.attributes,
+            "agent_reasoning": self.agent_reasoning,
             "description": self.description,
         }
 
@@ -38,12 +42,13 @@ class MedicalEntity:
     def from_dict(cls, data: Dict[str, Any]) -> "MedicalEntity":
         return cls(
             entity_type=data.get("entity_type", ""),
+            patient_age=data.get("patient_age", 0),
             term_cn=data.get("term_cn", ""),
             term_en=data.get("term_en", ""),
             snomed_concepts=data.get("snomed_concepts", []),
             icd10_concepts=data.get("icd10_concepts", []),
-            aligned_concept=data.get("aligned_concept", {}),
             attributes=data.get("attributes", {}),
+            agent_reasoning=data.get("agent_reasoning", {}),
             description=data.get("description", ""),
         )
 
@@ -51,6 +56,7 @@ class MedicalEntity:
 @dataclass
 class ClaimRequest:
     patient_id: str
+    patient_age: int
     policy_doc_id: str  # 保单文档ID
     medical_entities: List[MedicalEntity]  # 患者医疗实体
     claim_type: str  # medical
@@ -60,6 +66,7 @@ class ClaimRequest:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "patient_id": self.patient_id,
+            "patient_age": self.patient_age,
             "policy_doc_id": self.policy_doc_id,
             "medical_entities": [entity.to_dict() for entity in self.medical_entities],
             "claim_type": self.claim_type,
@@ -71,6 +78,7 @@ class ClaimRequest:
     def from_dict(cls, data: Dict[str, Any]) -> "ClaimRequest":
         return cls(
             patient_id=data.get("patient_id", ""),
+            patient_age=data.get("patient_age", 0),
             policy_doc_id=data.get("policy_doc_id", ""),
             medical_entities=[MedicalEntity.from_dict(entity) for entity in data.get("medical_entities", [])],
             claim_type=data.get("claim_type", ""),

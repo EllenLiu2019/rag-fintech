@@ -2,7 +2,7 @@ from typing import Dict, Any, List
 import asyncio
 
 from common import get_logger
-from agent.medical_normalizer import MedicalNormalizer
+from agent.medical_agent import MedicalAgent
 from agent.clause_matcher import ClauseMatcher
 from agent.eligibility_reasoner import EligibilityReasoner
 from agent.entity import ClaimRequest, ClaimDecision, MedicalEntity
@@ -15,7 +15,7 @@ class ClaimsOrchestrator:
     """Claims Orchestrator - Coordinates multiple agents to evaluate claim requests"""
 
     def __init__(self):
-        self.medical_normalizer = MedicalNormalizer()
+        self.medical_agent = MedicalAgent()
         self.clause_matcher = ClauseMatcher()
         self.eligibility_reasoner = EligibilityReasoner()
 
@@ -47,7 +47,7 @@ class ClaimsOrchestrator:
         return decision
 
     async def _normalize_medical_entities(self, entities: List[MedicalEntity]) -> List[MedicalEntity]:
-        tasks = [self.medical_normalizer.normalize(entity) for entity in entities]
+        tasks = [self.medical_agent.run(entity) for entity in entities]
         return await asyncio.gather(*tasks)
 
     async def _match_clauses(

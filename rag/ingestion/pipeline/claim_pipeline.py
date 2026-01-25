@@ -135,6 +135,7 @@ class ClaimPipeline(BasePipeline):
         claim_data = rag_document.business_data
         medical_entity = MedicalEntity(
             entity_type="diagnosis",
+            patient_age=claim_data["age"],
             term_cn=claim_data["primary_diagnosis"],
             term_en=claim_data["diagnosis_en"],
             attributes=claim_data.get("pathology_details", {}),
@@ -142,6 +143,7 @@ class ClaimPipeline(BasePipeline):
         )
         claim_request = ClaimRequest(
             patient_id=claim_data["name"],
+            patient_age=claim_data["age"],
             policy_doc_id="policy_0119223547_a02169",
             medical_entities=[medical_entity],
             claim_type="medical",

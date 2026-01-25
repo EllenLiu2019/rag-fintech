@@ -1,12 +1,14 @@
+import asyncio
 import json
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from rag.llm.chat_model import chat_model
 from common import get_logger, get_model_registry
 from common.prompt_manager import get_prompt_manager
 from rag.entity.clause_tree import ClauseForest, ClauseNode
 from repository.cache import cached
+from agent.entity import MedicalEntity
 
 logger = get_logger(__name__)
 
@@ -111,6 +113,42 @@ class FocRetriever:
             "reasoning": analysis_result["reasoning"],
             "tokens": analysis_result["tokens"],
         }
+
+
+async def foc_retrieval(entities: List[MedicalEntity], clause_forest: ClauseForest) -> Dict[str, Any]:
+    """
+    Perform FoC (Focus of Care) retrieval based on entities and clause forest.
+
+    Args:
+        entities: List of medical entities to search for
+        clause_forest: The clause forest structure to search within
+
+    Returns:
+        Dictionary containing clause_ids, reasoning, and tokens
+    """
+    entity_names = set()
+    icd10cn_names = set()
+    snomed_names = set()
+    tnm_stages = set()
+    for e in entities:
+        agent_reasoning = e.agent_reasoning
+        aligned_concept = agent_reasoning.get("aligned_concept", {})
+        entity_names.add(e.term_cn)
+        icd10cn_names.add(
+            aligned_concept.get("icd_name", "") + f"（concept code: {aligned_concept.get('icd_concept_code', '')}）"
+        )
+        snomed_names.add(aligned_concept.get("target_snomed_name", ""))
+        tnm_stages.add(agent_reasoning.get("tnm_stage", ""))
+
+    query = f"""
+      请根据信息判断是否符合主险及附加险的赔付条件：
+        诊断：{entity_names}
+        ICD10CN：{icd10cn_names}
+        SNOMED：{snomed_names}
+        TNM分期：{', '.join(tnm_stages)}
+    """
+
+    return await asyncio.to_thread(foc_retriever.retrieve_candidate_chunks, query, clause_forest)
 
 
 def _create_foc_retriever() -> FocRetriever:

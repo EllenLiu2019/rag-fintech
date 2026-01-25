@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, HumanMessage
-
+from langsmith import traceable
 from langchain.agents import create_agent
 
 from agent.tools import (
@@ -16,6 +16,7 @@ from agent.tools import (
 )
 from common import get_logger, get_model_registry
 from agent.entity import MedicalEntity
+
 
 logger = get_logger(__name__)
 
@@ -38,15 +39,18 @@ SYSTEM_PROMPT = """
 {
     "best_matched_concept": {
         "icd_id": "ICD10CN ID",
+        "icd_concept_code": "ICD10CN Concept Code of ICD10CN",
         "icd_name": "ICD10CN Name of ICD10CN",
         "mapped_snomed_id": "SNOMED ID of mapped SNOMED",
         "mapped_snomed_name": "SNOMED Name of mapped SNOMED",
         "target_snomed_id": "SNOMED ID of target SNOMED",
+        "target_snomed_concept_code": "SNOMED Concept Code of target SNOMED",
         "target_snomed_name": "SNOMED Name of target SNOMED",
         "path_length": 3,
         "rel_types": ["MAPS_TO", "ISA", ...] # relationship types between ICD10CN and Target SNOMED
-    }，
-    "tnm_stage": "TNM Stage",
+    },
+    "tnm_code": "TNM Code, e.g. T1N0M0",
+    "tnm_stage": "TNM Stage, e.g. I期",
     "reasoning": "Reasoning for the output",
     "human_in_the_loop": True # if the output is not confident, set to True, otherwise set to False
 }   
@@ -63,35 +67,28 @@ class MedicalResponse:
 
 class MedicalAgent:
     def __init__(self):
-        registry = get_model_registry()
-        model_config = registry.get_chat_model("qa_reasoner")
-        model = model_config.to_dict()
-        self.llm = init_chat_model(
-            model["model_name"],
-            model_provider=model["provider"],
-            api_key=os.getenv(f"{model['provider'].upper()}_API_KEY"),
+        model_config = get_model_registry().get_chat_model("qa_reasoner").to_dict()
+        model = init_chat_model(
+            model_config["model_name"],
+            model_provider=model_config["provider"],
+            api_key=os.getenv(f"{model_config['provider'].upper()}_API_KEY"),
         )
-        self.tools = {
-            "search_medical_kb": search_medical_kb,
-            "align_medical_concepts": align_medical_concepts,
-            "calculate_thyroid_tnm_stage": calculate_thyroid_tnm_stage,
-        }
+        tools = [search_medical_kb, align_medical_concepts, calculate_thyroid_tnm_stage]
         self.agent = create_agent(
-            model=self.llm,
+            model=model,
             system_prompt=SYSTEM_PROMPT,
-            tools=list(self.tools.values()),
+            tools=tools,
             context_schema=MedicalEntity,
             debug=True,
         )
 
+    @traceable(run_type="chain", name="MedicalAgent.run")
     async def run(self, medical_entity: MedicalEntity):
-        # Convert to BaseMessage objects
-        config = {"configurable": {"thread_id": "medical_agent_1"}}
         user_message = HumanMessage(
             content=f"请处理医疗实体: {json.dumps(medical_entity.to_dict(), ensure_ascii=False, indent=2)}"
         )
         inputs = {"messages": [user_message]}
-        results = await self.agent.ainvoke(inputs, config, context=medical_entity)
+        results = await self.agent.ainvoke(inputs, context=medical_entity)
         self._enrich_medical_entity(results, medical_entity)
         return results
 
@@ -119,15 +116,18 @@ class MedicalAgent:
             if aligned_concept:
                 medical_entity.agent_reasoning["aligned_concept"] = {
                     "icd_id": aligned_concept.get("icd_id"),
+                    "icd_concept_code": aligned_concept.get("icd_concept_code"),
                     "icd_name": aligned_concept.get("icd_name"),
                     "mapped_snomed_id": aligned_concept.get("mapped_snomed_id"),
                     "mapped_snomed_name": aligned_concept.get("mapped_snomed_name"),
                     "target_snomed_id": aligned_concept.get("target_snomed_id"),
+                    "target_snomed_concept_code": aligned_concept.get("target_snomed_concept_code"),
                     "target_snomed_name": aligned_concept.get("target_snomed_name"),
                     "path_length": aligned_concept.get("path_length"),
                     "rel_types": aligned_concept.get("rel_types", []),
                 }
 
+            medical_entity.agent_reasoning["tnm_code"] = medical_response_data.get("tnm_code", "")
             medical_entity.agent_reasoning["tnm_stage"] = medical_response_data.get("tnm_stage", "")
             medical_entity.agent_reasoning["reasoning"] = medical_response_data.get("reasoning", "")
             medical_entity.agent_reasoning["human_in_the_loop"] = medical_response_data.get("human_in_the_loop", False)

@@ -39,9 +39,12 @@ async def align_medical_concepts(icd10cn_concepts: list[dict[str, Any]], snomed_
         ORDER BY icd.id
         """
     for icd_concept in icd10cn_concepts:
+        icd10cn_id = icd_concept.get("concept_id")
+        icd_concept_code = icd_concept.get("concept_code")
         for snomed_concept in snomed_concepts:
-            icd10cn_id = icd_concept.get("concept_id")
             snomed_id = snomed_concept.get("concept_id")
+            snomed_concept_code = snomed_concept.get("concept_code")
+
             results = await asyncio.to_thread(
                 neo4j_client.execute_query,
                 direct_query,
@@ -52,10 +55,12 @@ async def align_medical_concepts(icd10cn_concepts: list[dict[str, Any]], snomed_
                     {
                         "path_length": 1,
                         "icd_id": result["icd_id"],
+                        "icd_concept_code": icd_concept_code,
                         "icd_name": result["icd_name"],
                         "mapped_snomed_id": result["snomed_id"],
                         "mapped_snomed_name": result["snomed_name"],
                         "target_snomed_id": result["snomed_id"],
+                        "target_snomed_concept_code": snomed_concept_code,
                         "target_snomed_name": result["snomed_name"],
                         "rel_types": ["MAPS_TO"],
                     }
@@ -78,9 +83,13 @@ async def align_medical_concepts(icd10cn_concepts: list[dict[str, Any]], snomed_
             """
 
         for icd_concept in icd10cn_concepts:
+            icd10cn_id = icd_concept.get("concept_id")
+            icd_concept_code = icd_concept.get("concept_code")
+
             for snomed_concept in snomed_concepts:
-                icd10cn_id = icd_concept.get("concept_id")
                 snomed_id = snomed_concept.get("concept_id")
+                snomed_concept_code = snomed_concept.get("concept_code")
+
                 results = await asyncio.to_thread(
                     neo4j_client.execute_query,
                     query,
@@ -91,10 +100,12 @@ async def align_medical_concepts(icd10cn_concepts: list[dict[str, Any]], snomed_
                         {
                             "path_length": int(result["path_length"]),
                             "icd_id": result["icd_id"],
+                            "icd_concept_code": icd_concept_code,
                             "icd_name": result["icd_name"],
                             "mapped_snomed_id": result["mapped_snomed_id"],
                             "mapped_snomed_name": result["mapped_snomed_name"],
                             "target_snomed_id": result["target_snomed_id"],
+                            "target_snomed_concept_code": snomed_concept_code,
                             "target_snomed_name": result["target_snomed_name"],
                             "rel_types": result["rel_types"],
                         }

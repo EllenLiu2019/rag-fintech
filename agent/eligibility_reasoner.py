@@ -68,15 +68,19 @@ class EligibilityReasoner:
         entities: List[MedicalEntity],
         evidence: Dict[str, Any],
     ) -> Dict[str, Any]:
-        patient_conditions = [
-            {
-                "diagnosis": e.term_cn,
-                "icd10cn_concepts": e.aligned_concept.get("icd_name", ""),
-                "snomed_concepts": e.aligned_concept.get("target_snomed_name", ""),
-                "attributes": e.attributes,
-            }
-            for e in entities
-        ]
+        patient_conditions = []
+        for e in entities:
+            agent_reasoning = e.agent_reasoning
+            aligned_concept: dict = agent_reasoning.get("aligned_concept", {})
+            patient_conditions.append(
+                {
+                    "diagnosis": e.term_cn,
+                    "icd10cn": f"{aligned_concept.get('icd_name', '')} (concept_code: {aligned_concept.get('icd_concept_code', '')})",
+                    "snomed": f"{aligned_concept.get('target_snomed_name', '')} (concept_code: {aligned_concept.get('target_snomed_concept_code', '')})",
+                    "tnm_stage": agent_reasoning.get("tnm_stage", ""),
+                    "attributes": e.attributes,
+                }
+            )
         coverage_evidence = evidence.get("coverage_evidence", [])
         exclusion_evidence = evidence.get("exclusion_evidence", [])
         clauses_evidence = evidence.get("clauses_evidence", "")

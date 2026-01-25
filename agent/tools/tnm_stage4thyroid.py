@@ -77,14 +77,12 @@ def calculate_thyroid_tnm_stage(
             return "I期"
         else:
             if "m1" in m:
-                return "IVC期"
-            if "t4b" in t:
                 return "IVB期"
-            if "t4a" in t or "n1b" in n:
+            if "t4b" in t:
                 return "IVA期"
-            if "n1a" in n:
+            if "t4a" in t:
                 return "III期"
-            if "t2" in t or "t3" in t:
+            if "t3" in t or "n1" in n:
                 return "II期"
             return "I期"
 

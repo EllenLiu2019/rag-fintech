@@ -47,7 +47,7 @@
             "description": "Claude Opus 4.5 model"
         },
         "qwen_32B": {
-            "provider": "Vllm",
+            "provider": "OpenAI",
             "model_name": "Qwen/Qwen3-32B-AWQ",
             "max_tokens": 128000,
             "base_url": "http://127.0.0.1:8000/v1",

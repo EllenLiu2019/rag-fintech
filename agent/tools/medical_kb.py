@@ -25,6 +25,7 @@ async def search_medical_kb(runtime: ToolRuntime[MedicalEntity]) -> SearchOutput
     """search ICD-10 and SNOMED standard concepts"""
 
     medical_entity: MedicalEntity = runtime.context
+
     domain_mapping = {
         "diagnosis": "Condition",
         "procedure": "Procedure",
@@ -42,7 +43,7 @@ async def search_medical_kb(runtime: ToolRuntime[MedicalEntity]) -> SearchOutput
         vector_store.search,
         selectFields=SELECT_FIELDS,
         dense_vectors=[embeddings[0]],
-        limit=5,
+        limit=3,
         knowledgebaseIds=[VECTOR_SNOMED_KB],
         filters=f'vocabulary_id == "ICD10CN" and domain_id == "{domain}" and concept_class_id == "ICD10 code"',
     )
@@ -50,7 +51,7 @@ async def search_medical_kb(runtime: ToolRuntime[MedicalEntity]) -> SearchOutput
         vector_store.search,
         selectFields=SELECT_FIELDS,
         dense_vectors=[embeddings[1]],
-        limit=5,
+        limit=3,
         knowledgebaseIds=[VECTOR_SNOMED_KB],
         filters=f'vocabulary_id == "SNOMED" and domain_id == "{domain}"',
     )
@@ -59,26 +60,31 @@ async def search_medical_kb(runtime: ToolRuntime[MedicalEntity]) -> SearchOutput
 
     if icd_results and icd_results[0]:
         for icd in icd_results[0]:
-            medical_entity.icd10_concepts.append(
-                {
-                    "concept_id": int(icd["concept_id"]),
-                    "concept_name": icd["concept_name"],
-                    "concept_code": icd["concept_code"],
-                    "score": icd["score"],
-                }
-            )
+            if medical_entity.icd10_concepts is None:
+                medical_entity.icd10_concepts = {}
+            concept_id = int(icd["concept_id"])
+            medical_entity.icd10_concepts[concept_id] = {
+                "concept_id": concept_id,
+                "concept_name": icd["concept_name"],
+                "concept_code": icd["concept_code"],
+                "score": icd["score"],
+            }
 
     if snomed_results and snomed_results[0]:
         for snomed in snomed_results[0]:
-            medical_entity.snomed_concepts.append(
-                {
-                    "concept_id": int(snomed["concept_id"]),
-                    "concept_name": snomed["concept_name"],
-                    "concept_code": snomed["concept_code"],
-                    "score": snomed["score"],
-                }
-            )
+            if medical_entity.snomed_concepts is None:
+                medical_entity.snomed_concepts = {}
+            concept_id = int(snomed["concept_id"])
+            medical_entity.snomed_concepts[concept_id] = {
+                "concept_id": concept_id,
+                "concept_name": snomed["concept_name"],
+                "concept_code": snomed["concept_code"],
+                "score": snomed["score"],
+            }
 
+    logger.warning(
+        f"Search medical kb results: icd_concepts={medical_entity.icd10_concepts}, snomed_concepts={medical_entity.snomed_concepts}"
+    )
     return SearchOutput(
         icd_concepts=medical_entity.icd10_concepts,
         snomed_concepts=medical_entity.snomed_concepts,

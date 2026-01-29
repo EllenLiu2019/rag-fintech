@@ -4,8 +4,12 @@ from typing import Any
 from pydantic import BaseModel, Field
 import json
 
+from agent.entity import MedicalEntity
+from langchain.tools import ToolRuntime
+
 from repository.graph import neo4j_client
 from common import get_logger
+
 
 logger = get_logger(__name__)
 
@@ -19,13 +23,29 @@ class MedicalConcepts(BaseModel):
     )
 
 
-@tool(args_schema=MedicalConcepts)
-async def align_medical_concepts(icd10cn_concepts: list[dict[str, Any]], snomed_concepts: list[dict[str, Any]]) -> str:
+@tool
+async def align_medical_concepts(runtime: ToolRuntime[MedicalEntity]) -> str:
     """align ICD-10 and SNOMED concepts by direct mapping or path matching.
 
     This tool accepts AI-selected high-confidence concepts and performs alignment.
     Returns JSON string with aligned_concepts list, sorted by path_length (shortest first).
     """
+
+    medical_entity: MedicalEntity = runtime.context
+
+    if medical_entity.agent_reasoning is None:
+        medical_entity.agent_reasoning = {}
+
+    encode_data = medical_entity.agent_reasoning.get("encode", {})
+    icd10cn_concepts = encode_data.get("icd10_concepts", [])
+    snomed_concepts = encode_data.get("snomed_concepts", [])
+
+    if not icd10cn_concepts or not snomed_concepts:
+        logger.warning(
+            f"Missing concepts in agent_reasoning: icd10_concepts={bool(icd10cn_concepts)}, "
+            f"snomed_concepts={bool(snomed_concepts)}"
+        )
+        return json.dumps({"aligned_concepts": []}, ensure_ascii=False)
 
     aligned_concepts = []
 

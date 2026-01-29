@@ -53,7 +53,7 @@ class TNMInfo(BaseModel):
 
 
 @tool(args_schema=TNMInfo)
-def calculate_thyroid_tnm_stage(
+async def calculate_thyroid_tnm_stage(
     age: int,
     t_stage_raw: str,
     n_stage_raw: str,

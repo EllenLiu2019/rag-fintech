@@ -1,3 +1,4 @@
+import os
 from typing import List, Dict, Any, Optional
 from pymilvus import (
     MilvusClient,
@@ -48,13 +49,35 @@ class VectorStoreClient(DocStoreClient):
             raise
 
     def _init_client(self):
-        """Create or reconnect to Milvus."""
+        """Create or reconnect to Milvus.
+        Temporarily disables HTTP proxy to avoid SSL certificate issues with gRPC.
+        """
+        
+        # Save current proxy settings
+        saved_proxies = {
+            'http_proxy': os.environ.get('http_proxy'),
+            'https_proxy': os.environ.get('https_proxy'),
+            'HTTP_PROXY': os.environ.get('HTTP_PROXY'),
+            'HTTPS_PROXY': os.environ.get('HTTPS_PROXY'),
+        }
+        
         try:
+            for proxy_var in ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY']:
+                if proxy_var in os.environ:
+                    del os.environ[proxy_var]
+            
+            logger.info(f"Connecting to Milvus at {self.uri} (proxy temporarily disabled)")
+            
             self._client = MilvusClient(uri=self.uri, token=self.token)
-            logger.info(f"Connected to Milvus at {self.uri}")
+            logger.info(f"Connected to Milvus successfully")
+            
         except Exception as e:
             logger.error(f"Failed to connect to Milvus: {e}")
             raise
+        finally:
+            for key, value in saved_proxies.items():
+                if value is not None:
+                    os.environ[key] = value
 
     @property
     def client(self) -> MilvusClient:

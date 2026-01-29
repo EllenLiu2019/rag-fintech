@@ -19,6 +19,7 @@ def extract_content(text: str) -> dict:
         return {}
 
     # Remove markdown code block markers
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
     text = re.sub(r"```json\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"```\s*", "", text)
 

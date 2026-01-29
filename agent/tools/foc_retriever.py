@@ -9,6 +9,7 @@ from common.prompt_manager import get_prompt_manager
 from rag.entity.clause_tree import ClauseForest, ClauseNode
 from repository.cache import cached
 from agent.entity import MedicalEntity
+from agent.tools.utils import extract_content
 
 logger = get_logger(__name__)
 
@@ -21,7 +22,7 @@ class FocRetriever:
     def __init__(self, model: Optional[Dict[str, Any]] = None):
         if model is None:
             registry = get_model_registry()
-            model_config = registry.get_chat_model("qa_reasoner")
+            model_config = registry.get_chat_model("qwen_32B")
             model = model_config.to_dict()
 
         self.llm = chat_model[model["provider"]](
@@ -63,11 +64,11 @@ class FocRetriever:
                     },
                 ]
             )
-            logger.info(f"Time taken to generate: {time.time() - start} seconds")
-            result = json.loads(content.replace("```json", "").replace("```", ""))
+            logger.warning(f"Time taken to generate: {time.time() - start} seconds")
+            result = extract_content(content)
             clause_ids = result.get("relevant_clause_ids", [])
 
-            logger.debug(f"Reasoning: {reasoning}")
+            logger.warning(f"Reasoning: {reasoning}")
 
             return {
                 "relevant_clause_ids": clause_ids,
@@ -83,7 +84,7 @@ class FocRetriever:
                 "tokens": 0,
             }
 
-    @cached(prefix="foc_llm_analysis", ttl=60 * 60 * 24)
+    # @cached(prefix="foc_llm_analysis", ttl=60 * 60 * 24)
     def retrieve_candidate_chunks(
         self,
         query: str,

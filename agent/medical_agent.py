@@ -22,20 +22,29 @@ logger = get_logger(__name__)
 
 
 SYSTEM_PROMPT = """
-你是一名专业的医疗理赔编码专家。你的目标是将输入的医疗实体标准化，并计算分期。
+你是一名专业的医疗理赔编码专家。你的目标是**调用工具**将输入的医疗实体标准化，并计算分期。
 
-**工作流程：**
+## 要求
+如果满足工具调用条件，请务必**确保**调用以下工具，**不要自行计算或推断**：
+- `search_medical_kb`
+- `align_medical_concepts`
+- `calculate_thyroid_tnm_stage`
+
+## 工作流程
 1. 分析用户输入的实体类型，如果实体类型为 diagnosis，分别搜索 ICD10CN 和 SNOMED 库。
-2. 请分别从返回的 ICD10CN 和 SNOMED 结果中找到最高置信度的1个或多个结果，调用 `align_medical_concepts` 工具，对高置信度且合理的 ICD & SNOMED concepts进行匹配。
-   - 如果匹配：将合理的且较短路径的匹配结果作为最佳匹配结果，填充到 `best_matched_concept` 字段。
+2. 请务必确保调用 `align_medical_concepts` 工具对上一步的结果进行匹配。
+   - 请分别从返回的 ICD10CN 和 SNOMED 结果中找到最高置信度的1个或多个结果，调用工具，对高置信度且合理的 ICD & SNOMED concepts进行匹配。
+   - 如果匹配：将合理的且较短路径的匹配结果作为最佳匹配结果，填充到 `best_matched_concept` 字段，请确保 best_matched_concept 必须直接复制于 align_medical_concepts 工具的输出。
    - 如果不匹配：设置 `human_in_the_loop` 字段为 True，并在 `reasoning` 中说明原因并标记歧义。
 3. 对于 TNM 分期，请根据“患者年龄”、“肿瘤大小”、“是否淋巴结转移”等关键信息，提取 T、N、M 分期、病理类型；
-   - 若是甲状腺癌，则调用 `calculate_thyroid_tnm_stage` 工具，计算 TNM 分期。
-   - 若是其他癌症，请回忆该类型癌症在 AJCC 8th edition 中的 TNM 分期规则，并计算 TNM 分期。
+   - 若是甲状腺癌，则**务必**调用 `calculate_thyroid_tnm_stage` 工具，计算 TNM 分期。
+   - 若是其他癌症，请**务必**回忆该类型癌症在 AJCC 8th edition 中的 TNM 分期规则，并计算 TNM 分期。
    - 将结果填充到返回结果的 `tnm_stage` 字段。
 4. 如果搜索结果或匹配结果与实体描述明显不符，或者无法确定 TNM 分期，请标记为需要人工审核，设置 `human_in_the_loop` 字段为 True。
+5. 在返回前**务必**检查是否调用必要的工具，如果必要工具未调用，调用工具以后才返回结果。
    
-**输出:** 请直接输出合法 JSON 字符串，不要携带 "```json" 和 "```" 标签，不要输出任何其他内容。示例如下：
+## 输出: 
+请直接输出合法 JSON 字符串，不要携带 "```json" 和 "```" 标签，不要输出任何其他内容。示例如下：
 {
     "best_matched_concept": {
         "icd_id": "ICD10CN ID",
@@ -67,11 +76,12 @@ class MedicalResponse:
 
 class MedicalAgent:
     def __init__(self):
-        model_config = get_model_registry().get_chat_model("qa_reasoner").to_dict()
+        model_config = get_model_registry().get_chat_model("qwen_32B").to_dict()
         model = init_chat_model(
-            model_config["model_name"],
-            model_provider=model_config["provider"],
-            api_key=os.getenv(f"{model_config['provider'].upper()}_API_KEY"),
+            model=model_config["model_name"],
+            model_provider="openai",
+            base_url=model_config["base_url"],
+            api_key=os.getenv(f"{model_config['provider'].upper()}_API_KEY", "EMPTY"),
         )
         tools = [search_medical_kb, align_medical_concepts, calculate_thyroid_tnm_stage]
         self.agent = create_agent(

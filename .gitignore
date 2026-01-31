@@ -35,3 +35,8 @@ docs/*
 api/scripts/
 rag_fintech.egg-info/
 **/data/
+repository/s3/*
+!repository/s3/*.py
+repository/rdb/sql/ddl/*snomed.sql
+rag/evaluation/*.csv
+tools/*

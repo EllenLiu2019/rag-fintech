@@ -19,7 +19,7 @@ def extract_content(text: str) -> dict:
         return {}
 
     # Remove markdown code block markers
-    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
     text = re.sub(r"```json\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"```\s*", "", text)
 
@@ -63,6 +63,22 @@ def extract_content(text: str) -> dict:
             return json.loads(text.strip())
         except json.JSONDecodeError:
             return {}
+
+
+def extract_ai_message(message: AIMessage) -> dict | None:
+
+    medical_response_data = None
+    if isinstance(message, AIMessage) and message.content:
+        try:
+            medical_response_data = extract_content(message.content) if isinstance(message.content, str) else {}
+        except Exception as e:
+            logger.warning(f"Failed to extract JSON from message: {e}")
+
+    if not medical_response_data:
+        logger.warning("No AI message found in agent result")
+        return None
+
+    return medical_response_data
 
 
 def _patched_convert_message_to_dict(message: BaseMessage) -> Dict:

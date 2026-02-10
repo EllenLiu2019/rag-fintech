@@ -7,6 +7,7 @@ from common import get_logger, get_model_registry
 from common.prompt_manager import get_prompt_manager
 from rag.entity.clause_tree import ClauseForest, ClauseNode
 from repository.cache import cached
+from agent.graph_state import HumanDecision
 from agent.entity import MedicalEntity
 from agent.tools.utils import extract_content
 
@@ -21,7 +22,7 @@ class FocRetriever:
     def __init__(self, model: Optional[Dict[str, Any]] = None):
         if model is None:
             registry = get_model_registry()
-            model_config = registry.get_chat_model("qwen_32B")
+            model_config = registry.get_chat_model("qa_lite")
             model = model_config.to_dict()
 
         self.llm = chat_model[model["provider"]](
@@ -83,7 +84,7 @@ class FocRetriever:
                 "tokens": 0,
             }
 
-    # @cached(prefix="foc_llm_analysis", ttl=60 * 60 * 24)
+    @cached(prefix="foc_llm_analysis", ttl=60 * 60 * 24)
     def retrieve_candidate_chunks(
         self,
         query: str,
@@ -115,7 +116,9 @@ class FocRetriever:
         }
 
 
-async def foc_retrieval(entities: List[MedicalEntity], clause_forest: ClauseForest) -> Dict[str, Any]:
+async def foc_retrieval(
+    entities: List[MedicalEntity], decisions: List[HumanDecision], clause_forest: ClauseForest
+) -> Dict[str, Any]:
     """
     Perform FoC (Focus of Care) retrieval based on entities and clause forest.
 
@@ -128,23 +131,16 @@ async def foc_retrieval(entities: List[MedicalEntity], clause_forest: ClauseFore
     """
     entity_names = set()
     icd10cn_names = set()
-    snomed_names = set()
     tnm_stages = set()
-    for e in entities:
-        agent_reasoning = e.agent_reasoning
-        aligned_concept = agent_reasoning.get("aligned_concept", {})
+    for e, decision in zip(entities, decisions):
         entity_names.add(e.term_cn)
-        icd10cn_names.add(
-            aligned_concept.get("icd_name", "") + f"（concept code: {aligned_concept.get('icd_concept_code', '')}）"
-        )
-        snomed_names.add(aligned_concept.get("target_snomed_name", ""))
-        tnm_stages.add(agent_reasoning.get("tnm_stage", ""))
+        icd10cn_names.add(decision.icd_concept_name + f"（concept code: {decision.icd_concept_code}）")
+        tnm_stages.add(decision.tnm_stage)
 
     query = f"""
       请根据信息判断是否符合主险及附加险的赔付条件：
         诊断：{entity_names}
         ICD10CN：{icd10cn_names}
-        SNOMED：{snomed_names}
         TNM分期：{', '.join(tnm_stages)}
     """
 

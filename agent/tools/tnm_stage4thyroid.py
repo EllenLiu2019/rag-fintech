@@ -2,6 +2,8 @@ from langchain.tools import tool
 from pydantic import BaseModel, Field
 from enum import Enum
 
+from langchain.tools import ToolRuntime
+
 
 class HistologyType(Enum):
     PAPILLARY = "乳头状癌"
@@ -53,57 +55,92 @@ class TNMInfo(BaseModel):
 
 
 @tool(args_schema=TNMInfo)
-async def calculate_thyroid_tnm_stage(
+def calculate_thyroid_tnm_stage(
     age: int,
     t_stage_raw: str,
     n_stage_raw: str,
     m_stage_raw: str,
     histology_type: HistologyType,
+    runtime: ToolRuntime,
 ) -> str:
     """Determine the TNM staging classification for thyroid cancer in accordance with the American Joint Committee on Cancer (AJCC) Eighth Edition guidelines.
 
     This tool accepts TNM information and calculates the TNM stage according to the AJCC 8th edition.
     Returns the TNM stage description.
     """
+    from agent.graph_state import AgentOutput, Step
+
+    agent_output_dict: dict[str, AgentOutput] = runtime.state.agent_output_dict
 
     t = t_stage_raw.replace("p", "").replace("c", "").lower()
     n = n_stage_raw.replace("p", "").replace("c", "").lower()
     m = m_stage_raw.replace("p", "").replace("c", "").lower()
 
-    if histology_type in [HistologyType.PAPILLARY, HistologyType.FOLLICULAR]:
-        if age < 55:
-            if "m1" in m:
-                return "II期"
-            return "I期"
+    # AJCC 8th edition: check from highest severity to lowest
+    match histology_type:
+        case HistologyType.PAPILLARY | HistologyType.FOLLICULAR:
+            tnm_stage = _stage_papillary_follicular(age, t, n, m)
+        case HistologyType.MEDULLARY:
+            tnm_stage = _stage_medullary(t, n, m)
+        case HistologyType.ANAPLASTIC:
+            tnm_stage = _stage_anaplastic(t, n, m)
+        case _:
+            tnm_stage = "无法判定"
+
+    tool_call = {
+        "name": "calculate_thyroid_tnm_stage",
+        "output": tnm_stage,
+    }
+    agent_output_dict[Step.STAGE_AGENT.value] = AgentOutput(
+        name=Step.STAGE_AGENT.value,
+        tool_calls=[tool_call],
+        agent_response={},
+        step_output=None,
+    )
+
+    return tnm_stage
+
+
+def _stage_papillary_follicular(age: int, t: str, n: str, m: str) -> str:
+    """Papillary / Follicular thyroid carcinoma staging (AJCC 8th edition)."""
+    if age < 55:
+        # Age < 55: only M status matters
+        return "II期" if "m1" in m else "I期"
+    else:
+        # Age >= 55: check from highest severity to lowest
+        if "m1" in m:
+            return "IVB期"
+        elif "t4b" in t:
+            return "IVA期"
+        elif "t4a" in t:
+            return "III期"
+        elif "t3" in t or "n1" in n:
+            return "II期"
         else:
-            if "m1" in m:
-                return "IVB期"
-            if "t4b" in t:
-                return "IVA期"
-            if "t4a" in t:
-                return "III期"
-            if "t3" in t or "n1" in n:
-                return "II期"
             return "I期"
 
-    elif histology_type == HistologyType.MEDULLARY:
-        if "m1" in m:
-            return "IVC期"
-        if "t4b" in t:
-            return "IVB期"
-        if "t4a" in t or "n1b" in n:
-            return "IVA期"
-        if "n1a" in n:
-            return "III期"
-        if "t2" in t or "t3" in t:
-            return "II期"
+
+def _stage_medullary(t: str, n: str, m: str) -> str:
+    """Medullary thyroid carcinoma staging (AJCC 8th edition)."""
+    if "m1" in m:
+        return "IVC期"
+    elif "t4b" in t:
+        return "IVB期"
+    elif "t4a" in t or "n1b" in n:
+        return "IVA期"
+    elif "n1a" in n:
+        return "III期"
+    elif "t2" in t or "t3" in t:
+        return "II期"
+    else:
         return "I期"
 
-    elif histology_type == HistologyType.ANAPLASTIC:
-        if "m1" in m:
-            return "IVC期"
-        if "t4" in t or "n1" in n:
-            return "IVB期"
-        return "IVA期"
 
-    return "无法判定"
+def _stage_anaplastic(t: str, n: str, m: str) -> str:
+    """Anaplastic thyroid carcinoma staging (AJCC 8th edition)."""
+    if "m1" in m:
+        return "IVC期"
+    elif "t4" in t or "n1" in n:
+        return "IVB期"
+    else:
+        return "IVA期"

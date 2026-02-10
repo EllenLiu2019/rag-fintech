@@ -7,7 +7,7 @@ from common.constants import VECTOR_GRAPH_KB
 from rag.embedding import dense_embedder, sparse_embedder
 from repository.vector import vector_store
 from repository.graph.neo4j_client import neo4j_client
-from agent.entity import MedicalEntity
+from agent.graph_state import HumanDecision
 
 logger = get_logger(__name__)
 
@@ -24,13 +24,9 @@ def _achieved_threshold(score: float, k: int = 60) -> bool:
     return score >= threshold
 
 
-async def _search_graph_entities(entity: MedicalEntity, doc_id: str) -> List[Dict[str, Any]]:
-    agent_reasoning = entity.agent_reasoning
-    aligned_concept = agent_reasoning.get("aligned_concept", {})
-    diagnosis = aligned_concept.get("icd_name", "")
-    tnm_stage = agent_reasoning.get("tnm_stage", "")
-    if tnm_stage:
-        diagnosis += f"（{tnm_stage}）"
+async def _search_graph_entities(decision: HumanDecision, doc_id: str) -> List[Dict[str, Any]]:
+
+    diagnosis = f"{decision.icd_concept_name}（{decision.tnm_stage}）"
 
     search_results = []
     dense_task = asyncio.to_thread(dense_embedder.embed_query, diagnosis)
@@ -114,26 +110,32 @@ def _extract_evidence_from_subgraph(subgraph, entity_name: str, root_id: int) ->
     }
 
 
-async def graph_retrieval(entities: List[MedicalEntity], doc_id: str) -> list[Dict[str, Any]]:
+async def graph_retrieval(decisions: List[HumanDecision], doc_id: str) -> list[Dict[str, Any]]:
     """
     Perform graph-based retrieval to find coverage/exclusion evidence.
 
     Args:
-        entities: List of medical entities to search for
+        decisions: List of human decisions containing ICD/TNM info
         doc_id: Document ID to search within
 
     Returns:
         List of evidence dictionaries containing coverage, exclusion, and clause_ids
     """
-    graph_evidence = []
+    # Step 1: Search graph entities for all decisions in parallel
+    search_tasks = [_search_graph_entities(decision, doc_id) for decision in decisions]
+    all_entity_matches = await asyncio.gather(*search_tasks)
 
-    for entity in entities:
-        entity_matches = await _search_graph_entities(entity, doc_id)
-        if entity_matches:
-            for match in entity_matches:
-                if not _achieved_threshold(match["score"]):
-                    continue
-                subgraph = await asyncio.to_thread(
+    # Step 2: Collect all subgraph fetch tasks (filter by threshold)
+    subgraph_tasks = []
+    task_meta: list[tuple[str, str]] = []  # (entity_name, root_id) per task
+    for entity_matches in all_entity_matches:
+        if not entity_matches:
+            continue
+        for match in entity_matches:
+            if not _achieved_threshold(match["score"]):
+                continue
+            subgraph_tasks.append(
+                asyncio.to_thread(
                     neo4j_client.get_relationship_subgraph,
                     "保险责任",
                     match["entity_name"],
@@ -141,8 +143,20 @@ async def graph_retrieval(entities: List[MedicalEntity], doc_id: str) -> list[Di
                     match["root_id"],
                     EVIDENCE_TYPE_MAP.keys(),
                 )
-                if subgraph.number_of_nodes() > 0:
-                    evidence = _extract_evidence_from_subgraph(subgraph, match["entity_name"], match["root_id"])
-                    graph_evidence.append(evidence)
+            )
+            task_meta.append((match["entity_name"], match["root_id"]))
+
+    if not subgraph_tasks:
+        return []
+
+    # Step 3: Fetch all subgraphs in parallel
+    subgraphs = await asyncio.gather(*subgraph_tasks)
+
+    # Step 4: Extract evidence from subgraphs (CPU-only, no I/O)
+    graph_evidence = []
+    for (entity_name, root_id), subgraph in zip(task_meta, subgraphs):
+        if subgraph.number_of_nodes() > 0:
+            evidence = _extract_evidence_from_subgraph(subgraph, entity_name, root_id)
+            graph_evidence.append(evidence)
 
     return graph_evidence

@@ -4,12 +4,14 @@ from common import get_logger
 from common.constants import VECTOR_DEFAULT_KB
 from rag.retrieval.retriever import retriever
 from agent.entity import MedicalEntity
+from agent.graph_state import HumanDecision
 
 logger = get_logger(__name__)
 
 
 async def vector_retrieval(
     entities: List[MedicalEntity],
+    decisions: List[HumanDecision],
     doc_id: str,
 ) -> Dict[str, Any]:
     """
@@ -27,15 +29,9 @@ async def vector_retrieval(
     icd10cn_names = []
     snomed_names = []
     tnm_stages = []
-    for e in entities:
-        agent_reasoning: dict = e.agent_reasoning
-        if agent_reasoning.get("tnm_stage"):
-            tnm_stages.append(agent_reasoning.get("tnm_stage"))
-        aligned_concept: dict = agent_reasoning.get("aligned_concept", {})
-        if aligned_concept and aligned_concept.get("icd_name"):
-            icd10cn_names.append(aligned_concept.get("icd_name"))
-        if aligned_concept and aligned_concept.get("target_snomed_name"):
-            snomed_names.append(aligned_concept.get("target_snomed_name"))
+    for decision in decisions:
+        tnm_stages.append(decision.tnm_stage)
+        icd10cn_names.append(decision.icd_concept_name)
 
     query_parts = []
     if entity_names:

@@ -24,28 +24,11 @@ export const DocumentList = ({
     try {
       setLoading(true)
       setError('')
-      
-      // TODO: 实现获取文档列表的 API
-      // 目前先返回空数组，等待后端 API 实现
-      // const response = await fetch(`${apiBaseUrl}/api/documents?doc_type=${docTypeFilter}`)
-      // if (!response.ok) throw new Error('获取文档列表失败')
-      // const data = await response.json()
-      // setDocuments(data.documents || [])
-      
-      // 临时：从 localStorage 获取（如果有的话）
-      const storedDocs = localStorage.getItem('uploaded_documents')
-      if (storedDocs) {
-        const parsed = JSON.parse(storedDocs)
-        let filtered = parsed
-        
-        if (docTypeFilter !== 'all') {
-          filtered = parsed.filter(doc => doc.doc_type === docTypeFilter)
-        }
-        
-        setDocuments(filtered)
-      } else {
-        setDocuments([])
-      }
+
+      const response = await fetch(`${apiBaseUrl}/api/documents?doc_type=${docTypeFilter}`)
+      if (!response.ok) throw new Error('获取文档列表失败')
+      const data = await response.json()
+      setDocuments(data || [])
     } catch (err) {
       console.error('获取文档列表失败:', err)
       setError(err.message || '获取文档列表失败')
@@ -56,22 +39,13 @@ export const DocumentList = ({
   }
 
   const handleDelete = async (document) => {
-    if (!window.confirm(`确定要删除文档 "${document.filename || document.file_name}" 吗？`)) {
+    if (!window.confirm(`确定要删除文档 "${document.file_name}" 吗？`)) {
       return
     }
 
     try {
-      // TODO: 实现删除文档的 API
-      // await fetch(`${apiBaseUrl}/api/documents/${document.doc_id}`, { method: 'DELETE' })
-      
-      // 临时：从 localStorage 删除
-      const storedDocs = localStorage.getItem('uploaded_documents')
-      if (storedDocs) {
-        const parsed = JSON.parse(storedDocs)
-        const filtered = parsed.filter(doc => doc.doc_id !== document.doc_id)
-        localStorage.setItem('uploaded_documents', JSON.stringify(filtered))
-      }
-      
+      // TODO: implement DELETE /api/documents/{doc_id} endpoint
+      alert('删除功能尚未实现')
       fetchDocuments()
     } catch (err) {
       console.error('删除文档失败:', err)
@@ -110,7 +84,7 @@ export const DocumentList = ({
     <div className="document-list">
       {documents.map((doc) => (
         <DocumentCard
-          key={doc.doc_id || doc.task_id}
+          key={doc.doc_id}
           document={doc}
           onSelect={onSelectDocument}
           onDelete={onDeleteDocument || handleDelete}

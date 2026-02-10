@@ -173,13 +173,8 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat, onSubmitClaim }) {
           }
       }
     } else if (fileInfo?.filename && !fileInfo?.task_id) {
-      // 没有 task_id，直接获取文件内容（兼容旧逻辑）
-      // console.log('No task_id, fetching file content directly') // Debug log
-      if (!hasFetchedRef.current || filenameRef.current !== fileInfo.filename) {
-        hasFetchedRef.current = true
-        filenameRef.current = fileInfo.filename
-        fetchFileContent()
-      }
+      // No task_id (e.g. selected from document list), fetch content directly
+      fetchFileContent()
     }
   }, [fileInfo?.task_id, fileInfo?.filename, fetchFileContent])
 
@@ -268,7 +263,7 @@ function ParseFile({ fileInfo, onBack, onSearch, onChat, onSubmitClaim }) {
                 onSubmitClaim(combinedInfo)
               }}
             >
-              Submit Claim
+              Claim Evaluation
             </button>
           </div>
         </div>

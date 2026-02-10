@@ -7,10 +7,9 @@ import { formatBytes } from '../utils/formatBytes'
 export const DocumentCard = ({ document, onSelect, onDelete }) => {
   const getStatusLabel = (status) => {
     const labels = {
-      pending: '等待中',
-      queued: '排队中',
-      started: '处理中',
-      finished: '已完成',
+      uploaded: '已上传',
+      processing: '处理中',
+      completed: '已完成',
       failed: '失败',
     }
     return labels[status] || status
@@ -18,10 +17,9 @@ export const DocumentCard = ({ document, onSelect, onDelete }) => {
 
   const getStatusClass = (status) => {
     const classes = {
-      pending: 'status-pending',
-      queued: 'status-queued',
-      started: 'status-started',
-      finished: 'status-finished',
+      uploaded: 'status-pending',
+      processing: 'status-started',
+      completed: 'status-finished',
       failed: 'status-failed',
     }
     return classes[status] || 'status-unknown'
@@ -39,7 +37,7 @@ export const DocumentCard = ({ document, onSelect, onDelete }) => {
     <div className="document-card" onClick={() => onSelect && onSelect(document)}>
       <div className="document-card-header">
         <div className="document-info">
-          <h4 className="document-name">{document.filename || document.file_name}</h4>
+          <h4 className="document-name">{document.file_name}</h4>
           <div className="document-meta">
             <span className={`type-badge type-${document.doc_type || 'unknown'}`}>
               {getTypeLabel(document.doc_type)}

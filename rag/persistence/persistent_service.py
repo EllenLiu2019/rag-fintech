@@ -1,5 +1,5 @@
 from fastapi import UploadFile
-from typing import Optional
+from typing import List, Optional
 
 from common import get_logger
 from common.exceptions import (
@@ -10,7 +10,7 @@ from common.exceptions import (
 )
 from common.error_codes import ErrorCodes
 from common.constants import VECTOR_DEFAULT_KB
-from repository.rdb.models.models import Document as RdbDocument, KnowledgeBase, LLM
+from repository.rdb.models.models import Document as RdbDocument, KnowledgeBase, LLM, ClaimEvaluations
 from repository.rdb import rdb_client
 from rag.entity import RagDocument, ClauseForest
 from repository.s3 import s3_client
@@ -137,6 +137,32 @@ class PersistentService:
                 message=f"Failed to query embedding model from database: {kb_name}",
                 code=ErrorCodes.R_DB_002,
                 details={"kb_name": kb_name, "error": str(e)},
+            ) from e
+
+    @staticmethod
+    def list_documents(doc_type: str = "all") -> List[RdbDocument]:
+        """List all documents, optionally filtered by doc_type."""
+        try:
+            if doc_type == "all":
+                return rdb_client.select(RdbDocument)
+            return rdb_client.select_all_by_kwargs(RdbDocument, doc_type=doc_type)
+        except Exception as e:
+            raise DatabaseError(
+                message=f"Failed to list documents with doc_type={doc_type}",
+                code=ErrorCodes.R_DB_002,
+                details={"doc_type": doc_type, "error": str(e)},
+            ) from e
+
+    @staticmethod
+    def list_evaluations(doc_id: str) -> List[ClaimEvaluations]:
+        """List all evaluation records for a given doc_id."""
+        try:
+            return rdb_client.select_all_by_kwargs(ClaimEvaluations, doc_id=doc_id)
+        except Exception as e:
+            raise DatabaseError(
+                message=f"Failed to list evaluations for doc_id={doc_id}",
+                code=ErrorCodes.R_DB_002,
+                details={"doc_id": doc_id, "error": str(e)},
             ) from e
 
     @staticmethod

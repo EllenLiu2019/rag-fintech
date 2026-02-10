@@ -4,6 +4,7 @@ from typing import Any, Optional, Callable
 from functools import wraps
 import inspect
 import time
+import asyncio
 
 from redis import Redis, RedisError, TimeoutError
 from rq import Queue, Retry
@@ -248,6 +249,42 @@ def cached(
             # Store in cache
             redis_client.set(cache_key, result, ttl=ttl)
 
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+def async_cached(prefix: str, ttl: int = None, key_func: Callable = None):
+    def decorator(func):
+        sig = inspect.signature(func)
+        params = list(sig.parameters.keys())
+        skip_first_arg = len(params) > 0 and params[0] in ("self", "cls")
+        if skip_first_arg:
+            logger.debug(
+                f"Detected method '{func.__name__}' with '{params[0]}' parameter. "
+                f"Will skip it when generating cache key."
+            )
+
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            if not redis_client.redis_enabled:
+                logger.info("Redis is disabled. Skipping cache.")
+                return func(*args, **kwargs)
+
+            cache_args = args[1:] if skip_first_arg else args
+            if key_func:
+                cache_key = f"{prefix}:{key_func(*args, **kwargs)}"
+            else:
+                cache_key = redis_client._generate_key(prefix, *cache_args, **kwargs)
+
+            # async Redis get
+            cached_value = await asyncio.to_thread(redis_client.get, cache_key)
+            if cached_value is not None:
+                return cached_value
+            result = await func(*args, **kwargs)
+            await asyncio.to_thread(redis_client.set, cache_key, result, ttl=ttl)
             return result
 
         return wrapper

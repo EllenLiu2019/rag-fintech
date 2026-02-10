@@ -8,6 +8,7 @@ from agent.tools.vector_retriever import vector_retrieval
 from rag.persistence import PersistentService
 from agent.entity import MedicalEntity
 from rag.entity.clause_tree import ClauseForest
+from agent.graph_state import HumanDecision
 
 
 logger = get_logger(__name__)
@@ -23,13 +24,13 @@ class ClauseMatcher:
     3. Vector retrieval - based on entity names to find policy information.
     """
 
-    async def match(self, entities: List[MedicalEntity], doc_id: str) -> Dict[str, Any]:
+    async def match(self, entities: List[MedicalEntity], decisions: List[HumanDecision], doc_id: str) -> Dict[str, Any]:
         clause_forest = PersistentService.get_clause_forest(doc_id)
 
         tasks = [
-            foc_retrieval(entities, clause_forest),
-            graph_retrieval(entities, doc_id),
-            vector_retrieval(entities, doc_id),
+            foc_retrieval(entities, decisions, clause_forest),
+            graph_retrieval(decisions, doc_id),
+            vector_retrieval(entities, decisions, doc_id),
         ]
         foc_result, graph_result, vector_result = await asyncio.gather(*tasks)
 
@@ -127,17 +128,9 @@ if __name__ == "__main__":
             "is_lymph_metastasis": False,
         },
         description="甲状腺乳头状癌，肿瘤位置: 右叶下极，肿瘤大小: 1.2 cm × 1.0 cm，被膜侵犯: (-)，脉管侵犯: (-)，神经侵犯: (-)，中央区淋巴结未见癌转移 (0/6).",
-        agent_reasoning={
-            "tnm_stage": "I期",
-            "aligned_concept": {
-                "icd_name": "甲状腺乳头状癌",
-                "icd_concept_code": "C73.00",
-                "target_snomed_name": "Papillary thyroid carcinoma",
-                "target_snomed_concept_code": "428081000124109",
-            },
-        },
     )
 
     clause_matcher = ClauseMatcher()
-    results = asyncio.run(clause_matcher.match([medical_entity], "policy_0119223547_a02169"))
+    human_decisions = [HumanDecision(icd_concept_code="C73.x00", icd_concept_name="甲状腺恶性肿瘤", tnm_stage="I期")]
+    results = asyncio.run(clause_matcher.match([medical_entity], human_decisions, "policy_0119223547_a02169"))
     print(json.dumps(results, ensure_ascii=False, indent=2))

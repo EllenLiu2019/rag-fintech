@@ -7,6 +7,8 @@ from common.prompt_manager import get_prompt_manager
 from rag.llm.chat_model import chat_model
 from common import get_model_registry
 from agent.entity import MedicalEntity
+from agent.graph_state import HumanDecision
+from agent.tools.utils import extract_content
 
 logger = get_logger(__name__)
 
@@ -32,10 +34,11 @@ class EligibilityReasoner:
     async def reason(
         self,
         entities: List[MedicalEntity],
+        decisions: List[HumanDecision],
         evidence: Dict[str, Any],
     ) -> Dict[str, Any]:
 
-        context = self._build_reasoning_context(entities, evidence)
+        context = self._build_reasoning_context(entities, decisions, evidence)
 
         prompt = self.prompt_manager.get("claim_reasoning", **context)
 
@@ -45,7 +48,7 @@ class EligibilityReasoner:
                 messages=[{"role": "system", "content": prompt}],
             )
 
-            result = json.loads(content.replace("```json", "").replace("```", ""))
+            result = extract_content(content)
 
             return {
                 "decision": result.get("decision", ""),
@@ -66,18 +69,16 @@ class EligibilityReasoner:
     def _build_reasoning_context(
         self,
         entities: List[MedicalEntity],
+        decisions: List[HumanDecision],
         evidence: Dict[str, Any],
     ) -> Dict[str, Any]:
         patient_conditions = []
-        for e in entities:
-            agent_reasoning = e.agent_reasoning
-            aligned_concept: dict = agent_reasoning.get("aligned_concept", {})
+        for e, decision in zip(entities, decisions):
             patient_conditions.append(
                 {
                     "diagnosis": e.term_cn,
-                    "icd10cn": f"{aligned_concept.get('icd_name', '')} (concept_code: {aligned_concept.get('icd_concept_code', '')})",
-                    "snomed": f"{aligned_concept.get('target_snomed_name', '')} (concept_code: {aligned_concept.get('target_snomed_concept_code', '')})",
-                    "tnm_stage": agent_reasoning.get("tnm_stage", ""),
+                    "icd10cn": f"{decision.icd_concept_name} (concept_code: {decision.icd_concept_code}))",
+                    "tnm_stage": decision.tnm_stage,
                     "attributes": e.attributes,
                 }
             )

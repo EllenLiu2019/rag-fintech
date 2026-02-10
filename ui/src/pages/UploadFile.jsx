@@ -13,7 +13,7 @@ import DocumentList from '../components/DocumentList'
  * UploadFile 组件
  * 文件上传页面
  */
-export const UploadFile = ({ onUploadSuccess, onGoToClaim }) => {
+export const UploadFile = ({ onUploadSuccess }) => {
   const [file, setFile] = useState(null)
   const [isDragActive, setIsDragActive] = useState(false)
   const [docType, setDocType] = useState('policy') // 'policy' | 'claim'
@@ -47,16 +47,6 @@ export const UploadFile = ({ onUploadSuccess, onGoToClaim }) => {
             doc_id: null,
             doc_type: docType,
           }
-
-      // 保存到 localStorage（临时方案，等待后端 API）
-      const storedDocs = localStorage.getItem('uploaded_documents')
-      const documents = storedDocs ? JSON.parse(storedDocs) : []
-      documents.push({
-        ...fileInfo,
-        status: 'queued',
-        created_at: new Date().toISOString(),
-      })
-      localStorage.setItem('uploaded_documents', JSON.stringify(documents))
 
       setFile(null)
       resetFileInput()
@@ -155,9 +145,8 @@ export const UploadFile = ({ onUploadSuccess, onGoToClaim }) => {
 
   const handleSelectDocument = (document) => {
     const fileInfo = {
-      filename: document.filename || document.file_name,
+      filename: document.file_name,
       size: document.size,
-      task_id: document.task_id,
       doc_id: document.doc_id,
       doc_type: document.doc_type,
     }

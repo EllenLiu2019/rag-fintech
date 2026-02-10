@@ -37,6 +37,7 @@ SQLAlchemy>=2.0.0
 
 # PostgreSQL
 psycopg[binary,pool]==3.3.2
+langgraph-checkpoint-postgres>=3.0.4
 
 # Neo4j
 neo4j==6.0.3

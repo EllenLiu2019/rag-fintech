@@ -69,3 +69,25 @@ class Document(Base):
     knowledgebase: Mapped["KnowledgeBase"] = relationship(
         "KnowledgeBase", back_populates="documents", foreign_keys=[kb_name]
     )
+
+
+class ClaimEvaluations(Base):
+    """Claim evaluation session table for time-travel support.
+
+    Maps business context (doc_id + entity) to LangGraph thread_id,
+    enabling checkpoint history lookup and replay.
+    """
+
+    __tablename__ = "claim_evaluations"
+    __table_args__ = {"schema": "rag_fintech"}
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    doc_id: Mapped[str] = mapped_column(Text, nullable=False)
+    patient_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    entity_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    entity_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    thread_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    human_decision: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default="now()")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default="now()")

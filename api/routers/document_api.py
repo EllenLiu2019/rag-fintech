@@ -1,3 +1,4 @@
+import asyncio
 import mimetypes
 from fastapi import APIRouter, File, UploadFile, Query
 from fastapi.responses import JSONResponse, Response
@@ -10,6 +11,7 @@ from repository.s3 import s3_client
 from rag.ingestion.pipeline import pipeline_runner
 from rag.ingestion import get_task
 from rag.entity import DocumentType
+from rag.persistence.persistent_service import PersistentService
 
 logger = get_logger(__name__)
 
@@ -51,6 +53,35 @@ async def upload_file(
         status_code=202,
         content=uploaded_doc.model_dump(mode="json", exclude_none=True),
     )
+
+
+@router.get("/documents")
+async def list_documents(doc_type: str = Query(default="all", description="Filter by doc_type: all, policy, claim")):
+    """List all documents, optionally filtered by doc_type."""
+    try:
+        records = await asyncio.to_thread(PersistentService.list_documents, doc_type)
+        results = []
+        for r in records:
+            row = r.to_dict()
+            # Convert datetime for JSON serialization
+            if row.get("upload_time") is not None:
+                row["upload_time"] = row["upload_time"].isoformat()
+            # Add frontend-friendly aliases
+            row["doc_id"] = row.get("document_id")
+            row["size"] = row.get("file_size")
+            row["status"] = row.get("doc_status")
+            row["created_at"] = row.get("upload_time")
+            # Drop heavy fields not needed for list display
+            row.pop("clause_forest", None)
+            row.pop("business_data", None)
+            row.pop("confidence", None)
+            results.append(row)
+        # Sort by upload_time descending (newest first)
+        results.sort(key=lambda x: x.get("upload_time", ""), reverse=True)
+        return JSONResponse(status_code=200, content=results)
+    except Exception as e:
+        logger.error(f"Failed to list documents: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"detail": str(e)})
 
 
 @router.get("/process/{job_id}")

@@ -30,7 +30,7 @@ class PromptManager:
             logger.warning(f"Prompts directory not found: {prompts_dir}")
             return
 
-        for yaml_file in prompts_dir.glob("*.yaml"):
+        for yaml_file in prompts_dir.rglob("*.yaml"):
             self._load_prompt_file(yaml_file)
 
         logger.info(f"Loaded {len(self._prompts)} prompt templates")

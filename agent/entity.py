@@ -2,8 +2,6 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, List
 from enum import Enum
 
-from pydantic import BaseModel, Field
-
 
 class ClaimStatus(Enum):
     ELIGIBLE = "eligible"
@@ -13,20 +11,18 @@ class ClaimStatus(Enum):
     UNDER_REVIEW = "under_review"
 
 
-class MedicalEntity(BaseModel):
-    """Custom runtime context schema."""
+@dataclass
+class MedicalEntity:
+    """belongs to runtime state schema."""
 
     entity_type: str  # diagnosis, procedure, symptom, medication
     patient_age: int
     term_cn: str
     term_en: str
-    icd10_concepts: Dict[int, dict[str, Any]] | None = Field(default=None, description="ICD-10 concepts")  # ICD-10
-    snomed_concepts: Dict[int, dict[str, Any]] | None = Field(default=None, description="SNOMED concepts")  # SNOMED
-    attributes: Dict[str, Any] = Field(
-        ..., description="TNM & max_diameter_cm & is_lumph"
-    )  # TNM & max_diameter_cm & is_lumph
-    agent_reasoning: Dict[str, Dict[str, Any]] | None = Field(default=None, description="Agent reasoning")
-    description: str = Field(default="", description="Description")
+    attributes: Dict[str, Any] = field(default_factory=dict)  # TNM & max_diameter_cm & is_lumph
+    description: str = ""
+    icd10_concepts: Dict[int, dict[str, Any]] = field(default_factory=dict)  # ICD-10
+    snomed_concepts: Dict[int, dict[str, Any]] = field(default_factory=dict)  # SNOMED
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -34,11 +30,10 @@ class MedicalEntity(BaseModel):
             "patient_age": self.patient_age,
             "term_cn": self.term_cn,
             "term_en": self.term_en,
+            "attributes": self.attributes,
+            "description": self.description,
             "snomed_concepts": self.snomed_concepts,
             "icd10_concepts": self.icd10_concepts,
-            "attributes": self.attributes,
-            "agent_reasoning": self.agent_reasoning,
-            "description": self.description,
         }
 
     @classmethod
@@ -48,11 +43,10 @@ class MedicalEntity(BaseModel):
             patient_age=data.get("patient_age", 0),
             term_cn=data.get("term_cn", ""),
             term_en=data.get("term_en", ""),
-            snomed_concepts=data.get("snomed_concepts", []),
-            icd10_concepts=data.get("icd10_concepts", []),
             attributes=data.get("attributes", {}),
-            agent_reasoning=data.get("agent_reasoning", {}),
             description=data.get("description", ""),
+            snomed_concepts=data.get("snomed_concepts", {}),
+            icd10_concepts=data.get("icd10_concepts", {}),
         )
 
 

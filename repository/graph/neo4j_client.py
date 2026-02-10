@@ -1,5 +1,3 @@
-import os
-
 import neo4j
 import networkx as nx
 
@@ -27,35 +25,16 @@ class Neo4jClient:
         uri = neo4j_config.get("uri")
         username = neo4j_config.get("username")
         password = neo4j_config.get("password")
-        
-        # Save current proxy settings
-        saved_proxies = {
-            'http_proxy': os.environ.get('http_proxy'),
-            'https_proxy': os.environ.get('https_proxy'),
-            'HTTP_PROXY': os.environ.get('HTTP_PROXY'),
-            'HTTPS_PROXY': os.environ.get('HTTPS_PROXY'),
-        }
 
         try:
-            # Temporarily disable proxy for Neo4j connection
-            for proxy_var in ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY']:
-                if proxy_var in os.environ:
-                    del os.environ[proxy_var]
-            
             driver = neo4j.GraphDatabase.driver(uri, auth=(username, password))
             driver.verify_connectivity()
             logger.info(f"Connected to Neo4j at {uri}")
+            return driver
         except Exception as e:
             if driver:
                 driver.close()
             raise ConnectionError(f"Failed to verify Neo4j connectivity: {e}") from e
-        finally:
-            # Restore proxy settings
-            for key, value in saved_proxies.items():
-                if value is not None:
-                    os.environ[key] = value
-
-        return driver
 
     def _get_database(self):
         """Get database name from config"""

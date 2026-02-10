@@ -1,67 +1,170 @@
 from typing import Dict, Any, List
 import asyncio
+import uuid
+from datetime import datetime, timezone
 
 from langsmith import traceable
 
 from common import get_logger
-from agent.medical_agent import MedicalAgent
+from agent.medical_agents import graph, MedicalAgents
 from agent.clause_matcher import ClauseMatcher
 from agent.eligibility_reasoner import EligibilityReasoner
-from agent.entity import ClaimRequest, ClaimDecision, MedicalEntity
+from agent.entity import ClaimRequest, ClaimDecision
 from rag.persistence.persistent_service import PersistentService
-
+from agent.graph_state import HumanDecision
+from repository.rdb import rdb_client
+from repository.rdb.models.models import ClaimEvaluations
 
 logger = get_logger(__name__)
 
 
 class ClaimsOrchestrator:
-    """Claims Orchestrator - Coordinates multiple agents to evaluate claim requests"""
+    """Claims Orchestrator - Coordinates multiple agents to evaluate claim requests
+
+    Two-phase flow for human-in-the-loop:
+        Phase 1: start_evaluation()  → runs medical agents to interrupt, returns pending review items
+        Phase 2: complete_evaluation() → accepts human decisions, finishes clause matching & reasoning
+
+    Each evaluation attempt is persisted to claim_evaluations for time-travel support.
+    """
 
     def __init__(self):
-        self.medical_agent = MedicalAgent()
         self.clause_matcher = ClauseMatcher()
         self.eligibility_reasoner = EligibilityReasoner()
 
-    @traceable(run_type="chain", name="Evaluate Claim Pipeline")
-    async def evaluate_claim(self, doc_id: str) -> ClaimDecision:
-        """
-        Evaluate claim request
-        Pipeline:
-        1. Medical entity normalization → SNOMED graph concept reasoning
-        2. Clause matching → find related coverage and exclusion clauses
-        3. Eligibility reasoning → based on graph reasoning whether satisfies conditions
-        4. Decision generation → output explainable claim decision
+    @traceable(run_type="chain", name="Start Claim Evaluation")
+    async def start_evaluation(self, doc_id: str) -> Dict[str, Any]:
+        """Phase 1: Run medical entity normalization until human review is needed.
+
+        Returns:
+            {
+                "doc_id": str,
+                "patient_id": str,
+                "thread_ids": [str],     # thread IDs for each entity (needed to resume)
+                "pending_reviews": [      # interrupt info for frontend display
+                    {
+                        "entity_index": int,
+                        "entity_name": str,
+                        "interrupts": [...]
+                    }
+                ]
+            }
         """
         rdb_document = PersistentService.get_document(doc_id)
         request = ClaimRequest.from_dict(rdb_document.business_data)
-        logger.info(f"Evaluating claim for patient: {request.patient_id}")
+        logger.info(f"Starting claim evaluation for patient: {request.patient_id}")
 
-        # Step 1: Medical Entity Normalization
-        await self._normalize_medical_entities(request.medical_entities)
+        # Generate unique thread_ids per evaluation attempt (supports re-evaluation)
+        eval_id = uuid.uuid4().hex[:8]
+        thread_ids = [f"{doc_id}_{eval_id}_entity_{i}" for i in range(len(request.medical_entities))]
+
+        # Step 1: Medical Entity Normalization (run to interrupt)
+        tasks = [graph.start(entity, thread_id) for entity, thread_id in zip(request.medical_entities, thread_ids)]
+        results = await asyncio.gather(*tasks)
+
+        # Extract interrupt info for frontend
+        pending_reviews = []
+        for i, (entity, result) in enumerate(zip(request.medical_entities, results)):
+            interrupt_info = MedicalAgents.extract_interrupt_info(result)
+            if interrupt_info:
+                pending_reviews.append(
+                    {
+                        "entity_index": i,
+                        "entity_name": entity.term_cn,
+                        "interrupts": interrupt_info,
+                    }
+                )
+
+        # Persist evaluation records (status=reviewing, waiting for human decision)
+        evaluations = [
+            ClaimEvaluations(
+                doc_id=doc_id,
+                patient_id=request.patient_id,
+                entity_index=i,
+                entity_name=entity.term_cn,
+                thread_id=thread_id,
+                status="reviewing",
+            )
+            for i, (entity, thread_id) in enumerate(zip(request.medical_entities, thread_ids))
+        ]
+        await asyncio.to_thread(rdb_client.save_all, evaluations)
+        logger.info(f"Saved {len(evaluations)} evaluation records for doc_id={doc_id}")
+
+        return {
+            "doc_id": doc_id,
+            "patient_id": request.patient_id,
+            "thread_ids": thread_ids,
+            "pending_reviews": pending_reviews,
+        }
+
+    @traceable(run_type="chain", name="Complete Claim Evaluation")
+    async def complete_evaluation(
+        self,
+        doc_id: str,
+        thread_ids: List[str],
+        decisions: List[HumanDecision],
+    ) -> ClaimDecision:
+        """Phase 2: Resume with human decisions, then run clause matching & eligibility reasoning.
+
+        Args:
+            doc_id: Document ID
+            thread_ids: Thread IDs from start_evaluation()
+            decisions: Human-confirmed decisions for each entity
+        """
+        rdb_document = PersistentService.get_document(doc_id)
+        request = ClaimRequest.from_dict(rdb_document.business_data)
+        logger.info(f"Completing claim evaluation for patient: {request.patient_id}")
+
+        # Update evaluation records: save human decisions and mark as approved
+        now = datetime.now(timezone.utc)
+        for thread_id, decision in zip(thread_ids, decisions):
+            await asyncio.to_thread(
+                self._update_evaluation,
+                thread_id=thread_id,
+                status="approved",
+                human_decision=decision.to_dict(),
+                updated_at=now,
+            )
+
+        # Resume medical agents with human decisions
+        resume_tasks = [graph.resume(decision, thread_id) for decision, thread_id in zip(decisions, thread_ids)]
+        await asyncio.gather(*resume_tasks)
 
         # Step 2: Clause Matching
-        evidence = await self._match_clauses(request.medical_entities, request.policy_doc_id)
+        evidence = await self.clause_matcher.match(
+            entities=request.medical_entities, decisions=decisions, doc_id=request.policy_doc_id
+        )
 
         # Step 3: Eligibility Reasoning
-        reasoning_result = await self._reason_eligibility(request.medical_entities, evidence)
+        reasoning_result = await self.eligibility_reasoner.reason(
+            entities=request.medical_entities, decisions=decisions, evidence=evidence
+        )
 
         # Step 4: Decision Generation
-        decision = self._generate_decision(evidence, reasoning_result)
+        claim_decision = self._generate_decision(evidence, reasoning_result)
 
-        return decision
+        # Update evaluation records: mark as completed
+        final_status = "completed" if claim_decision.status.value != "under_review" else "reviewing"
+        now = datetime.now(timezone.utc)
+        for thread_id in thread_ids:
+            await asyncio.to_thread(
+                self._update_evaluation,
+                thread_id=thread_id,
+                status=final_status,
+                updated_at=now,
+            )
 
-    @traceable(run_type="chain", name="Normalize Entities")
-    async def _normalize_medical_entities(self, entities: List[MedicalEntity]) -> List[MedicalEntity]:
-        tasks = [self.medical_agent.run(entity) for entity in entities]
-        return await asyncio.gather(*tasks)
+        return claim_decision
 
-    @traceable(run_type="tool", name="Match Clauses")
-    async def _match_clauses(self, entities: List[MedicalEntity], policy_doc_id: str) -> Dict[str, Any]:
-        return await self.clause_matcher.match(entities=entities, doc_id=policy_doc_id)
-
-    @traceable(run_type="llm", name="Reason Eligibility")
-    async def _reason_eligibility(self, entities: List[MedicalEntity], evidence: Dict[str, Any]) -> Dict[str, Any]:
-        return await self.eligibility_reasoner.reason(entities=entities, evidence=evidence)
+    @staticmethod
+    def _update_evaluation(thread_id: str, **kwargs) -> None:
+        """Update a single evaluation record by thread_id."""
+        record = rdb_client.select_by_kwargs(ClaimEvaluations, thread_id=thread_id)
+        if not record:
+            logger.warning(f"Evaluation record not found for thread_id={thread_id}")
+            return
+        record.update_from_dict(kwargs)
+        rdb_client.save(record)
 
     def _generate_decision(self, evidence: Dict[str, Any], reasoning: Dict[str, Any]) -> ClaimDecision:
         from agent.entity import ClaimStatus, ClaimDecision
@@ -78,7 +181,7 @@ class ClaimsOrchestrator:
             status=status,
             eligible_items=eligible_items,
             excluded_items=excluded_items,
-            matched_clauses=clauses_evidence,  # Markdown string format
+            matched_clauses=clauses_evidence,
             explanation=reasoning.get("explanation", ""),
             recommendations=reasoning.get("recommendations", []),
             reasoning=reasoning.get("reasoning", ""),
@@ -93,5 +196,5 @@ if __name__ == "__main__":
 
     doc_id = "claim_0120164504_f58784"
     orchestrator = ClaimsOrchestrator()
-    decision = asyncio.run(orchestrator.evaluate_claim(doc_id))
+    decision = asyncio.run(orchestrator.start_evaluation(doc_id))
     print(decision.to_dict())

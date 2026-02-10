@@ -132,6 +132,72 @@ class LLM(ABC):
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception(lambda e: not _should_not_retry(e)),
         before_sleep=lambda retry_state: logger.warning(
+            f"Retrying LLM.agenerate (attempt {retry_state.attempt_number}/3) "
+            f"after error: {retry_state.outcome.exception()}"
+        ),
+    )
+    async def agenerate(
+        self,
+        messages: Optional[List[Dict[str, str]]] = None,
+        prompt: Optional[str] = None,
+        temperature: float = 0,
+        max_tokens: Optional[int] = None,
+    ) -> tuple[str, str, int]:
+        if messages is None and prompt is None:
+            raise ValueError("Either 'messages' or 'prompt' must be provided")
+
+        if messages is not None:
+            final_messages = messages
+        else:
+            final_messages = [{"role": "user", "content": prompt}]
+
+        params = {
+            "model": self.model_name,
+            "messages": final_messages,
+            "temperature": temperature,
+            "stream": False,
+        }
+        if max_tokens is not None:
+            params["max_tokens"] = max_tokens
+
+        try:
+            response = await self.async_client.chat.completions.create(**params)
+            message = response.choices[0].message
+            reasoning_content = getattr(message, "reasoning_content", None)
+            return (
+                reasoning_content,
+                message.content,
+                response.usage.total_tokens,
+            )
+        except RateLimitError as e:
+            retry_after = None
+            if hasattr(e, "response") and hasattr(e.response, "headers"):
+                retry_after = e.response.headers.get("retry-after")
+            logger.warning(f"Rate limit error (will retry): {e}")
+            raise ModelRateLimitError(
+                message=f"Rate limit exceeded: {str(e)}", retry_after=int(retry_after) if retry_after else None
+            )
+        except APITimeoutError as e:
+            logger.warning(f"API timeout (will retry): {e}")
+            raise ModelTimeoutError(f"API timeout: {str(e)}")
+        except APIError as e:
+            status_code = getattr(e, "status_code", None)
+            logger.warning(f"API error ({status_code or 'unknown'}): {e}")
+            if status_code:
+                if status_code == 429:
+                    raise ModelRateLimitError(f"Rate limit exceeded: {str(e)}")
+                elif 500 <= status_code < 600:
+                    raise ModelServerError(message=f"Server error {status_code}: {str(e)}", status_code=status_code)
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in LLM.agenerate: {type(e).__name__}: {e}", exc_info=True)
+            raise
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception(lambda e: not _should_not_retry(e)),
+        before_sleep=lambda retry_state: logger.warning(
             f"Retrying LLM.stream_generate (attempt {retry_state.attempt_number}/3) "
             f"after error: {retry_state.outcome.exception()}"
         ),

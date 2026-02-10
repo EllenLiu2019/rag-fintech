@@ -60,6 +60,17 @@ class PostgreSQLClient:
             result = session.execute(statement).scalars().first()
             return result
 
+    def select_all_by_kwargs(self, model: Type[T], **kwargs) -> List[T]:
+        """Select all records matching keyword arguments"""
+        if not kwargs:
+            raise ValueError("At least one keyword argument is required")
+
+        conditions = [getattr(model, key) == value for key, value in kwargs.items()]
+        statement = select(model).where(and_(*conditions))
+
+        with self.Session() as session:
+            return session.execute(statement).scalars().all()
+
     def execute_query(self, model: Type[T], name: str) -> List[T]:
         """Execute a query to get IDs by kb_name"""
         query = select(model).where(model.kb_name == name)

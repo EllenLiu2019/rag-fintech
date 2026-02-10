@@ -10,7 +10,8 @@ postgresql:
   database: rag_fintech
   pool_size: 5
   max_overflow: 10
-
+  sslmode: disable
+  
 redis:
   host: redis-11071.c114.us-east-1-4.ec2.cloud.redislabs.com
   port: 11071

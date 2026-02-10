@@ -1,7 +1,4 @@
-from langchain.tools import tool, ToolRuntime
 import asyncio
-from dataclasses import dataclass
-from typing import Any
 
 from common.constants import VECTOR_SNOMED_KB
 from repository.vector import vector_store
@@ -14,17 +11,8 @@ logger = get_logger(__name__)
 SELECT_FIELDS = ["concept_id", "concept_name", "concept_code", "domain_id", "concept_class_id"]
 
 
-@dataclass
-class SearchOutput:
-    icd_concepts: list[dict[str, Any]]
-    snomed_concepts: list[dict[str, Any]]
-
-
-@tool
-async def search_medical_kb(runtime: ToolRuntime[MedicalEntity]) -> SearchOutput:
+async def search_medical_kb(medical_entity: MedicalEntity) -> None:
     """search ICD-10 and SNOMED standard concepts"""
-
-    medical_entity: MedicalEntity = runtime.context
 
     domain_mapping = {
         "diagnosis": "Condition",
@@ -81,11 +69,3 @@ async def search_medical_kb(runtime: ToolRuntime[MedicalEntity]) -> SearchOutput
                 "concept_code": snomed["concept_code"],
                 "score": snomed["score"],
             }
-
-    logger.warning(
-        f"Search medical kb results: icd_concepts={medical_entity.icd10_concepts}, snomed_concepts={medical_entity.snomed_concepts}"
-    )
-    return SearchOutput(
-        icd_concepts=medical_entity.icd10_concepts,
-        snomed_concepts=medical_entity.snomed_concepts,
-    )

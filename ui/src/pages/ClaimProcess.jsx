@@ -25,6 +25,13 @@ function ClaimProcess({ fileInfo, onBack }) {
   const [checkpointState, setCheckpointState] = useState(null)
   const [historyLoading, setHistoryLoading] = useState(false)
 
+  // ── Subgraph Time Travel state ──
+  const [subgraphName, setSubgraphName] = useState(null)       // currently selected subgraph name
+  const [subgraphCheckpoints, setSubgraphCheckpoints] = useState([])
+  const [selectedSubgraphCp, setSelectedSubgraphCp] = useState(null)
+  const [subgraphState, setSubgraphState] = useState(null)
+  const [subgraphLoading, setSubgraphLoading] = useState(false)
+
   // Phase 1: Submit claim → get AI candidates for review
   const handleSubmitClaim = async () => {
     const docId = fileInfo?.document_id || fileInfo?.doc_id
@@ -150,6 +157,11 @@ function ClaimProcess({ fileInfo, onBack }) {
       setCheckpoints([])
       setSelectedCheckpoint(null)
       setCheckpointState(null)
+      // Reset subgraph state
+      setSubgraphName(null)
+      setSubgraphCheckpoints([])
+      setSelectedSubgraphCp(null)
+      setSubgraphState(null)
       return
     }
 
@@ -208,6 +220,73 @@ function ClaimProcess({ fileInfo, onBack }) {
     } finally {
       setHistoryLoading(false)
     }
+  }
+
+  // ── Subgraph Time Travel handlers ──
+
+  const handleViewSubgraph = async (sgName) => {
+    if (!selectedEval) return
+    setSubgraphName(sgName)
+    setSubgraphCheckpoints([])
+    setSelectedSubgraphCp(null)
+    setSubgraphState(null)
+    setSubgraphLoading(true)
+    setError('')
+    try {
+      const res = await fetch(
+        `${apiBaseUrl}/api/claim/subgraph-checkpoints/${selectedEval.thread_id}?subgraph_name=${sgName}`
+      )
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || 'Failed to load subgraph checkpoints')
+      }
+      const data = await res.json()
+      setSubgraphCheckpoints(data)
+    } catch (err) {
+      setError(err.message || 'Failed to load subgraph checkpoints')
+    } finally {
+      setSubgraphLoading(false)
+    }
+  }
+
+  const handleSelectSubgraphCp = async (cp) => {
+    if (!selectedEval || !subgraphName) return
+    setSelectedSubgraphCp(cp.checkpoint_id)
+    setSubgraphState(null)
+    setSubgraphLoading(true)
+    setError('')
+    try {
+      const res = await fetch(
+        `${apiBaseUrl}/api/claim/subgraph-state/${selectedEval.thread_id}?subgraph_name=${subgraphName}`
+      )
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || 'Failed to load subgraph state')
+      }
+      const data = await res.json()
+      setSubgraphState(data)
+    } catch (err) {
+      setError(err.message || 'Failed to load subgraph state')
+    } finally {
+      setSubgraphLoading(false)
+    }
+  }
+
+  const handleBackFromSubgraph = () => {
+    setSubgraphName(null)
+    setSubgraphCheckpoints([])
+    setSelectedSubgraphCp(null)
+    setSubgraphState(null)
+  }
+
+  const subgraphOptions = ['encode_graph', 'stage_graph']
+
+  const getSubgraphLabel = (name) => {
+    const labels = {
+      encode_graph: 'Encode Graph',
+      stage_graph: 'Stage Graph',
+    }
+    return labels[name] || name
   }
 
   const getEvalStatusColor = (status) => {
@@ -408,7 +487,7 @@ function ClaimProcess({ fileInfo, onBack }) {
                         </div>
                         {ev.human_decision && (
                           <div className="eval-card-decision">
-                            <span>ICD: {ev.human_decision.icd_concept_code}</span>
+                            <span>ICD: {ev.human_decision.icd_concept_name} - {ev.human_decision.icd_concept_code} </span>
                             <span>TNM: {ev.human_decision.tnm_stage}</span>
                           </div>
                         )}
@@ -429,6 +508,10 @@ function ClaimProcess({ fileInfo, onBack }) {
                       setCheckpoints([])
                       setSelectedCheckpoint(null)
                       setCheckpointState(null)
+                      setSubgraphName(null)
+                      setSubgraphCheckpoints([])
+                      setSelectedSubgraphCp(null)
+                      setSubgraphState(null)
                     }}>
                       Back to evaluations
                     </button>
@@ -572,10 +655,186 @@ function ClaimProcess({ fileInfo, onBack }) {
                                 </div>
                               </div>
                             )}
+
+                            {/* View Subgraph Details buttons */}
+                            <div className="state-section subgraph-buttons-section">
+                              <h4>Subgraph Details</h4>
+                              <div className="subgraph-btn-row">
+                                {subgraphOptions.map((sg) => (
+                                  <button
+                                    key={sg}
+                                    className={`subgraph-btn ${subgraphName === sg ? 'active' : ''}`}
+                                    onClick={() => handleViewSubgraph(sg)}
+                                  >
+                                    {getSubgraphLabel(sg)}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
                     </div>
+
+                    {/* ── Subgraph Details Panel ── */}
+                    {subgraphName && (
+                      <div className="subgraph-panel">
+                        <div className="subgraph-panel-header">
+                          <button className="back-to-evals-btn" onClick={handleBackFromSubgraph}>
+                            Back to parent
+                          </button>
+                          <h3>
+                            Subgraph: <span className="subgraph-highlight">{getSubgraphLabel(subgraphName)}</span>
+                          </h3>
+                        </div>
+
+                        {subgraphLoading && !subgraphState && (
+                          <div className="loading-state">
+                            <div className="spinner"></div>
+                            <p>Loading subgraph data...</p>
+                          </div>
+                        )}
+
+                        <div className="checkpoint-content-row">
+                          {/* Subgraph checkpoint timeline */}
+                          <div className="checkpoint-timeline">
+                            <h3>Subgraph Checkpoints</h3>
+                            {subgraphCheckpoints.length === 0 && !subgraphLoading && (
+                              <p className="no-checkpoints">No subgraph checkpoints found.</p>
+                            )}
+                            {subgraphCheckpoints.map((cp, idx) => (
+                              <div
+                                key={cp.checkpoint_id}
+                                className={`checkpoint-step ${selectedSubgraphCp === cp.checkpoint_id ? 'active' : ''}`}
+                                onClick={() => handleSelectSubgraphCp(cp)}
+                              >
+                                <div className="step-indicator">
+                                  <div className={`step-dot ${cp.has_interrupt ? 'interrupt' : ''}`} />
+                                  {idx < subgraphCheckpoints.length - 1 && <div className="step-connector" />}
+                                </div>
+                                <div className="step-info">
+                                  <div className="step-header">
+                                    <span className="step-number">Step {cp.step}</span>
+                                    <span className={`source-badge source-${cp.source}`}>{cp.source}</span>
+                                    {cp.has_interrupt && <span className="interrupt-badge">INTERRUPT</span>}
+                                  </div>
+                                  {cp.node && cp.node.length > 0 && (
+                                    <div className="step-node">
+                                      Node: {cp.node.join(', ')}
+                                    </div>
+                                  )}
+                                  <div className="step-next">
+                                    Next: {getNodeLabel(cp.next)}
+                                  </div>
+                                  {cp.created_at && (
+                                    <div className="step-time">{formatTimestamp(cp.created_at)}</div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Subgraph state inspector */}
+                          <div className="state-inspector">
+                            <h3>Subgraph State</h3>
+                            {subgraphLoading && selectedSubgraphCp && (
+                              <div className="loading-state">
+                                <div className="spinner"></div>
+                                <p>Loading subgraph state...</p>
+                              </div>
+                            )}
+
+                            {!selectedSubgraphCp && !subgraphLoading && (
+                              <div className="empty-state"><p>Select a subgraph checkpoint to inspect.</p></div>
+                            )}
+
+                            {subgraphState && !subgraphLoading && (
+                              <div className="state-content">
+                                {/* Agent outputs */}
+                                {subgraphState.agent_output_dict && Object.keys(subgraphState.agent_output_dict).length > 0 && (
+                                  <div className="state-section">
+                                    <h4>Agent Outputs</h4>
+                                    {Object.entries(subgraphState.agent_output_dict).map(([key, output]) => (
+                                      <details key={key} className="agent-output-item" open>
+                                        <summary>{key}</summary>
+                                        <div className="agent-output-detail">
+                                          {output.agent_response?.reasoning && (
+                                            <div className="detail-row">
+                                              <span className="detail-label">Reasoning:</span>
+                                              <p className="detail-value">{output.agent_response.reasoning}</p>
+                                            </div>
+                                          )}
+                                          {output.step_output && (
+                                            <div className="detail-row">
+                                              <span className="detail-label">Output:</span>
+                                              <span className="detail-value">{typeof output.step_output === 'string' ? output.step_output : JSON.stringify(output.step_output)}</span>
+                                            </div>
+                                          )}
+                                          {output.tool_calls && output.tool_calls.length > 0 && (
+                                            <div className="detail-row">
+                                              <span className="detail-label">Tool Calls:</span>
+                                              <pre className="detail-pre">{JSON.stringify(output.tool_calls, null, 2)}</pre>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </details>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Human decision */}
+                                {subgraphState.human_decision && (subgraphState.human_decision.icd_concept_code || subgraphState.human_decision.tnm_stage) && (
+                                  <div className="state-section">
+                                    <h4>Human Decision</h4>
+                                    <div className="decision-summary">
+                                      <div className="detail-row">
+                                        <span className="detail-label">ICD Code:</span>
+                                        <span className="detail-value">{subgraphState.human_decision.icd_concept_code || '-'}</span>
+                                      </div>
+                                      <div className="detail-row">
+                                        <span className="detail-label">ICD Name:</span>
+                                        <span className="detail-value">{subgraphState.human_decision.icd_concept_name || '-'}</span>
+                                      </div>
+                                      <div className="detail-row">
+                                        <span className="detail-label">TNM Stage:</span>
+                                        <span className="detail-value">{subgraphState.human_decision.tnm_stage || '-'}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Messages */}
+                                {subgraphState.messages && subgraphState.messages.length > 0 && (
+                                  <div className="state-section">
+                                    <h4>Messages ({subgraphState.messages.length})</h4>
+                                    <div className="messages-list">
+                                      {subgraphState.messages.map((msg, idx) => (
+                                        <details key={idx} className="message-item">
+                                          <summary>
+                                            <span className={`msg-type msg-type-${msg.type}`}>{msg.type}</span>
+                                            {msg.name && <span className="msg-name">{msg.name}</span>}
+                                            <span className="msg-preview">{truncateContent(msg.content, 60)}</span>
+                                          </summary>
+                                          <div className="msg-content">
+                                            <pre>{typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content, null, 2)}</pre>
+                                            {msg.tool_calls && msg.tool_calls.length > 0 && (
+                                              <div className="msg-tool-calls">
+                                                <strong>Tool Calls:</strong>
+                                                <pre>{JSON.stringify(msg.tool_calls, null, 2)}</pre>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </details>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

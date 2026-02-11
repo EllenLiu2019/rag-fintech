@@ -45,5 +45,7 @@ class ErrorCodes:
     R_DB_001 = "R_DB_001"  # PostgreSQL connection failed
     R_DB_002 = "R_DB_002"  # PostgreSQL query failed
     R_DB_003 = "R_DB_003"  # Document not found
+    R_DB_004 = "R_DB_004"  # Evaluation not found
+    R_DB_005 = "R_DB_005"  # Subgraph not found
     R_CACHE_001 = "R_CACHE_001"  # Redis connection failed
     R_FILE_001 = "R_FILE_001"  # File storage failed

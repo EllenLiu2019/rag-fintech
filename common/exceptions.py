@@ -190,3 +190,15 @@ class DocumentNotFoundError(DatabaseError):
     """Document not found"""
 
     pass
+
+
+class EvaluationNotFoundError(DatabaseError):
+    """Evaluation not found"""
+
+    pass
+
+
+class SubgraphNotFoundError(DatabaseError):
+    """Subgraph not found"""
+
+    pass

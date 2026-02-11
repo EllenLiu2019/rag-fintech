@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS rag_fintech.claim_evaluations (
     thread_id       TEXT NOT NULL UNIQUE,           -- LangGraph thread_id
     status          TEXT NOT NULL DEFAULT 'pending', -- pending / reviewing / approved / completed / rejected
     human_decision  JSONB,                          -- the decision made by human reviewer
+    subgraph_configs JSONB,                         -- captured subgraph configs (checkpoint_ns + thread_id) for time-travel
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

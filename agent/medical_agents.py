@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 import asyncio
 import json
 
@@ -110,17 +110,57 @@ class MedicalAgents:
     # Time Travel: checkpoint query methods
     # ------------------------------------------------------------------
 
-    async def list_checkpoints(self, thread_id: str, limit: int = 20) -> list[dict[str, Any]]:
-        """List checkpoint metadata for a given thread_id."""
+    async def capture_subgraph_configs(self, thread_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Capture subgraph configs from interrupted parent states.
+
+        After graph.start() interrupts, call this to extract the config
+        (including checkpoint_ns) for each subgraph task. These configs
+        are needed later to query subgraph checkpoint history.
+
+        Args:
+            thread_ids: Thread IDs that were used in start()
+
+        Returns:
+            {thread_id: {subgraph_name: config_dict, ...}, ...}
+        """
         async_graph = await self.get_async_graph()
-        config = {"configurable": {"thread_id": thread_id}}
+        all_configs: dict[str, dict[str, Any]] = {}
+
+        for thread_id in thread_ids:
+            config = self._make_config(thread_id)
+            try:
+                parent_state = await async_graph.aget_state(config, subgraphs=True)
+                subgraph_configs: dict[str, Any] = {}
+                for task in parent_state.tasks:
+                    if task.state and task.state.config:
+                        subgraph_configs[task.name] = task.state.config
+                if subgraph_configs:
+                    all_configs[thread_id] = subgraph_configs
+                    logger.info(
+                        f"Captured subgraph configs for thread_id={thread_id}: " f"{list(subgraph_configs.keys())}"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to capture subgraph configs for thread_id={thread_id}: {e}")
+
+        return all_configs
+
+    async def list_checkpoints(self, config: dict[str, Any], limit: int = 20) -> list[dict[str, Any]]:
+        """List checkpoint history for a given config.
+
+        Works for both parent graph and subgraph configs.
+        For parent graph: pass {"configurable": {"thread_id": ...}}.
+        For subgraph: pass the config captured at interrupt time (already contains checkpoint_ns).
+        """
+        async_graph = await self.get_async_graph()
         checkpoints = []
         async for snapshot in async_graph.aget_state_history(config, limit=limit):
+            writes = snapshot.metadata.get("writes", {}) if snapshot.metadata else {}
             checkpoints.append(
                 {
-                    "checkpoint_id": snapshot.config["configurable"]["checkpoint_id"],
+                    "checkpoint_id": snapshot.config["configurable"].get("checkpoint_id", ""),
                     "step": snapshot.metadata.get("step", -1) if snapshot.metadata else -1,
                     "source": snapshot.metadata.get("source", "") if snapshot.metadata else "",
+                    "node": list(writes.keys()) if writes else [],
                     "next": list(snapshot.next),
                     "created_at": snapshot.created_at,
                     "has_interrupt": len(snapshot.interrupts) > 0,
@@ -128,14 +168,36 @@ class MedicalAgents:
             )
         return checkpoints
 
-    async def get_checkpoint_state(self, thread_id: str, checkpoint_id: Optional[str] = None) -> dict[str, Any]:
-        """Get full serialized graph state at a specific checkpoint."""
+    async def get_state(self, config: dict[str, Any]) -> dict[str, Any]:
+        """Get full serialized graph state for a given config.
+
+        Works for both parent graph and subgraph configs.
+        For parent graph: pass {"configurable": {"thread_id": ..., "checkpoint_id": ...}}.
+        For subgraph: pass the config captured at interrupt time (already contains checkpoint_ns).
+        """
         async_graph = await self.get_async_graph()
-        config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
-        if checkpoint_id:
-            config["configurable"]["checkpoint_id"] = checkpoint_id
         snapshot = await async_graph.aget_state(config)
         return self._serialize_snapshot(snapshot)
+
+    async def update_checkpoint(
+        self,
+        config: dict[str, Any],
+        values: dict[str, Any],
+        as_node: str | None = None,
+        task_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Update a checkpoint."""
+        async_graph = await self.get_async_graph()
+        return await async_graph.aupdate_state(
+            config,
+            values={
+                "messages": values.get("messages", []),
+                "agent_output_dict": values.get("agent_output_dict", {}),
+                "human_decision": values.get("human_decision", {}),
+            },
+            as_node=as_node,
+            task_id=task_id,
+        )
 
     @staticmethod
     def _serialize_snapshot(snapshot: StateSnapshot) -> dict[str, Any]:

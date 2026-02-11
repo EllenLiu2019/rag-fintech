@@ -75,6 +75,9 @@ class ClaimsOrchestrator:
                     }
                 )
 
+        # Capture subgraph configs from interrupted state (contains checkpoint_ns for time-travel)
+        all_subgraph_configs = await graph.capture_subgraph_configs(thread_ids)
+
         # Persist evaluation records (status=reviewing, waiting for human decision)
         evaluations = [
             ClaimEvaluations(
@@ -84,6 +87,7 @@ class ClaimsOrchestrator:
                 entity_name=entity.term_cn,
                 thread_id=thread_id,
                 status="reviewing",
+                subgraph_configs=all_subgraph_configs.get(thread_id),
             )
             for i, (entity, thread_id) in enumerate(zip(request.medical_entities, thread_ids))
         ]

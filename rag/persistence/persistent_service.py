@@ -7,6 +7,8 @@ from common.exceptions import (
     FileStorageError,
     ModelNotFoundError,
     DocumentNotFoundError,
+    EvaluationNotFoundError,
+    SubgraphNotFoundError,
 )
 from common.error_codes import ErrorCodes
 from common.constants import VECTOR_DEFAULT_KB
@@ -164,6 +166,33 @@ class PersistentService:
                 code=ErrorCodes.R_DB_002,
                 details={"doc_id": doc_id, "error": str(e)},
             ) from e
+
+    @staticmethod
+    def get_subgraph_config(thread_id: str, subgraph_name: str) -> dict:
+        """Look up a persisted subgraph config from claim_evaluations."""
+        record = rdb_client.select_by_kwargs(ClaimEvaluations, thread_id=thread_id)
+        if not record:
+            raise EvaluationNotFoundError(
+                message=f"Evaluation not found for thread_id={thread_id}",
+                code=ErrorCodes.R_DB_004,
+                details={"thread_id": thread_id},
+            )
+        if not record.subgraph_configs:
+            raise SubgraphNotFoundError(
+                message=f"No subgraph configs captured for thread_id={thread_id}. "
+                "Subgraph configs are only captured when the graph interrupts.",
+                code=ErrorCodes.R_DB_005,
+                details={"thread_id": thread_id},
+            )
+        config = record.subgraph_configs.get(subgraph_name)
+        if not config:
+            available = list(record.subgraph_configs.keys())
+            raise SubgraphNotFoundError(
+                message=f"Subgraph '{subgraph_name}' not found. Available: {available}",
+                code=ErrorCodes.R_DB_005,
+                details={"thread_id": thread_id, "subgraph_name": subgraph_name},
+            )
+        return config
 
     @staticmethod
     @cached(prefix="get_foc", ttl=3600)

@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from common import get_logger
-from common.exceptions import ParsingError, DocumentNotFoundError
+from common.exceptions import ParsingError, DocumentNotFoundError, EvaluationNotFoundError, SubgraphNotFoundError
 from rag.ingestion.pipeline import pipeline_runner
 from rag.entity import DocumentType
 from agent.claims_orchestrator import ClaimsOrchestrator
@@ -155,8 +155,10 @@ async def list_evaluations(doc_id: str):
 @router.get("/checkpoints/{thread_id}")
 async def list_checkpoints(thread_id: str, limit: int = Query(default=20, ge=1, le=100)):
     """List checkpoint timeline for a given thread_id (lightweight metadata only)."""
+    logger.info(f"Listing checkpoints for thread_id={thread_id}, limit={limit}")
     try:
-        checkpoints = await graph.list_checkpoints(thread_id, limit=limit)
+        config: dict = {"configurable": {"thread_id": thread_id}}
+        checkpoints = await graph.list_checkpoints(config, limit=limit)
         return JSONResponse(status_code=200, content=checkpoints)
     except Exception as e:
         logger.error(f"Failed to list checkpoints for thread_id={thread_id}: {e}", exc_info=True)
@@ -164,14 +166,69 @@ async def list_checkpoints(thread_id: str, limit: int = Query(default=20, ge=1, 
 
 
 @router.get("/state/{thread_id}")
-async def get_checkpoint_state(
+async def get_graph_state(
     thread_id: str,
     checkpoint_id: str = Query(default=None),
 ):
     """Get full graph state at a specific checkpoint (or latest if checkpoint_id omitted)."""
+    logger.info(f"Getting checkpoint state for thread_id={thread_id}, checkpoint_id={checkpoint_id}")
     try:
-        state = await graph.get_checkpoint_state(thread_id, checkpoint_id=checkpoint_id)
+        config: dict = {"configurable": {"thread_id": thread_id}}
+        if checkpoint_id:
+            config["configurable"]["checkpoint_id"] = checkpoint_id
+        state = await graph.get_state(config)
         return JSONResponse(status_code=200, content=state)
     except Exception as e:
         logger.error(f"Failed to get state for thread_id={thread_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Subgraph Time Travel endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/subgraph-checkpoints/{thread_id}")
+async def list_subgraph_checkpoints(
+    thread_id: str,
+    subgraph_name: str = Query(..., description="Name of the subgraph (e.g. encode_graph, stage_graph)"),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    """List checkpoint timeline for a subgraph within a given thread.
+
+    Requires that subgraph configs were captured during the interrupt
+    (persisted in claim_evaluations.subgraph_configs).
+    """
+    logger.info(f"Listing subgraph checkpoints for thread_id={thread_id}, subgraph_name={subgraph_name}, limit={limit}")
+    try:
+        subgraph_config = await asyncio.to_thread(PersistentService.get_subgraph_config, thread_id, subgraph_name)
+        checkpoints = await graph.list_checkpoints(subgraph_config, limit=limit)
+        return JSONResponse(status_code=200, content=checkpoints)
+    except (EvaluationNotFoundError, SubgraphNotFoundError):
+        raise
+    except Exception as e:
+        logger.error(
+            f"Failed to list subgraph checkpoints for thread_id={thread_id}, subgraph={subgraph_name}: {e}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/subgraph-state/{thread_id}")
+async def get_subgraph_state(
+    thread_id: str,
+    subgraph_name: str = Query(..., description="Name of the subgraph (e.g. encode_graph, stage_graph)"),
+):
+    """Get subgraph state using the config captured at interrupt time."""
+    try:
+        subgraph_config = await asyncio.to_thread(PersistentService.get_subgraph_config, thread_id, subgraph_name)
+        state = await graph.get_state(subgraph_config)
+        return JSONResponse(status_code=200, content=state)
+    except (EvaluationNotFoundError, SubgraphNotFoundError):
+        raise
+    except Exception as e:
+        logger.error(
+            f"Failed to get subgraph state for thread_id={thread_id}, subgraph={subgraph_name}: {e}",
+            exc_info=True,
+        )
         raise HTTPException(status_code=500, detail=str(e))

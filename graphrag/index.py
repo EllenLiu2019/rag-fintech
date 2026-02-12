@@ -1,7 +1,6 @@
 from typing import Callable
 import asyncio
 import networkx as nx
-from concurrent.futures import ThreadPoolExecutor
 from common import get_logger
 from graphrag.graph_extractor import GraphExtractor
 from graphrag.entity_alignment import EntityAlignment
@@ -140,12 +139,10 @@ async def persist_vector(merged_graph: nx.DiGraph):
         }
         chunks.append(chunk)
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        dense_future = executor.submit(dense_embedder.embed_chunks, chunks)
-        sparse_future = executor.submit(sparse_embedder.embed_chunks, chunks)
-
-        dense_future.result()
-        sparse_future.result()
+    await asyncio.gather(
+        asyncio.to_thread(dense_embedder.embed_chunks, chunks),
+        asyncio.to_thread(sparse_embedder.embed_chunks, chunks),
+    )
 
     vector_store.delete(condition={"doc_id": doc_id}, knowledgebaseId=VECTOR_GRAPH_KB)
 

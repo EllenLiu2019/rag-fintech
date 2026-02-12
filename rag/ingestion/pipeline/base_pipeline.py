@@ -4,7 +4,7 @@ import asyncio
 from rq import get_current_job
 
 from common import get_logger
-from rag.ingestion.parser import parse_content, ParseResult
+from rag.ingestion.parser import aparse_content, ParseResult
 from repository.s3 import s3_client
 from rag.entity import RagDocument, DocumentType
 from common.exceptions import ParsingError, IngestionError
@@ -116,7 +116,7 @@ class BasePipeline(ABC):
     async def parse_document(self, contents: bytes, filename: str, content_type: str):
         logger.info(f"Parsing document: {filename}")
         try:
-            parse_result = await asyncio.to_thread(parse_content, contents, filename, content_type)
+            parse_result = await aparse_content(contents, filename, content_type)
         except ValueError as e:
             raise ParsingError(
                 message=f"Failed to parse document: {filename}",

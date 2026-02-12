@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -50,7 +51,7 @@ def enqueue_task(func: Callable, *args, **kwargs) -> IngestionJob:
         raise IngestionError(message=f"Failed to enqueue task {func.__name__}: {e}", code=ErrorCodes.S_INGESTION_005)
 
 
-def get_task(job_id: str) -> IngestionJob:
+async def get_task(job_id: str) -> IngestionJob:
     """
     Get task status by job ID.
 
@@ -61,7 +62,7 @@ def get_task(job_id: str) -> IngestionJob:
         IngestionJob with current status
     """
     try:
-        job = redis_client.get_job(job_id)
+        job = await asyncio.to_thread(redis_client.get_job, job_id)
         if job is None:
             logger.warning(f"Job {job_id} not found")
             return IngestionJob(job_id=job_id, status="not_found")
@@ -76,7 +77,7 @@ def get_task(job_id: str) -> IngestionJob:
 
         # Get progress if available
         try:
-            progress_data = redis_client.get_progress(job_id)
+            progress_data = await asyncio.to_thread(redis_client.get_progress, job_id)
             logger.debug(f"Raw progress_data for job {job_id}: {progress_data}")
             if progress_data:
                 # Redis returns bytes when decode_responses=False

@@ -8,17 +8,17 @@ logger = get_logger(__name__)
 
 
 class TextParser(BaseParser):
-    """文本文件解析器"""
+    """Text Parser"""
 
     supported_extensions = [".txt", ".md", ".markdown"]
     supported_mime_types = ["text/plain", "text/markdown", "text/x-markdown"]
 
     def can_parse(self, filename: str, content_type: Optional[str]) -> bool:
-        """判断是否可以解析该文件"""
-        # 按扩展名判断
+        """Check if the file can be parsed"""
+        # Check if the file extension matches
         ext_match = filename.lower().endswith(tuple(self.supported_extensions))
 
-        # 按 MIME 类型判断
+        # Check if the MIME type matches
         mime_match = False
         if content_type:
             content_type_lower = content_type.lower()

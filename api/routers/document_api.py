@@ -87,7 +87,7 @@ async def list_documents(doc_type: str = Query(default="all", description="Filte
 @router.get("/process/{job_id}")
 async def get_process_status(job_id: str):
     """Get status of a document processing job."""
-    ingestion_job = get_task(job_id)
+    ingestion_job = await get_task(job_id)
     return JSONResponse(content=ingestion_job.model_dump(mode="json", exclude_none=True))
 
 

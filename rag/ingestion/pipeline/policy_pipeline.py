@@ -53,7 +53,9 @@ class PolicyPipeline(BasePipeline):
         pages = serialize_batch(parse_result.documents)
 
         try:
-            confidence, business_data, tokens, clause_forest = extractor.extract(documents=pages, source_file=filename)
+            confidence, business_data, tokens, clause_forest = await asyncio.to_thread(
+                extractor.extract, documents=pages, source_file=filename
+            )
         except Exception as e:
             raise ExtractionError(
                 message=f"Failed to extract metadata from document: {filename}",
@@ -87,7 +89,8 @@ class PolicyPipeline(BasePipeline):
         logger.info("Post-processing policy: chunking and embedding")
 
         try:
-            RagMarkdownSplitter().split_document(doc=rag_document)
+            splitter = RagMarkdownSplitter()
+            await asyncio.to_thread(splitter.split_document, doc=rag_document)
             logger.info(f"Document split into {len(rag_document.chunks)} chunks")
         except Exception as e:
             raise ChunkingError(
@@ -107,15 +110,11 @@ class PolicyPipeline(BasePipeline):
             )
 
     async def _embed_chunks(self, rag_document: RagDocument) -> None:
-        from concurrent.futures import ThreadPoolExecutor
-
         chunks = rag_document.chunks
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            dense_future = executor.submit(dense_embedder.embed_chunks, chunks, rag_document)
-            sparse_future = executor.submit(sparse_embedder.embed_chunks, chunks)
-
-            dense_future.result()
-            sparse_future.result()
+        await asyncio.gather(
+            asyncio.to_thread(dense_embedder.embed_chunks, chunks, rag_document),
+            asyncio.to_thread(sparse_embedder.embed_chunks, chunks),
+        )
 
     async def persist(self, rag_document: RagDocument, **kwargs) -> None:
         doc_id = rag_document.document_id

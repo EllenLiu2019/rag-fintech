@@ -44,10 +44,16 @@ class HumanDecision(BaseModel):
 
 
 def merge_decision(d1: HumanDecision, d2: HumanDecision) -> HumanDecision:
+    """Merge two HumanDecision objects. Newer value (d2) takes priority if non-empty.
+
+    This supports both:
+    - Normal flow: both subgraphs get the same decision, merge(d, d) = d
+    - Time-travel: propagated decision (d2) overrides the old one (d1)
+    """
     return HumanDecision(
-        icd_concept_code=d1.icd_concept_code if d1.icd_concept_code else d2.icd_concept_code,
-        icd_concept_name=d1.icd_concept_name if d1.icd_concept_name else d2.icd_concept_name,
-        tnm_stage=d1.tnm_stage if d1.tnm_stage else d2.tnm_stage,
+        icd_concept_code=d2.icd_concept_code if d2.icd_concept_code else d1.icd_concept_code,
+        icd_concept_name=d2.icd_concept_name if d2.icd_concept_name else d1.icd_concept_name,
+        tnm_stage=d2.tnm_stage if d2.tnm_stage else d1.tnm_stage,
     )
 
 

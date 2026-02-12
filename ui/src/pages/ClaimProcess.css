@@ -107,16 +107,15 @@
 
 .submit-button {
   width: 100%;
-  padding: 0.875rem 1.5rem;
-  background: linear-gradient(135deg, #5be9ff 0%, #00a6ff 100%);
-  color: #0a0e27;
-  font-size: 1rem;
-  font-weight: 600;
-  border: none;
+  padding: 0.7rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: #5be9ff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: 1px solid rgba(91, 233, 255, 0.25);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
-  margin-top: auto;
 }
 
 .submit-button:hover:not(:disabled) {
@@ -746,11 +745,40 @@
   padding-right: 0.5rem;
 }
 
+.checkpoint-timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
 .checkpoint-timeline h3 {
   font-size: 0.95rem;
   font-weight: 600;
   color: #5be9ff;
-  margin: 0 0 0.75rem 0;
+  margin: 0;
+}
+
+.refresh-btn {
+  padding: 0.2rem 0.2rem;
+  font-size: 0.5rem;
+  font-weight: 500;
+  color: #5be9ff;
+  background: rgba(91, 233, 255, 0.08);
+  border: 2px solid rgba(91, 233, 255, 0.25);
+  border-radius: 5cqi;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: rgba(91, 233, 255, 0.15);
+  border-color: #5be9ff;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .no-checkpoints {
@@ -1160,6 +1188,164 @@ p.detail-value {
   color: #5be9ff;
   margin-top: 0.15rem;
   font-weight: 500;
+}
+
+/* ======================================================================
+   Subgraph Replay (Fork & Replay)
+   ====================================================================== */
+
+/* Fork & Replay button inside agent output summary */
+.replay-edit-btn {
+  margin-left: auto;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #ffaa00;
+  background: rgba(255, 170, 0, 0.1);
+  border: 1px solid rgba(255, 170, 0, 0.3);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.replay-edit-btn:hover {
+  background: rgba(255, 170, 0, 0.2);
+  border-color: #ffaa00;
+  color: #fff;
+}
+
+/* Agent output summary layout to accommodate the button */
+.agent-output-item > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Replay editor section */
+.replay-editor-section {
+  border-color: rgba(255, 170, 0, 0.3) !important;
+  background: rgba(255, 170, 0, 0.03) !important;
+}
+
+.replay-hint {
+  font-size: 0.82rem;
+  color: #888;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.5;
+}
+
+.replay-hint strong {
+  color: #ffaa00;
+}
+
+.replay-json-editor {
+  width: 100%;
+  min-height: 180px;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 170, 0, 0.2);
+  border-radius: 8px;
+  color: #ccc;
+  font-family: 'Courier New', monospace;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.replay-json-editor:focus {
+  border-color: #ffaa00;
+}
+
+.replay-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  justify-content: flex-end;
+}
+
+.replay-cancel-btn {
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+  color: #888;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.replay-cancel-btn:hover:not(:disabled) {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.replay-execute-btn {
+  padding: 0.45rem 1.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0a0e27;
+  background: linear-gradient(135deg, #ffaa00 0%, #ff8800 100%);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.replay-execute-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 170, 0, 0.3);
+}
+
+.replay-execute-btn:disabled,
+.replay-cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Replay result section */
+.replay-result-section {
+  border-color: rgba(0, 255, 157, 0.3) !important;
+}
+
+.replay-status {
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: inline-block;
+  margin-bottom: 0.5rem;
+}
+
+.replay-status-interrupted {
+  background: rgba(255, 170, 0, 0.15);
+  color: #ffaa00;
+}
+
+.replay-status-completed {
+  background: rgba(0, 255, 157, 0.15);
+  color: #00ff9d;
+}
+
+.replay-interrupts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.replay-interrupt-item {
+  font-size: 0.85rem;
+  padding: 0.3rem 0;
+}
+
+.replay-confirm-panel {
+  margin-top: 0.75rem;
+}
+
+.replay-confirm-panel .review-fields-row {
+  margin-bottom: 0.5rem;
 }
 
 /* Scrollbar for history panels */

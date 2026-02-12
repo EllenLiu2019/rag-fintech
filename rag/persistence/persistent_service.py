@@ -195,6 +195,21 @@ class PersistentService:
         return config
 
     @staticmethod
+    def update_subgraph_config(thread_id: str, subgraph_name: str, new_config: dict) -> None:
+        """Update a single subgraph's config within the persisted subgraph_configs JSONB.
+
+        Called after fork_and_replay to persist the new checkpoint_id.
+        """
+        record = rdb_client.select_by_kwargs(ClaimEvaluations, thread_id=thread_id)
+        if not record:
+            logger.warning(f"Cannot update subgraph config: evaluation not found for thread_id={thread_id}")
+            return
+        configs = record.subgraph_configs or {}
+        configs[subgraph_name] = new_config
+        record.subgraph_configs = configs
+        rdb_client.save(record)
+
+    @staticmethod
     @cached(prefix="get_foc", ttl=3600)
     def get_clause_forest(doc_id: str) -> Optional[ClauseForest]:
         rdb_document = rdb_client.select_by_kwargs(RdbDocument, document_id=doc_id)

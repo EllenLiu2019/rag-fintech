@@ -11,7 +11,7 @@ from rag.ingestion.pipeline import pipeline_runner
 from rag.entity import DocumentType
 from agent.claims_orchestrator import ClaimsOrchestrator
 from agent.graph_state import HumanDecision
-from agent.medical_agents import graph
+from agent.medical_agents import graph, MedicalAgents
 from rag.persistence.persistent_service import PersistentService
 
 logger = get_logger(__name__)
@@ -44,6 +44,17 @@ class ApproveClaimRequest(BaseModel):
     doc_id: str
     thread_ids: List[str]
     decisions: List[HumanDecisionItem]
+
+
+class SubgraphReplayRequest(BaseModel):
+    subgraph_name: str
+    as_node: str
+    values: dict  # partial state, e.g. {"agent_output_dict": {"encode_agent": {...}}}
+
+
+class SubgraphResumeRequest(BaseModel):
+    subgraph_name: str
+    decision: HumanDecisionItem
 
 
 @router.post("/upload")
@@ -183,11 +194,6 @@ async def get_graph_state(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ---------------------------------------------------------------------------
-# Subgraph Time Travel endpoints
-# ---------------------------------------------------------------------------
-
-
 @router.get("/subgraph-checkpoints/{thread_id}")
 async def list_subgraph_checkpoints(
     thread_id: str,
@@ -229,6 +235,97 @@ async def get_subgraph_state(
     except Exception as e:
         logger.error(
             f"Failed to get subgraph state for thread_id={thread_id}, subgraph={subgraph_name}: {e}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Subgraph Time Travel endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post("/subgraph-replay/{thread_id}")
+async def replay_subgraph(thread_id: str, request: SubgraphReplayRequest):
+    """Fork a subgraph's state and replay execution from a specific node."""
+    logger.info(
+        f"Subgraph replay for thread_id={thread_id}, subgraph={request.subgraph_name}, as_node={request.as_node}"
+    )
+    try:
+        subgraph_config = await asyncio.to_thread(
+            PersistentService.get_subgraph_config, thread_id, request.subgraph_name
+        )
+
+        result, new_subgraph_config = await graph.fork_and_replay(
+            subgraph_config=subgraph_config,
+            values=request.values,
+            as_node=request.as_node,
+        )
+
+        # Extract new interrupt info from replayed result
+        interrupts = MedicalAgents.get_interrupts(result)
+
+        # Persist the updated subgraph config (checkpoint_id changed after fork)
+        await asyncio.to_thread(
+            PersistentService.update_subgraph_config,
+            thread_id,
+            request.subgraph_name,
+            new_subgraph_config,
+        )
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "interrupted" if interrupts else "completed",
+                "interrupts": interrupts,
+            },
+        )
+    except (EvaluationNotFoundError, SubgraphNotFoundError):
+        raise
+    except Exception as e:
+        logger.error(
+            f"Failed to replay subgraph for thread_id={thread_id}, subgraph={request.subgraph_name}: {e}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/subgraph-resume/{thread_id}")
+async def resume_subgraph(thread_id: str, request: SubgraphResumeRequest):
+    """Resume a subgraph's approval interrupt with a human decision.
+
+    Called after /subgraph-replay produces a new interrupt.
+    The user confirms/edits the new agent output, then this endpoint
+    resumes the subgraph's approval node with the decision.
+    """
+    logger.info(f"Subgraph resume for thread_id={thread_id}, subgraph={request.subgraph_name}")
+    try:
+        subgraph_config = await asyncio.to_thread(
+            PersistentService.get_subgraph_config, thread_id, request.subgraph_name
+        )
+
+        decision = HumanDecision(
+            icd_concept_code=request.decision.icd_concept_code,
+            icd_concept_name=request.decision.icd_concept_name,
+            tnm_stage=request.decision.tnm_stage,
+        )
+
+        await graph.resume(decision, subgraph_config)
+
+        # Return the final subgraph state for display
+        state = await graph.get_state(subgraph_config)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "completed",
+                "state": state,
+            },
+        )
+    except (EvaluationNotFoundError, SubgraphNotFoundError):
+        raise
+    except Exception as e:
+        logger.error(
+            f"Failed to resume subgraph for thread_id={thread_id}, subgraph={request.subgraph_name}: {e}",
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail=str(e))

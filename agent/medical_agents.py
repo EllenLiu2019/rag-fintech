@@ -12,7 +12,7 @@ from agent.entity import MedicalEntity
 from agent.tools import search_medical_kb
 from common import get_logger
 from agent.graph_components import graph_components
-from agent.graph_state import MedicalState, HumanDecision
+from agent.graph_state import MedicalState, HumanDecision, AgentOutput
 
 logger = get_logger(__name__)
 
@@ -60,34 +60,36 @@ class MedicalAgents:
         return result
 
     @traceable(run_type="chain", name="MedicalAgents.resume")
-    async def resume(self, decision: HumanDecision, thread_id: str) -> dict[str, Any]:
-        """Phase 2: Resume graph execution with human decision.
+    async def resume(self, decision: HumanDecision, config: dict[str, Any]) -> dict[str, Any]:
+        """Resume graph/subgraph execution with human decision.
 
-        Args:
-            decision: Human-confirmed ICD code and TNM stage
-            thread_id: Same thread ID used in start()
+        Works for both parent graph and subgraph configs:
+        - Parent config: resumes all interrupted subgraphs (normal /approve flow)
+        - Subgraph config: resumes a single subgraph (after fork_and_replay)
 
         Returns:
-            Final graph result after approval nodes complete.
+            Graph result dict after approval nodes complete.
         """
         async_graph = await self.get_async_graph()
-        config = self._make_config(thread_id)
 
-        # Get pending interrupts from the saved checkpoint
-        state = await async_graph.aget_state(config, subgraphs=True)
-        interrupts = []
-        for task in state.tasks:
-            interrupts.extend(task.interrupts)
+        snapshot = await async_graph.aget_state(config, subgraphs=True)
+        interrupts = list(snapshot.interrupts)
 
         if not interrupts:
-            logger.warning(f"No pending interrupts found for thread_id={thread_id}")
+            for task in snapshot.tasks:
+                interrupts.extend(task.interrupts)
+
+        if not interrupts:
+            logger.warning("No pending interrupts found for config")
             return {}
 
-        resume_value = {interrupt.id: decision for interrupt in interrupts}
+        logger.info(f"Resuming with {len(interrupts)} interrupt(s)")
+
+        resume_value = {intr.id: decision for intr in interrupts}
         return await async_graph.ainvoke(Command(resume=resume_value), config=config)
 
     @staticmethod
-    def extract_interrupt_info(result: dict[str, Any]) -> list[dict[str, Any]]:
+    def get_interrupts(result: dict[str, Any]) -> list[dict[str, Any]]:
         """Extract human-readable interrupt info from graph result for frontend display."""
         interrupts: list[Interrupt] = result.get("__interrupt__", [])
         if not interrupts:
@@ -106,16 +108,15 @@ class MedicalAgents:
             for interrupt in interrupts
         ]
 
-    # ------------------------------------------------------------------
-    # Time Travel: checkpoint query methods
-    # ------------------------------------------------------------------
-
     async def capture_subgraph_configs(self, thread_ids: list[str]) -> dict[str, dict[str, Any]]:
         """Capture subgraph configs from interrupted parent states.
 
-        After graph.start() interrupts, call this to extract the config
+        After graph.start() interrupts, call this to extract the RunnableConfig
         (including checkpoint_ns) for each subgraph task. These configs
-        are needed later to query subgraph checkpoint history.
+        are needed later to query subgraph checkpoint history and replay.
+
+        With subgraphs=False (default), PregelTask.state is already a
+        RunnableConfig containing the subgraph's checkpoint_ns and checkpoint_id.
 
         Args:
             thread_ids: Thread IDs that were used in start()
@@ -179,25 +180,45 @@ class MedicalAgents:
         snapshot = await async_graph.aget_state(config)
         return self._serialize_snapshot(snapshot)
 
-    async def update_checkpoint(
+    async def fork_and_replay(
         self,
-        config: dict[str, Any],
+        subgraph_config: dict[str, Any],
         values: dict[str, Any],
-        as_node: str | None = None,
-        task_id: str | None = None,
-    ) -> dict[str, Any]:
-        """Update a checkpoint."""
+        as_node: str,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Fork a subgraph's state at a specific node and replay execution.
+
+        This is the core of subgraph time-travel:
+        1. Updates the subgraph checkpoint with modified values, attributed to as_node
+           — aupdate_state returns a NEW config with updated checkpoint_id
+        2. Resumes the subgraph directly using the new config
+           — the subgraph replays from the node after as_node
+        3. The subgraph eventually hits the approval node again and interrupts
+
+        Returns:
+            (result, new_subgraph_config) — the graph result and the updated config
+            (checkpoint_id changed, must be persisted to DB for future queries)
+        """
         async_graph = await self.get_async_graph()
-        return await async_graph.aupdate_state(
-            config,
-            values={
-                "messages": values.get("messages", []),
-                "agent_output_dict": values.get("agent_output_dict", {}),
-                "human_decision": values.get("human_decision", {}),
-            },
-            as_node=as_node,
-            task_id=task_id,
-        )
+
+        # Convert agent_output_dict values from plain dicts to AgentOutput objects
+        update_values: dict[str, Any] = {}
+        raw_outputs = values.get("agent_output_dict", {})
+        if raw_outputs:
+            agent_outputs = {}
+            for key, val in raw_outputs.items():
+                agent_outputs[key] = AgentOutput(**val) if isinstance(val, dict) else val
+            update_values["agent_output_dict"] = agent_outputs
+
+        logger.info(f"Forking subgraph as_node={as_node}, " f"updating keys={list(raw_outputs.keys())}")
+
+        # Step 1: Fork — update the subgraph checkpoint
+        new_subgraph_config = await async_graph.aupdate_state(subgraph_config, update_values, as_node=as_node)
+
+        # Step 2: Replay — resume the subgraph directly using the new config
+        result = await async_graph.ainvoke(None, new_subgraph_config)
+
+        return result, new_subgraph_config
 
     @staticmethod
     def _serialize_snapshot(snapshot: StateSnapshot) -> dict[str, Any]:

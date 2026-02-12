@@ -65,13 +65,13 @@ class ClaimsOrchestrator:
         # Extract interrupt info for frontend
         pending_reviews = []
         for i, (entity, result) in enumerate(zip(request.medical_entities, results)):
-            interrupt_info = MedicalAgents.extract_interrupt_info(result)
-            if interrupt_info:
+            interrupts = MedicalAgents.get_interrupts(result)
+            if interrupts:
                 pending_reviews.append(
                     {
                         "entity_index": i,
                         "entity_name": entity.term_cn,
-                        "interrupts": interrupt_info,
+                        "interrupts": interrupts,
                     }
                 )
 
@@ -131,7 +131,9 @@ class ClaimsOrchestrator:
             )
 
         # Resume medical agents with human decisions
-        resume_tasks = [graph.resume(decision, thread_id) for decision, thread_id in zip(decisions, thread_ids)]
+        resume_tasks = [
+            graph.resume(decision, graph._make_config(thread_id)) for decision, thread_id in zip(decisions, thread_ids)
+        ]
         await asyncio.gather(*resume_tasks)
 
         # Step 2: Clause Matching

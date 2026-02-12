@@ -2,6 +2,7 @@ import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { apiBaseUrl } from '../../config/config'
 import BackIcon from '../components/icons/BackIcon'
+import RefreshIcon from '../components/icons/RefreshIcon'
 import './ClaimProcess.css'
 
 function ClaimProcess({ fileInfo, onBack }) {
@@ -31,6 +32,17 @@ function ClaimProcess({ fileInfo, onBack }) {
   const [selectedSubgraphCp, setSelectedSubgraphCp] = useState(null)
   const [subgraphState, setSubgraphState] = useState(null)
   const [subgraphLoading, setSubgraphLoading] = useState(false)
+
+  // ── Subgraph Replay state ──
+  const [replayEditing, setReplayEditing] = useState(false)
+  const [replayNode, setReplayNode] = useState('')
+  const [replayJson, setReplayJson] = useState('')
+  const [replayLoading, setReplayLoading] = useState(false)
+  const [replayResult, setReplayResult] = useState(null)
+
+  // ── Subgraph Resume (after replay interrupt) ──
+  const [replayDecision, setReplayDecision] = useState({ icd_concept_code: '', icd_concept_name: '', tnm_stage: '' })
+  const [resumeLoading, setResumeLoading] = useState(false)
 
   // Phase 1: Submit claim → get AI candidates for review
   const handleSubmitClaim = async () => {
@@ -162,6 +174,9 @@ function ClaimProcess({ fileInfo, onBack }) {
       setSubgraphCheckpoints([])
       setSelectedSubgraphCp(null)
       setSubgraphState(null)
+      // Reset replay state
+      setReplayEditing(false)
+      setReplayResult(null)
       return
     }
 
@@ -183,15 +198,12 @@ function ClaimProcess({ fileInfo, onBack }) {
     }
   }
 
-  const handleSelectEval = async (evalRecord) => {
-    setSelectedEval(evalRecord)
-    setCheckpoints([])
-    setSelectedCheckpoint(null)
-    setCheckpointState(null)
+  // Load checkpoints for a given thread_id (reusable for select + refresh)
+  const loadCheckpoints = async (threadId) => {
     setHistoryLoading(true)
     setError('')
     try {
-      const res = await fetch(`${apiBaseUrl}/api/claim/checkpoints/${evalRecord.thread_id}`)
+      const res = await fetch(`${apiBaseUrl}/api/claim/checkpoints/${threadId}`)
       if (!res.ok) throw new Error('Failed to load checkpoints')
       const data = await res.json()
       setCheckpoints(data)
@@ -200,6 +212,25 @@ function ClaimProcess({ fileInfo, onBack }) {
     } finally {
       setHistoryLoading(false)
     }
+  }
+
+  const handleSelectEval = async (evalRecord) => {
+    setSelectedEval(evalRecord)
+    setCheckpoints([])
+    setSelectedCheckpoint(null)
+    setCheckpointState(null)
+    await loadCheckpoints(evalRecord.thread_id)
+  }
+
+  const handleRefreshCheckpoints = () => {
+    if (!selectedEval) return
+    setSelectedCheckpoint(null)
+    setCheckpointState(null)
+    setSubgraphName(null)
+    setSubgraphState(null)
+    setReplayEditing(false)
+    setReplayResult(null)
+    loadCheckpoints(selectedEval.thread_id)
   }
 
   const handleSelectCheckpoint = async (cp) => {
@@ -230,20 +261,35 @@ function ClaimProcess({ fileInfo, onBack }) {
     setSubgraphCheckpoints([])
     setSelectedSubgraphCp(null)
     setSubgraphState(null)
+    setReplayEditing(false)
+    setReplayResult(null)
     setSubgraphLoading(true)
     setError('')
     try {
-      const res = await fetch(
+      // Load checkpoints
+      const cpRes = await fetch(
         `${apiBaseUrl}/api/claim/subgraph-checkpoints/${selectedEval.thread_id}?subgraph_name=${sgName}`
       )
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
+      if (!cpRes.ok) {
+        const errData = await cpRes.json().catch(() => ({}))
         throw new Error(errData.detail || 'Failed to load subgraph checkpoints')
       }
-      const data = await res.json()
-      setSubgraphCheckpoints(data)
+      const cpData = await cpRes.json()
+      setSubgraphCheckpoints(cpData)
+
+      // Auto-load state (subgraphs typically have one checkpoint)
+      const stateRes = await fetch(
+        `${apiBaseUrl}/api/claim/subgraph-state/${selectedEval.thread_id}?subgraph_name=${sgName}`
+      )
+      if (stateRes.ok) {
+        const stateData = await stateRes.json()
+        setSubgraphState(stateData)
+        if (cpData.length > 0) {
+          setSelectedSubgraphCp(cpData[0].checkpoint_id)
+        }
+      }
     } catch (err) {
-      setError(err.message || 'Failed to load subgraph checkpoints')
+      setError(err.message || 'Failed to load subgraph data')
     } finally {
       setSubgraphLoading(false)
     }
@@ -277,6 +323,153 @@ function ClaimProcess({ fileInfo, onBack }) {
     setSubgraphCheckpoints([])
     setSelectedSubgraphCp(null)
     setSubgraphState(null)
+    setReplayEditing(false)
+    setReplayResult(null)
+  }
+
+  // Start editing for replay: pre-fill JSON with the selected agent's output
+  const handleStartReplayEdit = (agentName) => {
+    if (!subgraphState?.agent_output_dict?.[agentName]) return
+    setReplayNode(agentName)
+    setReplayJson(JSON.stringify(subgraphState.agent_output_dict[agentName], null, 2))
+    setReplayEditing(true)
+    setReplayResult(null)
+  }
+
+  const handleCancelReplay = () => {
+    setReplayEditing(false)
+    setReplayNode('')
+    setReplayJson('')
+    setReplayResult(null)
+  }
+
+  const handleExecuteReplay = async () => {
+    if (!selectedEval || !subgraphName || !replayNode) return
+
+    // Validate JSON
+    let parsedOutput
+    try {
+      parsedOutput = JSON.parse(replayJson)
+    } catch {
+      setError('Invalid JSON in replay editor')
+      return
+    }
+
+    setReplayLoading(true)
+    setError('')
+    setReplayResult(null)
+    try {
+      const res = await fetch(
+        `${apiBaseUrl}/api/claim/subgraph-replay/${selectedEval.thread_id}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subgraph_name: subgraphName,
+            as_node: replayNode,
+            values: {
+              agent_output_dict: {
+                [replayNode]: parsedOutput,
+              },
+            },
+          }),
+        }
+      )
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || 'Replay failed')
+      }
+      const data = await res.json()
+      setReplayResult(data)
+      setReplayEditing(false)
+
+      // Refresh subgraph state to show updated results
+      if (data.status === 'interrupted') {
+        const stateRes = await fetch(
+          `${apiBaseUrl}/api/claim/subgraph-state/${selectedEval.thread_id}?subgraph_name=${subgraphName}`
+        )
+        if (stateRes.ok) {
+          const newState = await stateRes.json()
+          setSubgraphState(newState)
+        }
+
+        // Pre-fill decision from the new interrupt's agent_output
+        const mergedOutput = {}
+        for (const intr of (data.interrupts || [])) {
+          Object.assign(mergedOutput, intr.agent_output || {})
+        }
+        const alignAgent = mergedOutput.align_agent || {}
+        const stageAgent = mergedOutput.stage_agent || {}
+        const allConcepts = alignAgent.tool_calls?.[0]?.output || {}
+        const bestKey = alignAgent.agent_response?.best_matched_concept || ''
+        const bestConcept = allConcepts[bestKey] || Object.values(allConcepts)[0] || {}
+
+        setReplayDecision({
+          icd_concept_code: bestConcept.icd_concept_code || '',
+          icd_concept_name: bestConcept.icd_name || '',
+          tnm_stage: stageAgent.step_output || '',
+        })
+      }
+    } catch (err) {
+      setError(err.message || 'Replay failed')
+    } finally {
+      setReplayLoading(false)
+    }
+  }
+
+  // Resume the subgraph after replay interrupt — send human decision
+  const handleReplayResume = async () => {
+    if (!selectedEval || !subgraphName) return
+    if (!replayDecision.icd_concept_code && !replayDecision.tnm_stage) return
+
+    setResumeLoading(true)
+    setError('')
+    try {
+      const res = await fetch(
+        `${apiBaseUrl}/api/claim/subgraph-resume/${selectedEval.thread_id}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subgraph_name: subgraphName,
+            decision: replayDecision,
+          }),
+        }
+      )
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || 'Resume failed')
+      }
+      const data = await res.json()
+
+      // Update replay result to show completion
+      setReplayResult({ status: 'completed' })
+
+      // Refresh subgraph state with the final state from the response
+      if (data.state) {
+        setSubgraphState(data.state)
+      }
+    } catch (err) {
+      setError(err.message || 'Resume failed')
+    } finally {
+      setResumeLoading(false)
+    }
+  }
+
+  // Available nodes for replay per subgraph
+  const getReplayableNodes = (sgName) => {
+    if (sgName === 'encode_graph') {
+      return [
+        { value: 'encode_agent', label: 'encode_agent → re-run align_agent' },
+        { value: 'align_agent', label: 'align_agent → re-run approval' },
+      ]
+    }
+    if (sgName === 'stage_graph') {
+      return [
+        { value: 'stage_agent', label: 'stage_agent → re-run approval' },
+      ]
+    }
+    return []
   }
 
   const subgraphOptions = ['encode_graph', 'stage_graph']
@@ -419,6 +612,17 @@ function ClaimProcess({ fileInfo, onBack }) {
             </div>
           )}
 
+          {/* Show submit button only before review and not in history mode */}
+          {!reviewData && !historyMode && (
+            <button
+              className="submit-button"
+              onClick={handleSubmitClaim}
+              disabled={isProcessing || !(fileInfo?.document_id || fileInfo?.doc_id)}
+            >
+              {loading ? 'Analyzing...' : 'Submit Evaluation'}
+            </button>
+          )}
+
           {/* History toggle */}
           <button
             className={`history-toggle-btn ${historyMode ? 'active' : ''}`}
@@ -427,17 +631,6 @@ function ClaimProcess({ fileInfo, onBack }) {
           >
             {historyMode ? 'Exit History' : 'Evaluation History'}
           </button>
-
-          {/* Show submit button only before review and not in history mode */}
-          {!reviewData && !historyMode && (
-            <button
-              className="submit-button"
-              onClick={handleSubmitClaim}
-              disabled={isProcessing || !(fileInfo?.document_id || fileInfo?.doc_id)}
-            >
-              {loading ? '正在分析...' : '提交理赔申请'}
-            </button>
-          )}
         </div>
 
         {/* Right Panel */}
@@ -512,6 +705,8 @@ function ClaimProcess({ fileInfo, onBack }) {
                       setSubgraphCheckpoints([])
                       setSelectedSubgraphCp(null)
                       setSubgraphState(null)
+                      setReplayEditing(false)
+                      setReplayResult(null)
                     }}>
                       Back to evaluations
                     </button>
@@ -529,7 +724,17 @@ function ClaimProcess({ fileInfo, onBack }) {
                     <div className="checkpoint-content-row">
                       {/* Timeline column */}
                       <div className="checkpoint-timeline">
-                        <h3>Checkpoints</h3>
+                        <div className="checkpoint-timeline-header">
+                          <h3>Checkpoints</h3>
+                          <button
+                            className="refresh-btn"
+                            onClick={handleRefreshCheckpoints}
+                            disabled={historyLoading}
+                            title="Refresh checkpoints"
+                          >
+                            {historyLoading ? '...' : <RefreshIcon size={16} />}
+                          </button>
+                        </div>
                         {checkpoints.length === 0 && !historyLoading && (
                           <p className="no-checkpoints">No checkpoints found.</p>
                         )}
@@ -756,7 +961,18 @@ function ClaimProcess({ fileInfo, onBack }) {
                                     <h4>Agent Outputs</h4>
                                     {Object.entries(subgraphState.agent_output_dict).map(([key, output]) => (
                                       <details key={key} className="agent-output-item" open>
-                                        <summary>{key}</summary>
+                                        <summary>
+                                          <span>{key}</span>
+                                          {getReplayableNodes(subgraphName).some(n => n.value === key) && (
+                                            <button
+                                              className="replay-edit-btn"
+                                              onClick={(e) => { e.preventDefault(); handleStartReplayEdit(key) }}
+                                              title={`Edit ${key} output and replay`}
+                                            >
+                                              Fork & Replay
+                                            </button>
+                                          )}
+                                        </summary>
                                         <div className="agent-output-detail">
                                           {output.agent_response?.reasoning && (
                                             <div className="detail-row">
@@ -827,6 +1043,102 @@ function ClaimProcess({ fileInfo, onBack }) {
                                         </details>
                                       ))}
                                     </div>
+                                  </div>
+                                )}
+
+                                {/* Replay editor */}
+                                {replayEditing && (
+                                  <div className="state-section replay-editor-section">
+                                    <h4>Fork & Replay from: <span className="subgraph-highlight">{replayNode}</span></h4>
+                                    <p className="replay-hint">
+                                      Edit the JSON below, then click Replay.
+                                      The subgraph will re-run from the node after <strong>{replayNode}</strong>.
+                                    </p>
+                                    <textarea
+                                      className="replay-json-editor"
+                                      value={replayJson}
+                                      onChange={(e) => setReplayJson(e.target.value)}
+                                      rows={12}
+                                      spellCheck={false}
+                                    />
+                                    <div className="replay-actions">
+                                      <button
+                                        className="replay-cancel-btn"
+                                        onClick={handleCancelReplay}
+                                        disabled={replayLoading}
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        className="replay-execute-btn"
+                                        onClick={handleExecuteReplay}
+                                        disabled={replayLoading}
+                                      >
+                                        {replayLoading ? 'Replaying...' : 'Replay'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Replay result + resume confirmation */}
+                                {replayResult && (
+                                  <div className="state-section replay-result-section">
+                                    <h4>Replay Result</h4>
+                                    <div className={`replay-status replay-status-${replayResult.status}`}>
+                                      {replayResult.status === 'interrupted' ? 'Replayed — awaiting confirmation' : 'Replayed — completed'}
+                                    </div>
+
+                                    {/* Interrupted: show confirmation panel */}
+                                    {replayResult.status === 'interrupted' && (
+                                      <div className="replay-confirm-panel">
+                                        <p className="replay-hint">
+                                          Subgraph replayed with new agent outputs. Confirm or edit the values below to complete.
+                                        </p>
+                                        <div className="review-fields-row">
+                                          <div className="review-field">
+                                            <label>ICD-10 Code:</label>
+                                            <input
+                                              type="text"
+                                              value={replayDecision.icd_concept_code}
+                                              onChange={(e) => setReplayDecision(prev => ({ ...prev, icd_concept_code: e.target.value }))}
+                                              placeholder="e.g. C73.x00"
+                                            />
+                                          </div>
+                                          <div className="review-field">
+                                            <label>ICD-10 Name:</label>
+                                            <input
+                                              type="text"
+                                              value={replayDecision.icd_concept_name}
+                                              onChange={(e) => setReplayDecision(prev => ({ ...prev, icd_concept_name: e.target.value }))}
+                                              placeholder="e.g. thyroid cancer"
+                                            />
+                                          </div>
+                                          <div className="review-field">
+                                            <label>TNM Stage:</label>
+                                            <input
+                                              type="text"
+                                              value={replayDecision.tnm_stage}
+                                              onChange={(e) => setReplayDecision(prev => ({ ...prev, tnm_stage: e.target.value }))}
+                                              placeholder="e.g. I期"
+                                            />
+                                          </div>
+                                        </div>
+                                        <div className="replay-actions">
+                                          <button
+                                            className="replay-execute-btn"
+                                            onClick={handleReplayResume}
+                                            disabled={resumeLoading || (!replayDecision.icd_concept_code && !replayDecision.tnm_stage)}
+                                          >
+                                            {resumeLoading ? 'Resuming...' : 'Confirm & Resume'}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Completed: show success */}
+                                    {replayResult.status === 'completed' && (
+                                      <p className="replay-hint">Subgraph execution completed. The state inspector above shows the final result.</p>
+                                    )}
                                   </div>
                                 )}
                               </div>

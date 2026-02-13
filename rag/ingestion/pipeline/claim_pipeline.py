@@ -159,5 +159,5 @@ class ClaimPipeline(BasePipeline):
         doc_id = rag_document.document_id
         rdb_document_id = kwargs.get("rdb_document_id")
 
-        await asyncio.to_thread(PersistentService.update_document, rag_document, rdb_document_id)
+        await PersistentService.aupdate_document(rag_document, rdb_document_id)
         logger.info(f"RDB document updated for document: {doc_id}")

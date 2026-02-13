@@ -1,4 +1,3 @@
-import asyncio
 import mimetypes
 from fastapi import APIRouter, File, UploadFile, Query
 from fastapi.responses import JSONResponse, Response
@@ -59,7 +58,7 @@ async def upload_file(
 async def list_documents(doc_type: str = Query(default="all", description="Filter by doc_type: all, policy, claim")):
     """List all documents, optionally filtered by doc_type."""
     try:
-        records = await asyncio.to_thread(PersistentService.list_documents, doc_type)
+        records = await PersistentService.alist_documents(doc_type)
         results = []
         for r in records:
             row = r.to_dict()

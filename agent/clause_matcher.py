@@ -25,7 +25,7 @@ class ClauseMatcher:
     """
 
     async def match(self, entities: List[MedicalEntity], decisions: List[HumanDecision], doc_id: str) -> Dict[str, Any]:
-        clause_forest = PersistentService.get_clause_forest(doc_id)
+        clause_forest = await PersistentService.aget_clause_forest(doc_id)
 
         tasks = [
             foc_retrieval(entities, decisions, clause_forest),

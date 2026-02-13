@@ -1,6 +1,4 @@
 from typing import List
-import asyncio
-
 from fastapi import APIRouter, File, UploadFile, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -149,7 +147,7 @@ async def approve_claim(request: ApproveClaimRequest):
 async def list_evaluations(doc_id: str):
     """List all evaluation attempts for a given doc_id (for history display)."""
     try:
-        records = await asyncio.to_thread(PersistentService.list_evaluations, doc_id)
+        records = await PersistentService.alist_evaluations(doc_id)
         results = []
         for r in records:
             row = r.to_dict()
@@ -207,7 +205,7 @@ async def list_subgraph_checkpoints(
     """
     logger.info(f"Listing subgraph checkpoints for thread_id={thread_id}, subgraph_name={subgraph_name}, limit={limit}")
     try:
-        subgraph_config = await asyncio.to_thread(PersistentService.get_subgraph_config, thread_id, subgraph_name)
+        subgraph_config = await PersistentService.aget_subgraph_config(thread_id, subgraph_name)
         checkpoints = await graph.list_checkpoints(subgraph_config, limit=limit)
         return JSONResponse(status_code=200, content=checkpoints)
     except (EvaluationNotFoundError, SubgraphNotFoundError):
@@ -227,7 +225,7 @@ async def get_subgraph_state(
 ):
     """Get subgraph state using the config captured at interrupt time."""
     try:
-        subgraph_config = await asyncio.to_thread(PersistentService.get_subgraph_config, thread_id, subgraph_name)
+        subgraph_config = await PersistentService.aget_subgraph_config(thread_id, subgraph_name)
         state = await graph.get_state(subgraph_config)
         return JSONResponse(status_code=200, content=state)
     except (EvaluationNotFoundError, SubgraphNotFoundError):
@@ -252,9 +250,7 @@ async def replay_subgraph(thread_id: str, request: SubgraphReplayRequest):
         f"Subgraph replay for thread_id={thread_id}, subgraph={request.subgraph_name}, as_node={request.as_node}"
     )
     try:
-        subgraph_config = await asyncio.to_thread(
-            PersistentService.get_subgraph_config, thread_id, request.subgraph_name
-        )
+        subgraph_config = await PersistentService.aget_subgraph_config(thread_id, request.subgraph_name)
 
         result, new_subgraph_config = await graph.fork_and_replay(
             subgraph_config=subgraph_config,
@@ -266,8 +262,7 @@ async def replay_subgraph(thread_id: str, request: SubgraphReplayRequest):
         interrupts = MedicalAgents.get_interrupts(result)
 
         # Persist the updated subgraph config (checkpoint_id changed after fork)
-        await asyncio.to_thread(
-            PersistentService.update_subgraph_config,
+        await PersistentService.aupdate_subgraph_config(
             thread_id,
             request.subgraph_name,
             new_subgraph_config,
@@ -300,9 +295,7 @@ async def resume_subgraph(thread_id: str, request: SubgraphResumeRequest):
     """
     logger.info(f"Subgraph resume for thread_id={thread_id}, subgraph={request.subgraph_name}")
     try:
-        subgraph_config = await asyncio.to_thread(
-            PersistentService.get_subgraph_config, thread_id, request.subgraph_name
-        )
+        subgraph_config = await PersistentService.aget_subgraph_config(thread_id, request.subgraph_name)
 
         decision = HumanDecision(
             icd_concept_code=request.decision.icd_concept_code,

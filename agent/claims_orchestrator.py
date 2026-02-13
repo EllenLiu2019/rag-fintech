@@ -50,7 +50,7 @@ class ClaimsOrchestrator:
                 ]
             }
         """
-        rdb_document = PersistentService.get_document(doc_id)
+        rdb_document = await PersistentService.aget_document(doc_id)
         request = ClaimRequest.from_dict(rdb_document.business_data)
         logger.info(f"Starting claim evaluation for patient: {request.patient_id}")
 
@@ -115,7 +115,7 @@ class ClaimsOrchestrator:
             thread_ids: Thread IDs from start_evaluation()
             decisions: Human-confirmed decisions for each entity
         """
-        rdb_document = PersistentService.get_document(doc_id)
+        rdb_document = await PersistentService.aget_document(doc_id)
         request = ClaimRequest.from_dict(rdb_document.business_data)
         logger.info(f"Completing claim evaluation for patient: {request.patient_id}")
 

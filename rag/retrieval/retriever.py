@@ -4,7 +4,7 @@ import asyncio
 from rag.embedding import dense_embedder, sparse_embedder
 from rag.persistence import PersistentService
 from repository.vector import vector_store
-from repository.cache import cached
+from repository.cache import async_cached
 from rag.retrieval.selector import merge_chunks
 from rag.retrieval.foc_retriever import foc_retriever
 from rag.retrieval.reranker import reranker
@@ -46,7 +46,7 @@ class Retriever:
         logger.info(f"Searching for: '{query}' in kb: {kb_id} (mode: {mode})")
 
         try:
-            opt_query = query_optimizer.optimize(query, mode=opt_mode)
+            opt_query = await asyncio.to_thread(query_optimizer.optimize, query, mode=opt_mode)
         except Exception as e:
             raise RetrievalError(
                 message="Failed to optimize query",
@@ -57,7 +57,7 @@ class Retriever:
         foc_enhance = params.pop("foc_enhance", False)
         if foc_enhance:
             doc_id = filters.get("doc_id")
-            clause_forest = PersistentService.get_clause_forest(doc_id)
+            clause_forest = await PersistentService.aget_clause_forest(doc_id)
 
             foc_task = asyncio.to_thread(self._retrieve_foc_result, query, kb_id, clause_forest)
             vector_task = self._retrieve_vector_results(opt_query["optimized_queries"], kb_id, top_k, filters, mode)
@@ -69,7 +69,7 @@ class Retriever:
                 opt_query["optimized_queries"], kb_id, top_k, filters, mode
             )
 
-            results = self._reorder_results(query, vector_results, top_k, opt_mode)
+            results = await asyncio.to_thread(self._reorder_results, query, vector_results, top_k, opt_mode)
 
         return {
             "results": results,
@@ -99,16 +99,16 @@ class Retriever:
         dense_vectors, sparse_vectors = await self._embed_queries(optimized_queries)
 
         if mode == "hybrid":
-            results = self._hybrid_search(dense_vectors, sparse_vectors, top_k, kb_id, filters)
+            results = await self._hybrid_search(dense_vectors, sparse_vectors, top_k, kb_id, filters)
         elif mode == "dense":
-            results = self._dense_search(dense_vectors, top_k, kb_id, filters)
+            results = await self._dense_search(dense_vectors, top_k, kb_id, filters)
 
         logger.info(f"Found {len(results) if results else 0} results.")
 
         return results
 
-    @cached(prefix="dense_search", ttl=1800)
-    def _dense_search(
+    @async_cached(prefix="dense_search", ttl=1800)
+    async def _dense_search(
         self,
         dense_vectors: List[List[float]],
         top_k: int,
@@ -118,7 +118,8 @@ class Retriever:
         """Dense vector search."""
 
         try:
-            return vector_store.search(
+            return await asyncio.to_thread(
+                vector_store.search,
                 selectFields=VECTOR_RETRIEVE_FIELDS,
                 dense_vectors=dense_vectors,
                 limit=top_k,
@@ -134,8 +135,8 @@ class Retriever:
                 details={"kb_id": kb_id, "top_k": top_k, "error": str(e)},
             ) from e
 
-    @cached(prefix="hybrid_search", ttl=1800)
-    def _hybrid_search(
+    @async_cached(prefix="hybrid_search", ttl=1800)
+    async def _hybrid_search(
         self,
         dense_vectors: List[List[float]],
         sparse_vectors: List[Dict[str, float]],
@@ -146,7 +147,8 @@ class Retriever:
         """Hybrid search (dense + sparse)."""
 
         try:
-            return vector_store.hybrid_search(
+            return await asyncio.to_thread(
+                vector_store.hybrid_search,
                 selectFields=VECTOR_RETRIEVE_FIELDS,
                 dense_vectors=dense_vectors,
                 sparse_vectors=sparse_vectors,

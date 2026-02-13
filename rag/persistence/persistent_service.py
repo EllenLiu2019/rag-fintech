@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import UploadFile
 from typing import List, Optional
 
@@ -16,7 +18,6 @@ from repository.rdb.models.models import Document as RdbDocument, KnowledgeBase,
 from repository.rdb import rdb_client
 from rag.entity import RagDocument, ClauseForest
 from repository.s3 import s3_client
-from repository.cache import cached
 from rag.marshaller import deserialize, serialize
 
 logger = get_logger(__name__)
@@ -29,7 +30,7 @@ class PersistentService:
         contents = await file.read()
 
         try:
-            storage_file = s3_client.save_original_file(file.filename, contents, doc_type)
+            storage_file = await asyncio.to_thread(s3_client.save_original_file, file.filename, contents, doc_type)
         except Exception as e:
             raise FileStorageError(
                 message=f"Failed to save original file: {file.filename}",
@@ -49,7 +50,7 @@ class PersistentService:
         )
 
         try:
-            rdb_document = rdb_client.save(document)
+            rdb_document = await asyncio.to_thread(rdb_client.save, document)
         except Exception as e:
             raise DatabaseError(
                 message=f"Failed to save document to database: {file.filename}",
@@ -62,6 +63,11 @@ class PersistentService:
         )
 
         return rdb_document
+
+    @staticmethod
+    async def aupdate_document(rag_document: RagDocument, rdb_id: int):
+        """Async version of update_document."""
+        await asyncio.to_thread(PersistentService.update_document, rag_document, rdb_id)
 
     @staticmethod
     def update_document(rag_document: RagDocument, rdb_id: int):
@@ -114,6 +120,11 @@ class PersistentService:
             ) from e
 
     @staticmethod
+    async def aget_embedding_model(kb_name: str) -> str:
+        """Async version of get_embedding_model."""
+        return await asyncio.to_thread(PersistentService.get_embedding_model, kb_name)
+
+    @staticmethod
     def get_embedding_model(kb_name: str) -> str:
         try:
             kb_ids = rdb_client.execute_query(KnowledgeBase, kb_name)
@@ -142,6 +153,11 @@ class PersistentService:
             ) from e
 
     @staticmethod
+    async def alist_documents(doc_type: str = "all") -> List[RdbDocument]:
+        """Async version of list_documents."""
+        return await asyncio.to_thread(PersistentService.list_documents, doc_type)
+
+    @staticmethod
     def list_documents(doc_type: str = "all") -> List[RdbDocument]:
         """List all documents, optionally filtered by doc_type."""
         try:
@@ -156,6 +172,11 @@ class PersistentService:
             ) from e
 
     @staticmethod
+    async def alist_evaluations(doc_id: str) -> List[ClaimEvaluations]:
+        """Async version of list_evaluations."""
+        return await asyncio.to_thread(PersistentService.list_evaluations, doc_id)
+
+    @staticmethod
     def list_evaluations(doc_id: str) -> List[ClaimEvaluations]:
         """List all evaluation records for a given doc_id."""
         try:
@@ -166,6 +187,11 @@ class PersistentService:
                 code=ErrorCodes.R_DB_002,
                 details={"doc_id": doc_id, "error": str(e)},
             ) from e
+
+    @staticmethod
+    async def aget_subgraph_config(thread_id: str, subgraph_name: str) -> dict:
+        """Async version of get_subgraph_config."""
+        return await asyncio.to_thread(PersistentService.get_subgraph_config, thread_id, subgraph_name)
 
     @staticmethod
     def get_subgraph_config(thread_id: str, subgraph_name: str) -> dict:
@@ -195,6 +221,11 @@ class PersistentService:
         return config
 
     @staticmethod
+    async def aupdate_subgraph_config(thread_id: str, subgraph_name: str, new_config: dict) -> None:
+        """Async version of update_subgraph_config."""
+        await asyncio.to_thread(PersistentService.update_subgraph_config, thread_id, subgraph_name, new_config)
+
+    @staticmethod
     def update_subgraph_config(thread_id: str, subgraph_name: str, new_config: dict) -> None:
         """Update a single subgraph's config within the persisted subgraph_configs JSONB.
 
@@ -210,7 +241,11 @@ class PersistentService:
         rdb_client.save(record)
 
     @staticmethod
-    @cached(prefix="get_foc", ttl=3600)
+    async def aget_clause_forest(doc_id: str) -> Optional[ClauseForest]:
+        """Async version of get_clause_forest."""
+        return await asyncio.to_thread(PersistentService.get_clause_forest, doc_id)
+
+    @staticmethod
     def get_clause_forest(doc_id: str) -> Optional[ClauseForest]:
         rdb_document = rdb_client.select_by_kwargs(RdbDocument, document_id=doc_id)
         if rdb_document is None:
@@ -218,7 +253,11 @@ class PersistentService:
         return deserialize(rdb_document.clause_forest, target_type=ClauseForest)
 
     @staticmethod
-    @cached(prefix="get_document", ttl=3600)
+    async def aget_document(doc_id: str) -> RdbDocument:
+        """Async version of get_document."""
+        return await asyncio.to_thread(PersistentService.get_document, doc_id)
+
+    @staticmethod
     def get_document(doc_id: str) -> RdbDocument:
         rdb_document = rdb_client.select_by_kwargs(RdbDocument, document_id=doc_id)
         if rdb_document is None:

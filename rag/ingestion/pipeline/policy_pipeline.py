@@ -123,7 +123,7 @@ class PolicyPipeline(BasePipeline):
         await self._persist_vector_store(rag_document)
         logger.info(f"Vector store persisted for document: {doc_id}")
 
-        await asyncio.to_thread(PersistentService.update_document, rag_document, rdb_document_id)
+        await PersistentService.aupdate_document(rag_document, rdb_document_id)
         logger.info(f"RDB document updated for document: {doc_id}")
 
     async def _persist_vector_store(self, rag_document: RagDocument) -> None:

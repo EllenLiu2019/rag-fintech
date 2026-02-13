@@ -12,6 +12,7 @@ class ErrorCodes:
 
     # API Layer (A)
     A_VALIDATION_001 = "A_VAL_001"  # Parameter validation failed
+    A_VALIDATION_002 = "A_VAL_002"  # Batch size limit exceeded
     A_AUTH_001 = "A_AUTH_001"  # Authentication failed
     A_NOTFOUND_001 = "A_NF_001"  # Resource not found
     A_RATELIMIT_001 = "A_RL_001"  # Frequency limit exceeded
@@ -27,6 +28,7 @@ class ErrorCodes:
     S_INGESTION_008 = "S_ING_008"  # Failed to update job progress
     S_INGESTION_009 = "S_ING_009"  # Schema path not found
     S_INGESTION_010 = "S_ING_010"  # Failed to build graph
+    S_INGESTION_011 = "S_ING_011"  # Parse quality check failed
     S_RETRIEVAL_001 = "S_RET_001"  # Retrieval failed
     S_RETRIEVAL_002 = "S_RET_002"  # Reranking failed
     S_GENERATION_001 = "S_GEN_001"  # Generation failed

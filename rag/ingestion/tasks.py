@@ -2,7 +2,7 @@ import asyncio
 import uuid
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 from repository.cache import redis_client
 from common import get_logger
@@ -23,6 +23,14 @@ class IngestionJob(BaseModel):
     ended_at: Optional[datetime] = Field(default=None, description="ended_at")
     error: Optional[str] = Field(default=None, description="error")
     result: Optional[str] = Field(default=None, description="result")
+
+
+class BatchIngestionJob(BaseModel):
+    batch_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="batch_id")
+    jobs: List[IngestionJob] = Field(default_factory=list, description="individual jobs")
+    total: int = Field(default=0, description="total number of files")
+    accepted: int = Field(default=0, description="number of successfully enqueued files")
+    failed: int = Field(default=0, description="number of files that failed to enqueue")
 
 
 def enqueue_task(func: Callable, *args, **kwargs) -> IngestionJob:

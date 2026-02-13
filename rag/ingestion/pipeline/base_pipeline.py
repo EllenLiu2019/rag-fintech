@@ -123,7 +123,49 @@ class BasePipeline(ABC):
                 code=ErrorCodes.S_INGESTION_002,
                 details={"filename": filename, "content_type": content_type, "reason": str(e)},
             )
+
+        self._validate_parse_quality(parse_result, filename)
         return parse_result
+
+    def _validate_parse_quality(self, parse_result: ParseResult, filename: str) -> None:
+        """Validate parse result quality. Raises ParsingError if quality is unacceptable."""
+        docs = parse_result.documents
+
+        if not docs:
+            raise ParsingError(
+                message=f"No documents returned from parsing: {filename}",
+                code=ErrorCodes.S_INGESTION_011,
+                details={"filename": filename, "job_id": parse_result.job_id},
+            )
+
+        total_pages = len(docs)
+        empty_pages = sum(1 for d in docs if not d.text or len(d.text.strip()) < 10)
+        empty_ratio = empty_pages / total_pages
+        avg_length = sum(len(d.text or "") for d in docs) / total_pages
+
+        quality_metrics = {
+            "total_pages": total_pages,
+            "empty_pages": empty_pages,
+            "empty_ratio": f"{empty_ratio:.0%}",
+            "avg_page_length": f"{avg_length:.0f}",
+        }
+
+        # Hard fail: more than 80% pages are empty
+        if empty_ratio > 0.8:
+            raise ParsingError(
+                message=f"Parse quality too low for {filename}: {empty_ratio:.0%} pages are empty",
+                code=ErrorCodes.S_INGESTION_011,
+                details={"filename": filename, **quality_metrics},
+            )
+
+        # Soft warning: some quality concerns
+        if empty_ratio > 0.3:
+            logger.warning(f"[Quality] {filename}: {empty_ratio:.0%} empty pages ({empty_pages}/{total_pages})")
+
+        if avg_length < 100:
+            logger.warning(f"[Quality] {filename}: low avg page length ({avg_length:.0f} chars)")
+
+        logger.info(f"[Quality] {filename}: {total_pages} pages, avg {avg_length:.0f} chars/page, {empty_pages} empty")
 
     @abstractmethod
     async def extract_information(

@@ -1,10 +1,12 @@
 import mimetypes
+from typing import List
 from fastapi import APIRouter, File, UploadFile, Query
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
+import asyncio
 
 from common import get_logger
-from common.exceptions import NotFoundError
+from common.exceptions import NotFoundError, ValidationError, RateLimitExceededError
 from common.error_codes import ErrorCodes
 from repository.s3 import s3_client
 from rag.ingestion.pipeline import pipeline_runner
@@ -26,6 +28,9 @@ class UploadedDoc(BaseModel):
     doc_id: str
     file_name: str
     message: str
+
+
+batch_semaphore = asyncio.Semaphore(3)
 
 
 @router.post("/process")
@@ -52,6 +57,39 @@ async def upload_file(
         status_code=202,
         content=uploaded_doc.model_dump(mode="json", exclude_none=True),
     )
+
+
+@router.post("/process/batch")
+async def upload_files_batch(
+    files: List[UploadFile] = File(...),
+):
+    """
+    Upload and process multiple document files in batch.
+
+    - **files**: Multiple document files to upload (PDF, TXT, etc.)
+
+    Each file is uploaded and enqueued independently.
+    Returns a batch_id for tracking and individual job status for each file.
+    """
+    logger.info(f"Received batch upload request: {len(files)} files")
+
+    if len(files) > 10:
+        raise ValidationError(
+            message="Batch size limit: 10 files",
+            code=ErrorCodes.A_VALIDATION_002,
+            details={"batch_size": len(files)},
+        )
+    if batch_semaphore.locked():
+        raise RateLimitExceededError(
+            message="Too many batch requests in progress",
+            code=ErrorCodes.A_RATELIMIT_001,
+            details={"batch_semaphore": batch_semaphore._value},
+        )
+
+    async with batch_semaphore:
+        batch_job = await pipeline_runner.batch(files, DocumentType.POLICY, graph_enabled=True)
+
+    return JSONResponse(status_code=202, content=batch_job.model_dump(mode="json", exclude_none=True))
 
 
 @router.get("/documents")

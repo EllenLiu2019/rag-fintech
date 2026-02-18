@@ -670,16 +670,6 @@ async def main(config_path: str):
     )
     reports.append(r_concurrent)
 
-    # Phase D: Prefix Cache (same 8192-token prompt x5 → expect TTFT drop after run 1)
-    r_prefix = await phase_prefix_cache(
-        client,
-        model,
-        gpu_mon,
-        prompt_builder=prompt_builder,
-        output_max_tokens=config["run"].get("long_context_output_tokens", 128),
-    )
-    reports.append(r_prefix)
-
     # Phase E: Concurrency Scaling (fixed input, increasing concurrency)
     r_concurrent = await phase_concurrent_scaling(
         client,

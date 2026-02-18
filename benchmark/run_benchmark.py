@@ -623,29 +623,29 @@ async def main(config_path: str):
     r_cold = await phase_cold(client, model, sample_prompt, gpu_mon, max_tokens=max_tokens)
     reports.append(r_cold)
 
-    # # Phase B: Warm Start
-    # warm_cfg = config["run"].get("warm", {})
-    # r_warm = await phase_warm(
-    #     client,
-    #     model,
-    #     sample_prompt,
-    #     gpu_mon,
-    #     total_runs=warm_cfg.get("total_runs", 5),
-    #     eval_from=warm_cfg.get("eval_from", 3),
-    #     max_tokens=max_tokens,
-    # )
-    # reports.append(r_warm)
+    # Phase B: Warm Start
+    warm_cfg = config["run"].get("warm", {})
+    r_warm = await phase_warm(
+        client,
+        model,
+        sample_prompt,
+        gpu_mon,
+        total_runs=warm_cfg.get("total_runs", 5),
+        eval_from=warm_cfg.get("eval_from", 3),
+        max_tokens=max_tokens,
+    )
+    reports.append(r_warm)
 
-    # # Phase C: Long Context Pressure
-    # r_long = await phase_long_context(
-    #     client,
-    #     model,
-    #     gpu_mon,
-    #     prompt_builder=prompt_builder,
-    #     input_token_targets=long_ctx_targets,
-    #     output_max_tokens=config["run"].get("long_context_output_tokens", 128),
-    # )
-    # reports.append(r_long)
+    # Phase C: Long Context Pressure
+    r_long = await phase_long_context(
+        client,
+        model,
+        gpu_mon,
+        prompt_builder=prompt_builder,
+        input_token_targets=long_ctx_targets,
+        output_max_tokens=config["run"].get("long_context_output_tokens", 128),
+    )
+    reports.append(r_long)
 
     # # Phase D: Prefix Cache (same 8192-token prompt x5 → expect TTFT drop after run 1)
     # r_prefix = await phase_prefix_cache(
@@ -656,6 +656,29 @@ async def main(config_path: str):
     #     output_max_tokens=config["run"].get("long_context_output_tokens", 128),
     # )
     # reports.append(r_prefix)
+
+    # Phase E: Concurrency Scaling (fixed input, increasing concurrency)
+    r_concurrent = await phase_concurrent_scaling(
+        client,
+        model,
+        gpu_mon,
+        prompt_builder=prompt_builder,
+        concurrent_levels=config["run"].get("concurrent_levels", [1, 2, 4, 8]),
+        input_tokens=config["run"].get("concurrent_input_tokens", 4096),
+        output_max_tokens=config["run"].get("concurrent_output_tokens", 256),
+        rounds=config["run"].get("concurrent_rounds", 3),
+    )
+    reports.append(r_concurrent)
+
+    # Phase D: Prefix Cache (same 8192-token prompt x5 → expect TTFT drop after run 1)
+    r_prefix = await phase_prefix_cache(
+        client,
+        model,
+        gpu_mon,
+        prompt_builder=prompt_builder,
+        output_max_tokens=config["run"].get("long_context_output_tokens", 128),
+    )
+    reports.append(r_prefix)
 
     # Phase E: Concurrency Scaling (fixed input, increasing concurrency)
     r_concurrent = await phase_concurrent_scaling(

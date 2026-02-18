@@ -128,6 +128,10 @@ class ClauseForest:
     clause_count: int = 0
     node_count: int = 0
 
+    def is_empty(self) -> bool:
+        """Check if the forest has no clause trees."""
+        return not self.trees or self.node_count == 0
+
     def __hash__(self):
         trees_data = []
         for node, (start_page, end_page) in sorted(self.trees.items(), key=lambda x: x[0].id):

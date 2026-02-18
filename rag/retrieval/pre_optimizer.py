@@ -5,9 +5,6 @@ from typing import Dict, Any, List, Literal, Optional
 from rag.llm.chat_model import chat_model
 from common import get_logger, get_model_registry
 from common.prompt_manager import get_prompt_manager
-from rag.embedding import dense_embedder
-from repository.vector import vector_store
-from rag.retrieval.ner_service import ner_service
 from repository.cache import cached
 
 logger = get_logger(__name__)
@@ -206,47 +203,47 @@ class GlossaryInjector:
             }
         """
         snomed_entities = {}
-        entities = ner_service.get_entities(query)
-        if not entities:
-            return snomed_entities
-        combined_results = ner_service.combine_entities(entities, query)
-        words_to_search = []
-        entities_to_search = []
-        for ent in combined_results:
-            if float(ent["score"]) >= self.threshold or ent["entity_group"] == "COMBINED_BIO_SYMPTOM":
-                words_to_search.append(ent["word"])
-                entities_to_search.append(ent)
+        # entities = ner_service.get_entities(query)
+        # if not entities:
+        #     return snomed_entities
+        # combined_results = ner_service.combine_entities(entities, query)
+        # words_to_search = []
+        # entities_to_search = []
+        # for ent in combined_results:
+        #     if float(ent["score"]) >= self.threshold or ent["entity_group"] == "COMBINED_BIO_SYMPTOM":
+        #         words_to_search.append(ent["word"])
+        #         entities_to_search.append(ent)
 
-        if not words_to_search:
-            return snomed_entities
+        # if not words_to_search:
+        #     return snomed_entities
 
-        word_embeddings = dense_embedder.embed_queries_batch(words_to_search)
+        # word_embeddings = dense_embedder.embed_queries_batch(words_to_search)
 
-        for entity, word_embedding in zip(entities_to_search, word_embeddings):
-            filter_expr = ""
-            if entity["entity_group"] not in ["COMBINED_BIO_SYMPTOM"]:
-                domain_ids = entity["domain_id"].split(";")
-                concept_class_ids = entity["concept_class_id"].split(";")
-                filter_expr = f"domain_id in {domain_ids} or concept_class_id in {concept_class_ids}"
-            search_result = vector_store.search(
-                self.select_fields,
-                [word_embedding],
-                limit=2,
-                knowledgebaseIds=["snomed_kb"],
-                filters=filter_expr,
-            )
-            if search_result and search_result[0]:
-                concept_names = []
-                for res in search_result[0]:
-                    concept_name = res["concept_name"]
-                    if concept_name not in concept_names:
-                        concept_names.append(concept_name)
+        # for entity, word_embedding in zip(entities_to_search, word_embeddings):
+        #     filter_expr = ""
+        #     if entity["entity_group"] not in ["COMBINED_BIO_SYMPTOM"]:
+        #         domain_ids = entity["domain_id"].split(";")
+        #         concept_class_ids = entity["concept_class_id"].split(";")
+        #         filter_expr = f"domain_id in {domain_ids} or concept_class_id in {concept_class_ids}"
+        #     search_result = vector_store.search(
+        #         self.select_fields,
+        #         [word_embedding],
+        #         limit=2,
+        #         knowledgebaseIds=["snomed_kb"],
+        #         filters=filter_expr,
+        #     )
+        #     if search_result and search_result[0]:
+        #         concept_names = []
+        #         for res in search_result[0]:
+        #             concept_name = res["concept_name"]
+        #             if concept_name not in concept_names:
+        #                 concept_names.append(concept_name)
 
-                snomed_entities[entity["word"]] = {
-                    "concept_names": "; ".join(concept_names),
-                    "start": entity["start"],
-                    "end": entity["end"],
-                }
+        #         snomed_entities[entity["word"]] = {
+        #             "concept_names": "; ".join(concept_names),
+        #             "start": entity["start"],
+        #             "end": entity["end"],
+        #         }
 
         return snomed_entities
 
@@ -322,7 +319,7 @@ class QueryOptimizer:
 
     def __init__(self, model: dict[str, Any]):
         self.model = model
-        self.glossary_injector = GlossaryInjector()
+        # self.glossary_injector = GlossaryInjector()
         self.unified_rewriter = UnifiedRewriter(model=model)
         self.hyde_rewriter = HyDERewriter(model=model)
         self.multi_query_rewriter = MiltiQueryOptimizer(model=model)

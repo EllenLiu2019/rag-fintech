@@ -13,20 +13,32 @@ class LLMExtractor:
         )
         self.prompt_manager = get_prompt_manager()
 
-    def extract(self, content: str, hints: dict = None, missing_fields: dict = None) -> dict:
-
+    def _build_prompt(self, content: str, hints: dict = None, missing_fields: dict = None) -> str:
         fields = missing_fields or {}
-
-        prompt = self.prompt_manager.get(
+        return self.prompt_manager.get(
             "insurance_extraction",
             hints=json.dumps(hints or {}, ensure_ascii=False),
             content=content,
             fields=json.dumps(fields, ensure_ascii=False),
         )
 
+    @staticmethod
+    def _parse_response(content: str) -> dict:
+        return json.loads(content.replace("```json", "").replace("```", ""))
+
+    def extract(self, content: str, hints: dict = None, missing_fields: dict = None) -> dict:
+        prompt = self._build_prompt(content, hints, missing_fields)
         _, content, tokens = self.llm.generate(prompt=prompt, temperature=0)
-        content = json.loads(content.replace("```json", "").replace("```", ""))
         return {
-            "content": content,
+            "content": self._parse_response(content),
+            "tokens": tokens,
+        }
+
+    async def aextract(self, content: str, hints: dict = None, missing_fields: dict = None) -> dict:
+        """Async version using LLM's native agenerate()."""
+        prompt = self._build_prompt(content, hints, missing_fields)
+        _, content, tokens = await self.llm.agenerate(prompt=prompt, temperature=0)
+        return {
+            "content": self._parse_response(content),
             "tokens": tokens,
         }

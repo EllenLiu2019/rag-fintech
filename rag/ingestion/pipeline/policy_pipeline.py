@@ -53,8 +53,8 @@ class PolicyPipeline(BasePipeline):
         pages = serialize_batch(parse_result.documents)
 
         try:
-            confidence, business_data, tokens, clause_forest = await asyncio.to_thread(
-                extractor.extract, documents=pages, source_file=filename
+            confidence, business_data, tokens, clause_forest = await extractor.aextract(
+                documents=pages, source_file=filename
             )
         except Exception as e:
             raise ExtractionError(

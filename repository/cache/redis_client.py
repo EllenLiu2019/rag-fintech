@@ -150,7 +150,7 @@ class RedisClient:
         return self.queue.enqueue(
             func,
             *args,
-            retry=Retry(max=2, interval=60),
+            retry=Retry(max=1, interval=60),
             job_timeout=job_timeout,
             result_ttl=result_ttl,
             failure_ttl=failure_ttl,

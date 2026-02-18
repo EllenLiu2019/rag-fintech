@@ -40,6 +40,36 @@ app.add_middleware(
 # Add request logging middleware
 setup_request_logging_middleware(app)
 
+# Health check endpoint for K8S liveness/readiness probes
+@app.get("/health", tags=["Health"])
+async def health():
+    from repository.rdb import rdb_client
+    from repository.cache import redis_client
+
+    checks = {"status": "ok", "service": settings.API_TITLE}
+
+    try:
+        rdb_client.engine.connect().close()
+        checks["postgresql"] = "ok"
+    except Exception:
+        checks["postgresql"] = "error"
+        checks["status"] = "degraded"
+
+    try:
+        if redis_client.redis_enabled:
+            redis_client.client.ping()
+            checks["redis"] = "ok"
+        else:
+            checks["redis"] = "disabled"
+    except Exception:
+        checks["redis"] = "error"
+        checks["status"] = "degraded"
+
+    status_code = 200 if checks["status"] == "ok" else 503
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content=checks, status_code=status_code)
+
+
 # Register API routes using APIRouter
 app.include_router(document_api.router)
 app.include_router(chat_api.router)

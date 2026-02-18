@@ -111,4 +111,5 @@ def _create_ner_service() -> NERService:
     return ner_service
 
 
-ner_service = _create_ner_service()
+# ner_service = _create_ner_service()
+ner_service = None

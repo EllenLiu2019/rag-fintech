@@ -1,3 +1,4 @@
+import asyncio
 from copy import deepcopy
 import json
 from typing import Any, Optional
@@ -98,6 +99,67 @@ class Extractor:
                 details={"error": str(e)},
             ) from e
 
+    async def aextract(
+        self, documents: list[dict[str, Any]], source_file: str = None
+    ) -> tuple[dict[str, Any], dict[str, Any], int, Any]:
+        """Async version of extract. LLM calls use native async, CPU-bound work runs in thread pool."""
+        if not isinstance(documents, list) or not all(isinstance(doc, dict) for doc in documents):
+            raise ExtractionError(
+                message="Invalid input: documents must be a list of dict objects",
+                code=ErrorCodes.S_INGESTION_003,
+                details={"input_type": type(documents).__name__},
+            )
+
+        try:
+            logger.info("Starting rule-based extraction (async)")
+
+            raw_documents = deepcopy(documents)
+            rule_extractor: RuleExtractor = RuleExtractor(self.schema)
+            # Rule extraction is CPU-bound (regex + BeautifulSoup)
+            extracted_results = await asyncio.to_thread(rule_extractor.extract, raw_documents)
+
+            missing_fields = check_missing_fields(self.schema, extracted_results)
+
+            llm_tokens = 0
+            if missing_fields:
+                llm_results = await self._afallback_to_llm_extraction(documents[:2], extracted_results, missing_fields)
+                if llm_results:
+                    extracted_results = llm_results["content"]
+                    llm_tokens = llm_results.get("tokens", 0)
+
+            logger.info("Calculating confidence scores")
+            confidence_result = self.confidence_calculator.calculate(
+                extracted_results,
+                self.schema,
+                rule_extractor.extraction_signals,
+            )
+            metadata = self.metadata_creator.create(extracted_results)
+
+            # Clause forest building is CPU-bound (markdown parsing + regex)
+            logger.info("Extracting clause trees from documents")
+            clause_forest_builder = ClauseForestBuilder()
+            clause_forest = await asyncio.to_thread(clause_forest_builder.build, raw_documents)
+
+            # DB writes
+            rdb_builder = RdbBuilder(
+                schema=self.schema,
+                extracted_results=extracted_results,
+                confidence_score=confidence_result.get("overall_confidence", 0.0),
+                source_file=source_file,
+            )
+            await asyncio.to_thread(rdb_builder.build)
+
+            return confidence_result, metadata, llm_tokens, clause_forest
+
+        except ExtractionError:
+            raise
+        except Exception as e:
+            raise ExtractionError(
+                message=f"Extraction pipeline failed: {str(e)}",
+                code=ErrorCodes.S_INGESTION_003,
+                details={"error": str(e)},
+            ) from e
+
     def _fallback_to_llm_extraction(
         self,
         documents: list[dict[str, Any]],
@@ -120,11 +182,32 @@ class Extractor:
             logger.error(f"LLM extraction failed: {e}", exc_info=True)
             return None
 
+    async def _afallback_to_llm_extraction(
+        self,
+        documents: list[dict[str, Any]],
+        extracted_results: dict[str, Any],
+        missing_fields: dict[str, Any],
+    ) -> Optional[dict[str, Any]]:
+        """Async version using LLM's native agenerate()."""
+        logger.warning(f"Missing fields detected: {missing_fields}. ")
+
+        try:
+            hints = extracted_results
+            content = "\n".join([doc.get("text", "") for doc in documents])
+
+            llm_results = await self.llm_extractor.aextract(content, hints=hints, missing_fields=missing_fields)
+            logger.info("LLM extraction completed (async)")
+            return llm_results
+
+        except Exception as e:
+            logger.error(f"LLM extraction failed: {e}", exc_info=True)
+            return None
+
 
 def _create_extractor() -> Extractor:
     schema_path = get_base_config("schema_path", None)
     registry = get_model_registry()
-    model_config = registry.get_chat_model("query_lite")
+    model_config = registry.get_chat_model("qwen_32B")
     return Extractor(model=model_config.to_dict(), schema_path=schema_path)
 
 

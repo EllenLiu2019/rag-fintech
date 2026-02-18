@@ -76,7 +76,11 @@ class BasePipeline(ABC):
                 callback(job_id, 7, "Completed")
 
             if kwargs.get("graph_enabled", False):
-                if self.doc_type == DocumentType.POLICY and rag_document.clause_forest:
+                if (
+                    self.doc_type == DocumentType.POLICY
+                    and rag_document.clause_forest
+                    and not rag_document.clause_forest.is_empty()
+                ):
                     graph_job_id = enqueue_task(
                         build_graph,
                         rag_document.clause_forest,
@@ -84,6 +88,10 @@ class BasePipeline(ABC):
                         document_id=rag_document.document_id,
                     )
                     logger.info(f"Enqueued graph build job: {graph_job_id}")
+                elif kwargs.get("graph_enabled", False):
+                    logger.warning(
+                        f"Skipping graph build: clause_forest is empty for {rag_document.document_id}"
+                    )
 
             logger.info(f"Completed {self.doc_type.value} ingestion: {rag_document.document_id}")
 
@@ -197,6 +205,10 @@ class BasePipeline(ABC):
 def build_graph(clause_forest: ClauseForest, **kwargs):
     document_id = kwargs.get("document_id")
     logger.info(f"Starting graph build for document: {document_id}")
+
+    if not clause_forest or clause_forest.is_empty():
+        logger.warning(f"Skipping graph build: empty clause_forest for document {document_id}")
+        return
 
     try:
         asyncio.run(graphrag_index.index(document_id, clause_forest))

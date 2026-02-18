@@ -25,7 +25,15 @@ async def index(
     clause_forest: ClauseForest,
     callback: Callable | None = None,
 ):
+    if not clause_forest or clause_forest.is_empty():
+        logger.warning(f"Empty clause_forest for doc_id={doc_id}, skipping graph indexing")
+        return
+
     foc: dict[int, str] = build_foc(clause_forest)
+    if not foc:
+        logger.warning(f"No clauses extracted from clause_forest for doc_id={doc_id}, skipping graph indexing")
+        return
+
     subgraph = await generate_subgraph(doc_id, foc)
     merged_graph = await merge_graph(subgraph)
     await align_graph(merged_graph, foc.keys())

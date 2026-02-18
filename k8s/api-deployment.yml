@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-api
+  namespace: rag-fintech
+  labels:
+    app.kubernetes.io/name: rag-fintech
+    app.kubernetes.io/component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rag-fintech
+        app.kubernetes.io/component: api
+    spec:
+      containers:
+        - name: api
+          # Replace with your ECR image URI
+          image: <aws-account>.dkr.ecr.<region>.amazonaws.com/rag-fintech:latest
+          imagePullPolicy: Always
+          command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8001"]
+          ports:
+            - containerPort: 8001
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: rag-fintech-secrets
+          env:
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: LANGSMITH_TRACING
+              value: "true"
+            - name: LANGSMITH_ENDPOINT
+              value: "https://api.smith.langchain.com"
+            - name: LANGSMITH_PROJECT
+              value: "rag-fintech"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/conf/service_conf.yaml
+              subPath: service_conf.yaml
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+      volumes:
+        - name: config-volume
+          configMap:
+            name: rag-fintech-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-api
+  namespace: rag-fintech
+  labels:
+    app.kubernetes.io/name: rag-fintech
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: api
+  ports:
+    - port: 8001
+      targetPort: 8001
+      protocol: TCP

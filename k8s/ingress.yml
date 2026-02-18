@@ -1,0 +1,33 @@
+# ==============================================================================
+# Ingress -- optional, for exposing the API externally
+# Requires an Ingress Controller (e.g. nginx-ingress, AWS ALB Ingress Controller)
+# ==============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rag-api-ingress
+  namespace: rag-fintech
+  labels:
+    app.kubernetes.io/name: rag-fintech
+  annotations:
+    # For AWS ALB Ingress Controller:
+    # kubernetes.io/ingress.class: alb
+    # alb.ingress.kubernetes.io/scheme: internet-facing
+    # alb.ingress.kubernetes.io/target-type: ip
+
+    # For nginx Ingress Controller:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+spec:
+  rules:
+    - host: api.rag-fintech.example.com  # Replace with your domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rag-api
+                port:
+                  number: 8001

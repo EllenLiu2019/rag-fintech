@@ -1,0 +1,47 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Git
+.git/
+.gitignore
+
+# IDE / Editor
+.cursor/
+.vscode/
+.idea/
+*.sw?
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+
+# Dev / Test / Tools
+tests/
+tools/
+docs/
+ui/
+*.md
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+*.egg
+
+# Data files (large, not needed in image)
+**/data/
+repository/s3/*
+!repository/s3/*.py
+
+# Notebooks
+*.ipynb

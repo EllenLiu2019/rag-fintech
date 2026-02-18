@@ -1,0 +1,43 @@
+# ==============================================================================
+# vLLM deployment for 4090 GPU machine
+# Usage: docker compose -f docker-compose.vllm.yml up -d
+# ==============================================================================
+
+services:
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-server
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount HuggingFace model cache to avoid re-downloading on container restart
+      - huggingface-cache:/root/.cache/huggingface
+    environment:
+      - HF_HOME=/root/.cache/huggingface
+      # Optional: set API key for authentication (recommended when exposed to public)
+      # - VLLM_API_KEY=${VLLM_API_KEY:-}
+    command: >
+      --model Qwen/Qwen3-8B
+      --port 8000
+      --max-model-len 8192
+      --gpu-memory-utilization 0.9
+      --dtype bfloat16
+      --kv-cache-dtype fp8
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s  # vLLM model loading takes time
+
+volumes:
+  huggingface-cache:
+    driver: local

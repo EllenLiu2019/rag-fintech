@@ -1,0 +1,42 @@
+experiment:
+  name: "qwen8b_vllm_minimal_benchmark"
+  model: "Qwen/Qwen3-8B"
+  base_url: "http://127.0.0.1:8000/v1"
+  task: "text_structured_extraction"
+
+environment:
+  gpu: "A10 16G"
+
+run:
+  # Shared sampling params
+  temperature: 0
+  max_new_tokens: 256
+
+  # Sample prompt used for Phase A (cold) and Phase B (warm)
+  sample_prompt: |
+    请从以下保险条款中提取关键信息，以JSON格式输出。
+
+    产品名称：安康护航重疾险。
+    等待期90天。
+    一般住院医疗年限额100万元。
+    意外医疗报销比例80%，免赔额500元。
+
+    请提取：product_name, waiting_period, annual_limit, reimbursement_ratio, deductible
+
+  # Phase B: Warm Start
+  warm:
+    total_runs: 5
+    eval_from: 3       # P50/P95 calculated from run 3~5
+
+  # Phase C: Long Context Pressure
+  long_context_tokens: [1024, 2048, 4096, 8192]
+  long_context_output_tokens: 128
+
+metrics:
+  required:
+    - "ttft_ms"
+    - "decode_tps"
+    - "gpu_mem_peak_mb"
+  aggregation:
+    - "p50"
+    - "p95"

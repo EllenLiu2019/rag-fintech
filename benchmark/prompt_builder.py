@@ -40,22 +40,32 @@ class Qwen3PromptBuilder:
         self.cfg = config
         self.tok = AutoTokenizer.from_pretrained(config.model_id, trust_remote_code=True)
 
-        self.prefix_ids = self.tok.encode(self.cfg.prefix_text, add_special_tokens=False)
-        if len(self.prefix_ids) == 0:
-            raise ValueError("prefix_text encodes to empty token sequence; please change it.")
-
         self.nonce_pool: List[List[int]] = self._build_nonce_pool(
             pool_size=self.cfg.nonce_pool_size,
             nonce_len=self.cfg.nonce_tokens_len,
         )
 
-        self.filler_ids_pool: List[List[int]] = [
-            self.tok.encode(t, add_special_tokens=False) for t in self.cfg.filler_texts
-        ]
-        if any(len(x) == 0 for x in self.filler_ids_pool):
-            raise ValueError("Some filler_texts encode to empty; please adjust filler_texts.")
-
         self._template_overhead = self._measure_template_overhead()
+
+    def _measure_template_overhead(self) -> int:
+        """Measure how many tokens the chat template adds around user content."""
+        probe = "x"
+        probe_content_tokens = len(self.tok.encode(probe, add_special_tokens=False))
+        full_tokens = len(
+            self.tok.apply_chat_template(
+                [{"role": "user", "content": probe}],
+                add_generation_prompt=True,
+                tokenize=True,
+            )
+        )
+        return full_tokens - probe_content_tokens
+
+    def _content_tokens(self, content: str) -> int:
+        return len(self.tok.encode(content, add_special_tokens=False))
+
+    def _full_prompt_tokens(self, content: str) -> int:
+        """Equivalent to vLLM's prompt_tokens: content tokens + chat template overhead."""
+        return self._content_tokens(content) + self._template_overhead
 
     def _measure_template_overhead(self) -> int:
         """Measure how many tokens the chat template adds around user content."""
@@ -136,9 +146,18 @@ class Qwen3PromptBuilder:
 
     def _build_nonce_pool(self, pool_size: int, nonce_len: int) -> List[List[int]]:
         nonce_fragments = [
-            " nonceA ", " nonceB ", " nonceC ", " nonceD ",
-            " idXX ", " tagYY ", " seedZZ ", " keyQQ ",
-            " alpha ", " beta ", " gamma ", " delta ",
+            " nonceA ",
+            " nonceB ",
+            " nonceC ",
+            " nonceD ",
+            " idXX ",
+            " tagYY ",
+            " seedZZ ",
+            " keyQQ ",
+            " alpha ",
+            " beta ",
+            " gamma ",
+            " delta ",
         ]
         frag_ids = [self.tok.encode(s, add_special_tokens=False) for s in nonce_fragments]
         frag_ids = [x for x in frag_ids if len(x) > 0]

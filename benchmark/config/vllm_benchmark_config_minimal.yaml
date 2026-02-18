@@ -32,6 +32,12 @@ run:
   long_context_tokens: [1024, 2048, 4096, 8192]
   long_context_output_tokens: 128
 
+  # Phase E: Concurrency Scaling (fixed input, increasing concurrency)
+  concurrent_levels: [1, 2, 4, 8]
+  concurrent_input_tokens: 4096
+  concurrent_output_tokens: 256
+  concurrent_rounds: 3
+
 metrics:
   required:
     - "ttft_ms"

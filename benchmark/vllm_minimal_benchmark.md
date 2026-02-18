@@ -2,9 +2,8 @@
 
 ## 1. 实验目标
 
-在 `4090 24G` 单卡环境下，对比以下三组配置在短文本结构化抽取任务上的推理性能：
+在 `A10 24G` 单卡环境下，对比以下三组配置在短文本结构化抽取任务上的推理性能：
 
-- Baseline: Hugging Face text generation inference
 - 对比组 A: vLLM（参数调优）
 - 对比组 B: vLLM（量化）
 

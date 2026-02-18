@@ -249,7 +249,7 @@ async def phase_warm(
     stats = summarize(eval_metrics)
     print(f"\n  --- Eval runs {eval_from}-{total_runs} summary ---")
     print(f"  TTFT  p50={stats['ttft_p50']:.1f}ms  p95={stats['ttft_p95']:.1f}ms")
-    print(f"  TPS   p50={stats['decode_tps_p50']:.1f}  p95={stats['decode_tps_p95']:.1f}")
+    print(f"  TPS   p50={stats['decode_tps_p50']:.1f} tokens/s  p95={stats['decode_tps_p95']:.1f} tokens/s")
     print(f"  GPU mem peak: {stats['gpu_mem_peak_mb']:.0f} MB")
 
     return PhaseReport(phase="warm", records=all_metrics)
@@ -297,6 +297,60 @@ async def phase_long_context(
 
     return PhaseReport(phase="long_context", records=all_metrics)
 
+# ---------------------------------------------------------------------------
+# Phase D: prefix cache 
+# ---------------------------------------------------------------------------
+
+
+async def phase_prefix_cache(
+    client: AsyncOpenAI,
+    model: str,
+    gpu_mon: GpuMemoryMonitor,
+    prompt_builder: Qwen3PromptBuilder,
+    output_max_tokens: int = 128,
+) -> PhaseReport:
+    print("\n" + "=" * 60)
+    print(f"Phase D: Prefix Cache)")
+    print("=" * 60)
+
+    all_metrics: list[RequestMetrics] = []
+
+    prompt = prompt_builder.build(target_tokens=8192, seed=0)
+    _prompt = prompt_builder.build(target_tokens=8192, seed=1)
+    actual_tokens = prompt_builder.count_tokens(prompt)
+    _actual_tokens = prompt_builder.count_tokens(_prompt)
+    label = f"prefix_cache_8192"
+    print(f"\n  Target 8192 tokens (actual={actual_tokens}, {_actual_tokens}, chars={len(prompt)}, {len(_prompt)})")
+
+    for i in range(5):
+        gpu_mon.start()
+        if i == 4:
+            m = await streaming_request(client, model, _prompt, max_tokens=output_max_tokens)
+        else:
+            m = await streaming_request(client, model, prompt, max_tokens=output_max_tokens)
+        peak = await gpu_mon.stop()
+
+        m.phase = "prefix_cache"
+        m.label = f"{label}_run_{i + 1}"
+        m.gpu_mem_peak_mb = peak
+        all_metrics.append(m)
+
+        print(f"    Run {i + 1}: Input tokens={m.input_tokens}  TTFT={m.ttft_ms:.1f}ms  TPS={m.decode_tps:.1f}  Success={m.success}")
+
+
+    # Summary: prefix cache effect = TTFT drop from run1 to run2-5
+    ok = [m for m in all_metrics if m.success]
+    if len(ok) >= 2:
+        ttft_run1 = ok[0].ttft_ms
+        ttft_cached = [m.ttft_ms for m in ok[1:]]
+        avg_cached = sum(ttft_cached) / len(ttft_cached)
+        drop_pct = (1 - avg_cached / ttft_run1) * 100 if ttft_run1 > 0 else 0
+        print(f"\n  --- Prefix cache effect ---")
+        print(f"  TTFT run1 (cold) : {ttft_run1:.1f} ms")
+        print(f"  TTFT run2-5 avg  : {avg_cached:.1f} ms")
+        print(f"  TTFT reduction   : {drop_pct:.1f}% (expect >0 if prefix cache hits)")
+
+    return PhaseReport(phase="prefix_cache", records=all_metrics)
 
 # ---------------------------------------------------------------------------
 # CSV export
@@ -355,36 +409,46 @@ async def main(config_path: str):
     print(f"Tokenizer loaded: vocab_size={prompt_builder.tok.vocab_size}")
 
     client = AsyncOpenAI(api_key="EMPTY", base_url=base_url)
-    gpu_mon = GpuMemoryMonitor(interval=0.2)
+    gpu_mon = GpuMemoryMonitor(interval=0.1)
     reports: list[PhaseReport] = []
 
     # Phase A: Cold Start
     r_cold = await phase_cold(client, model, sample_prompt, gpu_mon, max_tokens=max_tokens)
     reports.append(r_cold)
 
-    # Phase B: Warm Start
-    warm_cfg = config["run"].get("warm", {})
-    r_warm = await phase_warm(
-        client,
-        model,
-        sample_prompt,
-        gpu_mon,
-        total_runs=warm_cfg.get("total_runs", 5),
-        eval_from=warm_cfg.get("eval_from", 3),
-        max_tokens=max_tokens,
-    )
-    reports.append(r_warm)
+    # # Phase B: Warm Start
+    # warm_cfg = config["run"].get("warm", {})
+    # r_warm = await phase_warm(
+    #     client,
+    #     model,
+    #     sample_prompt,
+    #     gpu_mon,
+    #     total_runs=warm_cfg.get("total_runs", 5),
+    #     eval_from=warm_cfg.get("eval_from", 3),
+    #     max_tokens=max_tokens,
+    # )
+    # reports.append(r_warm)
 
-    # Phase C: Long Context Pressure
-    r_long = await phase_long_context(
+    # # Phase C: Long Context Pressure
+    # r_long = await phase_long_context(
+    #     client,
+    #     model,
+    #     gpu_mon,
+    #     prompt_builder=prompt_builder,
+    #     input_token_targets=long_ctx_targets,
+    #     output_max_tokens=config["run"].get("long_context_output_tokens", 128),
+    # )
+    # reports.append(r_long)
+
+    # Phase D: Prefix Cache (same 8192-token prompt x5 → expect TTFT drop after run 1)
+    r_prefix = await phase_prefix_cache(
         client,
         model,
         gpu_mon,
         prompt_builder=prompt_builder,
-        input_token_targets=long_ctx_targets,
         output_max_tokens=config["run"].get("long_context_output_tokens", 128),
     )
-    reports.append(r_long)
+    reports.append(r_prefix)
 
     # Export
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")

@@ -4,6 +4,12 @@ GPU_ID=${1:-0}
 
 MODEL_NAME="Qwen/Qwen3-8B"
 
+# Model cache must live on the 232 GB data disk (/data), not the 30 GB root volume.
+# Mount /dev/nvme1n1 at /data before running this script.
+# Path matches the bind-mount target in docker-compose.vllm.yml so models are shared.
+export HF_HOME=${HF_HOME:-/data/huggingface}
+# Expose to HuggingFace Hub CLI and transformers as well
+export HUGGINGFACE_HUB_CACHE="$HF_HOME/hub"
 export CUDA_VISIBLE_DEVICES=$GPU_ID
 
 echo "Starting vLLM server on GPU $GPU_ID with model $MODEL_NAME..."

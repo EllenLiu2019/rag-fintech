@@ -55,6 +55,7 @@ dev = [
     "debugpy>=1.8.0",
     "ipykernel>=6.25.0",
     "black>=24.0.0",
+    "matplotlib>=3.10.8"
 ]
 
 [project.scripts]
@@ -62,7 +63,7 @@ rag-api = "api.rag_server:app"
 rq-worker = "api.worker:main"
 
 [tool.setuptools]
-packages = ["api", "agent", "common", "graphrag", "rag", "repository"]
+packages = ["api", "agent", "benchmark", "common", "graphrag", "rag", "repository"]
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.yaml", "*.yml"]

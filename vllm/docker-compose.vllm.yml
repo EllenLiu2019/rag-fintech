@@ -1,5 +1,8 @@
 # ==============================================================================
-# vLLM deployment for 4090 GPU machine
+# vLLM deployment for AWS EC2 GPU instance
+# Prerequisites:
+#   - /dev/nvme1n1 mounted at /data  (232 GB data disk)
+#   - sudo mkdir -p /data/huggingface && sudo chmod 777 /data/huggingface
 # Usage: docker compose -f docker-compose.vllm.yml up -d
 # ==============================================================================
 
@@ -8,11 +11,15 @@ services:
     image: vllm/vllm-openai:latest
     container_name: vllm-server
     restart: unless-stopped
+    # vLLM container runs as root (default). Cannot use `user: 1000` because
+    # PyTorch calls getpass.getuser() which requires a /etc/passwd entry.
     ports:
       - "8000:8000"
     volumes:
-      # Mount HuggingFace model cache to avoid re-downloading on container restart
-      - huggingface-cache:/root/.cache/huggingface
+      # Bind-mount the host data disk so models are stored on /data (232 GB nvme1n1),
+      # not on the 30 GB root volume. The cache persists across container restarts
+      # and docker image upgrades.
+      - /data/huggingface:/root/.cache/huggingface
     environment:
       - HF_HOME=/root/.cache/huggingface
       # Optional: set API key for authentication (recommended when exposed to public)
@@ -43,6 +50,3 @@ services:
       retries: 5
       start_period: 120s  # vLLM model loading takes time
 
-volumes:
-  huggingface-cache:
-    driver: local

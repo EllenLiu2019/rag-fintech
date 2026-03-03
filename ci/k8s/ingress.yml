@@ -6,7 +6,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: rag-api-ingress
-  namespace: rag-fintech
+  namespace: production
   labels:
     app.kubernetes.io/name: rag-fintech
   annotations:

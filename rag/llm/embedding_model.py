@@ -98,9 +98,12 @@ class MilvusBgeM3Embed(Base):
 
     def __init__(self, key, model_name, base_url=None):
         from pymilvus import model
+        from huggingface_hub import snapshot_download
 
         self.model_name = model_name
+        local_path = snapshot_download(model_name, local_files_only=True)
         self.model = model.hybrid.BGEM3EmbeddingFunction(
+            model_name=local_path,
             device="cpu",
             normalize_embeddings=False,
             return_dense=False,

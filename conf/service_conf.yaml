@@ -13,8 +13,8 @@ postgresql:
   sslmode: disable
   
 redis:
-  host: redis-11071.c114.us-east-1-4.ec2.cloud.redislabs.com
-  port: 11071
+  host: redis-10680.c10.us-east-1-2.ec2.cloud.redislabs.com
+  port: 10680
   decode_responses: False
   username: default
   password: ${RAG_REDIS_PASSWORD}

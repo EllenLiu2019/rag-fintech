@@ -1,0 +1,66 @@
+# docker-compose for single-node deployment (dev / staging)
+# All secrets are read from a .env file (never commit .env to git).
+#
+# Setup:
+#   DOCKER_API_VERSION=1.43 docker compose -f ci/docker-compose.yaml up -d
+#
+# Image override:
+#   IMAGE_TAG=22cf785 DOCKER_API_VERSION=1.43 docker compose -f ci/docker-compose.yaml up -d
+#
+# Note: DOCKER_API_VERSION=1.43 is required because docker-compose-plugin v5
+# targets API 1.53 but Docker Engine 24.x only supports up to 1.43.
+#
+# PostgreSQL: runs on your laptop. Before starting, open a reverse SSH tunnel:
+#   ssh -N -R 15432:localhost:5432 root@121.43.129.87
+
+x-image: &image
+  image: crpi-jie2r6qhrtiyvvnq-vpc.cn-hangzhou.personal.cr.aliyuncs.com/ali-private/rag-fintech:${IMAGE_TAG:-latest}
+
+x-common: &common
+  <<: *image
+  restart: unless-stopped
+  network_mode: host
+  env_file: .env
+  volumes:
+    - ./conf/service_conf.yaml:/app/conf/service_conf.yaml:ro
+    - /data/hf_cache:/app/.cache/huggingface
+  environment:
+    PYTHONUNBUFFERED: "1"
+    LOG_LEVEL: INFO
+    LANGSMITH_TRACING: "true"
+    LANGSMITH_ENDPOINT: "https://api.smith.langchain.com"
+    LANGSMITH_PROJECT: "rag-fintech"
+    HF_HUB_OFFLINE: "1"
+    TRANSFORMERS_OFFLINE: "1"
+
+services:
+  api:
+    <<: *common
+    container_name: rag-api
+    command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "2"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  worker:
+    <<: *common
+    container_name: rag-worker
+    command: ["python", "api/worker.py"]
+    environment:
+      PYTHONUNBUFFERED: "1"
+      LOG_LEVEL: INFO
+      RQ_WORKER_CLASS: fork
+      LANGSMITH_TRACING: "true"
+      LANGSMITH_ENDPOINT: "https://api.smith.langchain.com"
+      LANGSMITH_PROJECT: "rag-fintech"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+
+  ui:
+    image: crpi-jie2r6qhrtiyvvnq-vpc.cn-hangzhou.personal.cr.aliyuncs.com/ali-private/rag-fintech-ui:${IMAGE_TAG:-latest}
+    container_name: rag-ui
+    restart: unless-stopped
+    network_mode: host

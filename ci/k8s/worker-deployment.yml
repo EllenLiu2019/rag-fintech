@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: rag-worker
-  namespace: rag-fintech
+  namespace: production
   labels:
     app.kubernetes.io/name: rag-fintech
     app.kubernetes.io/component: worker
@@ -17,10 +17,11 @@ spec:
         app.kubernetes.io/name: rag-fintech
         app.kubernetes.io/component: worker
     spec:
+      imagePullSecrets:
+        - name: acr-secret
       containers:
         - name: worker
-          # Replace with your ECR image URI
-          image: <aws-account>.dkr.ecr.<region>.amazonaws.com/rag-fintech:latest
+          image: ${IMAGE_REGISTRY}/rag-fintech:${IMAGE_TAG}
           imagePullPolicy: Always
           command: ["python", "api/worker.py"]
           envFrom:

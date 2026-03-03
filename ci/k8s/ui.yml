@@ -1,0 +1,68 @@
+# ci/k8s/ui.yml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-conf
+  namespace: production
+data:
+  default.conf: |
+    server {
+        listen 80;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        location ~* \.(js|css|png|svg|ico|woff2?)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+
+        gzip on;
+        gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-ui
+  namespace: production
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-ui
+  template:
+    metadata:
+      labels:
+        app: rag-ui
+    spec:
+      imagePullSecrets:
+        - name: acr-secret
+      containers:
+        - name: ui
+          image: crpi-jie2r6qhrtiyvvnq-vpc.cn-hangzhou.personal.cr.aliyuncs.com/ali-private/rag-fintech-ui:${IMAGE_TAG}
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf      # 只挂载这一个文件，不覆盖整个目录
+      volumes:
+        - name: nginx-conf
+          configMap:
+            name: nginx-conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-ui
+  namespace: production
+spec:
+  selector:
+    app: rag-ui
+  ports:
+    - port: 80
+      targetPort: 80

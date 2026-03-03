@@ -41,3 +41,9 @@ repository/s3/*
 repository/rdb/sql/ddl/*snomed.sql
 rag/evaluation/*.csv
 tools/*
+# local secrets
+ci/.env
+ci/conf/service_conf.yaml
+
+# pre-downloaded wheels (local build cache)
+wheels/

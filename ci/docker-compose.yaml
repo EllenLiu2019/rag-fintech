@@ -9,9 +9,9 @@
 #
 # Note: DOCKER_API_VERSION=1.43 is required because docker-compose-plugin v5
 # targets API 1.53 but Docker Engine 24.x only supports up to 1.43.
-#
 # PostgreSQL: runs on your laptop. Before starting, open a reverse SSH tunnel:
 #   ssh -N -R 15432:localhost:5432 root@121.43.129.87
+
 
 x-image: &image
   image: crpi-jie2r6qhrtiyvvnq-vpc.cn-hangzhou.personal.cr.aliyuncs.com/ali-private/rag-fintech:${IMAGE_TAG:-latest}
@@ -23,6 +23,7 @@ x-common: &common
   env_file: .env
   volumes:
     - ./conf/service_conf.yaml:/app/conf/service_conf.yaml:ro
+
     - /data/hf_cache:/app/.cache/huggingface
   environment:
     PYTHONUNBUFFERED: "1"
@@ -64,3 +65,4 @@ services:
     container_name: rag-ui
     restart: unless-stopped
     network_mode: host
+

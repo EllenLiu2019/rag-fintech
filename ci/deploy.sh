@@ -3,6 +3,7 @@
 # Usage:
 #    ./ci/deploy.sh                  # uses git HEAD as tag
 #   IMAGE_TAG=v1.2.0  ./ci/deploy.sh # override tag
+
 set -euo pipefail
 
 # docker-compose-plugin v5 targets API 1.53 but Docker Engine 24.x supports max 1.43
@@ -28,6 +29,7 @@ docker build -f ci/Dockerfile.ui \
   -t "${FULL_IMAGE_UI}" .
 
 echo "==> Logging in to ACR"
+
 docker login \
   --username Ellen_lab \
   --password Happygirl123! \
@@ -36,6 +38,7 @@ docker login \
 echo "==> Pushing images to ACR"
 docker push "${FULL_IMAGE}"
 docker push "${FULL_IMAGE_UI}"
+
 
 # echo "==> Applying K8S manifests (IMAGE_TAG=${IMAGE_TAG})"
 # export IMAGE_REGISTRY IMAGE_TAG
@@ -50,3 +53,4 @@ docker push "${FULL_IMAGE_UI}"
 echo "==> Deploy complete: ${IMAGE_TAG}"
 echo "    Backend:  ${FULL_IMAGE}"
 echo "    Frontend: ${FULL_IMAGE_UI}"
+

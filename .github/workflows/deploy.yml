@@ -73,6 +73,7 @@ jobs:
       - name: Apply manifests
         env:
           IMAGE_TAG: ${{ steps.vars.outputs.IMAGE_TAG }}
+          IMAGE_REGISTRY: crpi-jie2r6qhrtiyvvnq-vpc.cn-hangzhou.personal.cr.aliyuncs.com/ali-private
         run: |
           # namespace, configmap and secrets are managed manually on ACK, skip them
           for f in ci/k8s/api-deployment.yml \

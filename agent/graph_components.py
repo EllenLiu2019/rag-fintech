@@ -35,7 +35,7 @@ class GraphComponents:
     def __init__(self):
         rdb_config = get_base_config("postgresql", {})
         self.url = f"postgresql://{rdb_config.get('username')}:{rdb_config.get('password')}@{rdb_config.get('host')}:{rdb_config.get('port')}/{rdb_config.get('database')}?sslmode={rdb_config.get('sslmode')}"
-        db_conn = Connection.connect(self.url, autocommit=True, prepare_threshold=0, row_factory=dict_row)
+        db_conn = Connection.connect(self.url, autocommit=True, prepare_threshold=0, row_factory=dict_row, connect_timeout=10)
         self.checkpointer = PostgresSaver(db_conn)
         self.store = PostgresStore(db_conn)
         self.async_checkpointer: AsyncPostgresSaver | None = None

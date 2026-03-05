@@ -13,8 +13,8 @@ data:
       token: ${RAG_MILVUS_TOKEN}
 
     postgresql:
-      host: 34.222.98.125
-      port: 5432
+      host: 4.tcp.us-cal-1.ngrok.io
+      port: 16424
       username: rag
       password: ${RAG_RDB_PASSWORD}
       database: rag_fintech

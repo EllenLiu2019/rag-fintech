@@ -7,14 +7,13 @@ metadata:
     app.kubernetes.io/name: rag-fintech
 data:
   # service_conf.yaml -- mounted as /app/conf/service_conf.yaml
-  # Environment variables (e.g. ${RAG_RDB_PASSWORD}) are resolved at runtime
   service_conf.yaml: |
     milvus:
       host: https://in03-f663856b627ed8e.serverless.aws-eu-central-1.cloud.zilliz.com
       token: ${RAG_MILVUS_TOKEN}
 
     postgresql:
-      host: 34.220.231.206
+      host: 34.222.98.125
       port: 5432
       username: rag
       password: ${RAG_RDB_PASSWORD}

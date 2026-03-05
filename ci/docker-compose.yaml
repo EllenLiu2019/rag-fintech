@@ -9,8 +9,7 @@
 #
 # Note: DOCKER_API_VERSION=1.43 is required because docker-compose-plugin v5
 # targets API 1.53 but Docker Engine 24.x only supports up to 1.43.
-# PostgreSQL: runs on your laptop. Before starting, open a reverse SSH tunnel:
-#   ssh -N -R 15432:localhost:5432 root@121.43.129.87
+# PostgreSQL: runs on your laptop. :
 
 
 x-image: &image

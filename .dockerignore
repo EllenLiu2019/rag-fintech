@@ -26,7 +26,17 @@ tests/
 tools/
 docs/
 ui/
+vllm/
+observation/
+data/
+wheels/
+ci/
+.github/
 *.md
+*.txt
+*.ini
+*.json
+!pyproject.toml
 .env
 
 # OS files
@@ -37,6 +47,7 @@ Thumbs.db
 dist/
 build/
 *.egg
+rag_fintech.egg-info/
 
 # Data files (large, not needed in image)
 **/data/

@@ -3,6 +3,10 @@
 # Usage:
 #    ./ci/deploy.sh                  # uses git HEAD as tag
 #   IMAGE_TAG=v1.2.0  ./ci/deploy.sh # override tag
+#
+# Required env vars (set in shell or .env):
+#   ACR_PASSWORD   - Alibaba Cloud Container Registry password
+#   KUBECONFIG     - path to kubeconfig (default: ~/.kube/config)
 
 set -euo pipefail
 
@@ -32,26 +36,28 @@ echo "==> Logging in to ACR"
 
 docker login \
   --username Ellen_lab \
-  --password Happygirl123! \
+  --password *** \
   crpi-jie2r6qhrtiyvvnq-vpc.cn-hangzhou.personal.cr.aliyuncs.com
 
 echo "==> Pushing images to ACR"
 docker push "${FULL_IMAGE}"
 docker push "${FULL_IMAGE_UI}"
 
+echo "==> Applying K8S manifests (IMAGE_TAG=${IMAGE_TAG})"
+export IMAGE_REGISTRY IMAGE_TAG
+# configmap and secrets are managed manually on ACK, skip them
+for f in ci/k8s/namespace.yml \
+         ci/k8s/api-deployment.yml \
+         ci/k8s/worker-deployment.yml \
+         ci/k8s/ui.yml \
+         ci/k8s/ingress.yml; do
+  envsubst < "${f}" | kubectl apply -f -
+done
 
-# echo "==> Applying K8S manifests (IMAGE_TAG=${IMAGE_TAG})"
-# export IMAGE_REGISTRY IMAGE_TAG
-# for f in ci/k8s/*.yml; do
-#   envsubst < "${f}" | kubectl apply -f -
-# done
-
-# echo "==> Waiting for rollout"
-# kubectl rollout status deployment/rag-api    -n rag-fintech
-# kubectl rollout status deployment/rag-worker -n rag-fintech
+echo "==> Waiting for rollout"
+kubectl rollout status deployment/rag-api    -n production --timeout=300s
+kubectl rollout status deployment/rag-worker -n production --timeout=300s
 
 echo "==> Deploy complete: ${IMAGE_TAG}"
 echo "    Backend:  ${FULL_IMAGE}"
 echo "    Frontend: ${FULL_IMAGE_UI}"
-
-

@@ -1,0 +1,50 @@
+# Dockerignore for Dockerfile.ui (frontend build)
+# Only ui/ and ci/nginx.conf are needed; exclude everything else.
+
+# Virtual environment & Python
+.venv/
+venv/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+*.so
+
+# Git & IDE
+.git/
+.cursor/
+.vscode/
+.idea/
+
+# Backend source (not needed for frontend build)
+api/
+agent/
+rag/
+common/
+graphrag/
+repository/
+benchmark/
+conf/
+wheels/
+vllm/
+observation/
+
+# CI files (except nginx.conf which is needed)
+ci/Dockerfile
+ci/Dockerfile.ui
+ci/deploy.sh
+ci/docker-compose.yaml
+ci/k8s/
+ci/.env*
+ci/conf/
+
+# Misc
+.github/
+docs/
+tests/
+tools/
+data/
+**/data/
+*.md
+*.log
+.DS_Store
+Thumbs.db

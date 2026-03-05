@@ -101,7 +101,10 @@ class MilvusBgeM3Embed(Base):
         from huggingface_hub import snapshot_download
 
         self.model_name = model_name
-        local_path = snapshot_download(model_name, local_files_only=True)
+        try:
+            local_path = snapshot_download(model_name, local_files_only=True)
+        except Exception:
+            local_path = snapshot_download(model_name, local_files_only=False)
         self.model = model.hybrid.BGEM3EmbeddingFunction(
             model_name=local_path,
             device="cpu",

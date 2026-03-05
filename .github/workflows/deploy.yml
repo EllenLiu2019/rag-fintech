@@ -1,0 +1,89 @@
+name: Build & Deploy to ACK
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:        # allow manual trigger from GitHub UI
+
+env:
+  IMAGE_REGISTRY: crpi-jie2r6qhrtiyvvnq.cn-hangzhou.personal.cr.aliyuncs.com/ali-private
+
+jobs:
+  build-and-deploy:
+    name: Build → Push → Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ───────────────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 2. Derive image tag from git SHA ──────────────────────────────────────
+      - name: Set image tag
+        id: vars
+        run: echo "IMAGE_TAG=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      # ── 3. Log in to Alibaba Cloud Container Registry ────────────────────────
+      - name: Log in to ACR
+        uses: docker/login-action@v3
+        with:
+          registry: crpi-jie2r6qhrtiyvvnq.cn-hangzhou.personal.cr.aliyuncs.com
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      # ── 4. Build & push backend image ────────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ci/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_REGISTRY }}/rag-fintech:${{ steps.vars.outputs.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── 5. Build & push frontend image ───────────────────────────────────────
+      - name: Build and push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ci/Dockerfile.ui
+          push: true
+          tags: ${{ env.IMAGE_REGISTRY }}/rag-fintech-ui:${{ steps.vars.outputs.IMAGE_TAG }}
+          build-args: |
+            VITE_API_BASE_URL=http://${{ env.ALIYUN_PUBLIC_IP }}:8001
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── 6. Set up kubectl with ACK kubeconfig ─────────────────────────────────
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      # ── 7. Apply K8s manifests ────────────────────────────────────────────────
+      - name: Apply manifests
+        env:
+          IMAGE_TAG: ${{ steps.vars.outputs.IMAGE_TAG }}
+        run: |
+          # namespace, configmap and secrets are managed manually on ACK, skip them
+          for f in ci/k8s/api-deployment.yml \
+                   ci/k8s/worker-deployment.yml \
+                   ci/k8s/ui.yml \
+                   ci/k8s/ingress.yml; do
+            envsubst < "${f}" | kubectl apply -f -
+          done
+
+      # ── 8. Wait for rollout ───────────────────────────────────────────────────
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/rag-api    -n production --timeout=300s
+          kubectl rollout status deployment/rag-worker -n production --timeout=300s

@@ -35,16 +35,24 @@ spec:
               value: "INFO"
             - name: PYTHONUNBUFFERED
               value: "1"
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
             - name: LANGSMITH_TRACING
               value: "true"
             - name: LANGSMITH_ENDPOINT
               value: "https://api.smith.langchain.com"
             - name: LANGSMITH_PROJECT
               value: "rag-fintech"
+            - name: HF_HOME
+              value: "/app/.cache/huggingface"
+            - name: HF_ENDPOINT
+              value: "https://hf-mirror.com"
           volumeMounts:
             - name: config-volume
               mountPath: /app/conf/service_conf.yaml
               subPath: service_conf.yaml
+            - name: hf-cache
+              mountPath: /app/.cache/huggingface
           resources:
             requests:
               cpu: "500m"
@@ -56,20 +64,24 @@ spec:
             httpGet:
               path: /health
               port: 8001
-            initialDelaySeconds: 15
-            periodSeconds: 10
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 20    # 30s + 20×15s = up to 5.5min for first-time model download
             timeoutSeconds: 5
           livenessProbe:
             httpGet:
               path: /health
               port: 8001
-            initialDelaySeconds: 30
+            initialDelaySeconds: 60
             periodSeconds: 30
             timeoutSeconds: 5
       volumes:
         - name: config-volume
           configMap:
             name: rag-fintech-config
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: hf-model-cache
 
 ---
 apiVersion: v1

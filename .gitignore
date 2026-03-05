@@ -45,5 +45,5 @@ tools/*
 ci/.env
 ci/conf/service_conf.yaml
 
-# pre-downloaded wheels (local build cache)
-wheels/
+# pre-downloaded wheels (local build cache, keep the dir itself tracked)
+wheels/*.whl

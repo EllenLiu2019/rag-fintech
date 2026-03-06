@@ -28,3 +28,6 @@ neo4j:
   database: neo4j
 
 schema_path: rag/ingestion/extractor/schema/insurance.json
+
+ingestion:
+  extractor_model: qa_lite

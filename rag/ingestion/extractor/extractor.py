@@ -206,8 +206,10 @@ class Extractor:
 
 def _create_extractor() -> Extractor:
     schema_path = get_base_config("schema_path", None)
+    ingestion_config = get_base_config("ingestion", {})
+    model_name = ingestion_config.get("extractor_model", "qa_lite")
     registry = get_model_registry()
-    model_config = registry.get_chat_model("qwen_32B")
+    model_config = registry.get_chat_model(model_name)
     return Extractor(model=model_config.to_dict(), schema_path=schema_path)
 
 

@@ -26,7 +26,12 @@ class PostgreSQLClient:
             isolation_level="READ COMMITTED",
             pool_size=int(rdb_config.get("pool_size", 5)),
             max_overflow=int(rdb_config.get("max_overflow", 10)),
-            connect_args={"options": "-c search_path=rag_fintech"},
+            pool_pre_ping=True,
+            pool_recycle=300,
+            connect_args={
+                "options": "-c search_path=rag_fintech",
+                "connect_timeout": 10,
+            },
         )
         logger.info(
             f"PostgreSQL client initialized successfully at @{rdb_config.get('host')}/{rdb_config.get('database')}"

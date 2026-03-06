@@ -1,27 +1,33 @@
 # ==============================================================================
-# Ingress -- for exposing the API externally
-# Requires an Ingress Controller (e.g. nginx-ingress)
+# Ingress -- route traffic via nginx-ingress-controller NLB
+# No host required; access via NLB IP directly
 # ==============================================================================
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: rag-api-ingress
+  name: rag-ingress
   namespace: production
   labels:
     app.kubernetes.io/name: rag-fintech
   annotations:
-    kubernetes.io/ingress.class: nginx
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
 spec:
+  ingressClassName: nginx
   rules:
-    - host: rag-fintech.com 
-      http:
+    - http:
         paths:
-          - path: /
+          - path: /api/
             pathType: Prefix
             backend:
               service:
                 name: rag-api
                 port:
                   number: 8001
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rag-ui
+                port:
+                  number: 80

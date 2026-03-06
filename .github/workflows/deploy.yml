@@ -54,8 +54,6 @@ jobs:
           file: ci/Dockerfile.ui
           push: true
           tags: ${{ env.IMAGE_REGISTRY }}/rag-fintech-ui:${{ steps.vars.outputs.IMAGE_TAG }}
-          build-args: |
-            VITE_API_BASE_URL=http://${{ env.ALIYUN_PUBLIC_IP }}:8001
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -75,16 +73,15 @@ jobs:
           IMAGE_TAG: ${{ steps.vars.outputs.IMAGE_TAG }}
           IMAGE_REGISTRY: crpi-jie2r6qhrtiyvvnq-vpc.cn-hangzhou.personal.cr.aliyuncs.com/ali-private
         run: |
-          # namespace, configmap and secrets are managed manually on ACK, skip them
           for f in ci/k8s/api-deployment.yml \
                    ci/k8s/worker-deployment.yml \
                    ci/k8s/ui.yml \
                    ci/k8s/ingress.yml; do
-            envsubst < "${f}" | kubectl apply -f -
+            envsubst '${IMAGE_REGISTRY} ${IMAGE_TAG}' < "${f}" | kubectl apply -f -
           done
 
       # ── 8. Wait for rollout ───────────────────────────────────────────────────
       - name: Wait for rollout
         run: |
-          kubectl rollout status deployment/rag-api    -n production --timeout=300s
-          kubectl rollout status deployment/rag-worker -n production --timeout=300s
+          kubectl rollout status deployment/rag-api    -n production --timeout=600s
+          kubectl rollout status deployment/rag-worker -n production --timeout=600s

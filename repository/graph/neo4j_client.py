@@ -1,11 +1,29 @@
 import neo4j
+import neo4j.exceptions
 import networkx as nx
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
 
 from common.config_utils import get_base_config
 from common import get_logger
 from common.exceptions import ConnectionError
 
 logger = get_logger(__name__)
+
+_TRANSIENT_EXC = (
+    neo4j.exceptions.ServiceUnavailable,
+    neo4j.exceptions.SessionExpired,
+    neo4j.exceptions.TransientError,
+    ConnectionResetError,
+    OSError,
+)
+
+_neo4j_retry = retry(
+    retry=retry_if_exception_type(_TRANSIENT_EXC),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    reraise=True,
+    before_sleep=before_sleep_log(logger, "WARNING"),
+)
 
 ALLOWED_RELATIONSHIP_TYPES = ["INCLUDE", "NOT_INCLUDE", "RELATED_TO"]
 
@@ -27,7 +45,11 @@ class Neo4jClient:
         password = neo4j_config.get("password")
 
         try:
-            driver = neo4j.GraphDatabase.driver(uri, auth=(username, password))
+            driver = neo4j.GraphDatabase.driver(
+                uri,
+                auth=(username, password),
+                liveness_check_timeout=30,
+            )
             driver.verify_connectivity()
             logger.info(f"Connected to Neo4j at {uri}")
             return driver
@@ -52,6 +74,7 @@ class Neo4jClient:
             result = session.run(f"CREATE (n:{node_type}) SET n = $properties RETURN n", properties=properties)
             return result.single()
 
+    @_neo4j_retry
     def execute_query(self, query, parameters=None):
         """Execute a Cypher query and return results"""
         with self.driver.session(database=self.database, default_access_mode=neo4j.READ_ACCESS) as session:
@@ -132,6 +155,7 @@ class Neo4jClient:
                         doc_id=row["doc_id"],
                     )
 
+    @_neo4j_retry
     def load_subgraph(self, doc_id: str) -> tuple[list[dict], list[dict]]:
         """Load subgraph from Neo4j for a specific document and clause and return lists of entities and relationships"""
         with self.driver.session(database=self.database, default_access_mode=neo4j.READ_ACCESS) as session:
@@ -180,6 +204,7 @@ class Neo4jClient:
 
         return entities, relationships
 
+    @_neo4j_retry
     def get_relationship_subgraph(
         self,
         start_entity: str,
@@ -255,6 +280,7 @@ class Neo4jClient:
         )
         return graph
 
+    @_neo4j_retry
     def get_entity_subgraph(self, entity_name: str, max_depth: int = 2):
         """Get subgraph around a specific entity within max_depth hops"""
 

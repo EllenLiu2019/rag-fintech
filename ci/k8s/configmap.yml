@@ -9,12 +9,12 @@ data:
   # service_conf.yaml -- mounted as /app/conf/service_conf.yaml
   service_conf.yaml: |
     milvus:
-      host: https://in03-f663856b627ed8e.serverless.aws-eu-central-1.cloud.zilliz.com
+      host: http://milvus.production.svc.cluster.local:19530
       token: ${RAG_MILVUS_TOKEN}
 
     postgresql:
-      host: 4.tcp.us-cal-1.ngrok.io
-      port: 16424
+      host: 10.70.247.90
+      port: 5432
       username: rag
       password: ${RAG_RDB_PASSWORD}
       database: rag_fintech

@@ -1,0 +1,142 @@
+# Milvus Standalone on ACK
+# Chart: https://zilliztech.github.io/milvus-helm/ (chart 5.x / Milvus 2.6)
+#
+# Verify chart's default values:
+#   helm show values zilliz/milvus > /tmp/milvus-default-values.yaml
+#
+
+nodeSelector:
+  workload: milvus
+
+tolerations:
+  - key: "workload"
+    operator: "Equal"
+    value: "milvus"
+    effect: "NoSchedule"
+
+image:
+  all:
+    repository: docker.m.daocloud.io/milvusdb/milvus
+    tag: v2.6.11
+    pullPolicy: IfNotPresent
+
+# --- Standalone mode (tuned for 8GB node with mmap) ---
+cluster:
+  enabled: false
+
+standalone:
+  replicas: 1
+  messageQueue: woodpecker
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+  persistence:
+    mountPath: "/var/lib/milvus"
+    enabled: true
+    annotations:
+      helm.sh/resource-policy: keep
+    persistentVolumeClaim:
+      storageClass: "alicloud-disk-essd-pl0"
+      size: 10Gi
+      accessModes: ReadWriteOnce
+  disk:
+    enabled: true
+
+# --- Streaming / WAL ---
+streaming:
+  enabled: true
+  woodpecker:
+    embedded: true
+    storage:
+      type: minio
+
+woodpecker:
+  enabled: true
+
+# --- Dependencies ---
+etcd:
+  enabled: true
+  name: etcd
+  replicaCount: 1
+  pdb:
+    create: false
+  nodeSelector:
+    workload: milvus
+  tolerations:
+    - key: "workload"
+      operator: "Equal"
+      value: "milvus"
+      effect: "NoSchedule"
+  image:
+    registry: "docker.m.daocloud.io"
+    repository: "milvusdb/etcd"
+    tag: "3.5.25-r1"
+    pullPolicy: IfNotPresent
+  auth:
+    rbac:
+      enabled: false
+      create: false
+    token:
+      enabled: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "1G"
+  persistence:
+    storageClass: "alicloud-disk-essd-pl0"
+    size: 10Gi
+
+minio:
+  enabled: true
+  name: minio
+  mode: standalone
+  nodeSelector:
+    workload: milvus
+  tolerations:
+    - key: "workload"
+      operator: "Equal"
+      value: "milvus"
+      effect: "NoSchedule"
+  image:
+    repository: "quay.io/minio/minio"
+    tag: "RELEASE.2024-12-18T13-15-44Z"
+    pullPolicy: IfNotPresent
+  accessKey: minioadmin
+  secretKey: minioadmin
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "128Mi"
+    limits:
+      cpu: "1"
+      memory: "4Gi"
+  persistence:
+    enabled: true
+    storageClass: "alicloud-disk-essd"
+    size: 30Gi
+    accessMode: ReadWriteOnce
+
+# --- Disable unused components ---
+pulsarv3:
+  enabled: false
+kafka:
+  enabled: false
+
+# --- mmap: reduce Milvus heap usage for large indexes (SNOMED ~2G) ---
+extraConfigFiles:
+  user.yaml: |
+    queryNode:
+      mmap:
+        vectorField: true
+        vectorIndex: true
+
+log:
+  persistence:
+    enabled: false

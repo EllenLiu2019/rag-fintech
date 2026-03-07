@@ -1,5 +1,6 @@
 from abc import ABC
 from typing import List, Dict
+import os
 import numpy as np
 import time
 
@@ -96,6 +97,17 @@ class BAAIBgeM3Embed(Base):
 class MilvusBgeM3Embed(Base):
     _FACTORY_NAME = "Milvus-BGE-M3"
 
+    @staticmethod
+    def _is_cache_valid(path: str) -> bool:
+        if not os.path.isdir(path):
+            return False
+        weight_extensions = (".safetensors", ".bin", ".h5", ".msgpack")
+        return any(
+            os.path.isfile(os.path.join(path, f))
+            for f in os.listdir(path)
+            if f.endswith(weight_extensions)
+        )
+
     def __init__(self, key, model_name, base_url=None):
         from pymilvus import model
         from huggingface_hub import snapshot_download
@@ -103,7 +115,10 @@ class MilvusBgeM3Embed(Base):
         self.model_name = model_name
         try:
             local_path = snapshot_download(model_name, local_files_only=True)
+            if not self._is_cache_valid(local_path):
+                raise FileNotFoundError(f"Cached snapshot at {local_path} is missing model weight files")
         except Exception:
+            logger.info(f"Downloading model {model_name} from remote...")
             local_path = snapshot_download(model_name, local_files_only=False)
         self.model = model.hybrid.BGEM3EmbeddingFunction(
             model_name=local_path,

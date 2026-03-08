@@ -149,14 +149,16 @@ class ClaimsOrchestrator:
         # Step 4: Decision Generation
         claim_decision = self._generate_decision(evidence, reasoning_result)
 
-        # Update evaluation records: mark as completed
+        # Update evaluation records: mark as completed and persist decision result
         final_status = "completed" if claim_decision.status.value != "under_review" else "reviewing"
         now = datetime.now(timezone.utc)
+        decision_dict = claim_decision.to_dict()
         for thread_id in thread_ids:
             await asyncio.to_thread(
                 self._update_evaluation,
                 thread_id=thread_id,
                 status=final_status,
+                decision_result=decision_dict,
                 updated_at=now,
             )
 

@@ -35,9 +35,13 @@ class GraphComponents:
     def __init__(self):
         rdb_config = get_base_config("postgresql", {})
         self.url = f"postgresql://{rdb_config.get('username')}:{rdb_config.get('password')}@{rdb_config.get('host')}:{rdb_config.get('port')}/{rdb_config.get('database')}?sslmode={rdb_config.get('sslmode')}"
-        db_conn = Connection.connect(self.url, autocommit=True, prepare_threshold=0, row_factory=dict_row, connect_timeout=10)
+        db_conn = Connection.connect(
+            self.url, autocommit=True, prepare_threshold=0, row_factory=dict_row, connect_timeout=10
+        )
         self.checkpointer = PostgresSaver(db_conn)
+        # self.checkpointer.setup()
         self.store = PostgresStore(db_conn)
+        # self.store.setup()
         self.async_checkpointer: AsyncPostgresSaver | None = None
         self.async_store: AsyncPostgresStore | None = None
 
@@ -66,6 +70,8 @@ class GraphComponents:
         await pool.open(wait=True)
         self.async_checkpointer = AsyncPostgresSaver(pool)
         self.async_store = AsyncPostgresStore(pool)
+        # await self.async_checkpointer.setup()
+        # await self.async_store.setup()
 
     def _build_encode_graph(self, *, use_async: bool = False):
         from agent.medical_alignment_agent import MedicalAlignmentAgent

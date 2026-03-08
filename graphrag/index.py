@@ -25,6 +25,7 @@ async def index(
     clause_forest: ClauseForest,
     callback: Callable | None = None,
 ):
+    logger.info(f"Indexing graph for doc_id={doc_id}")
     if not clause_forest or clause_forest.is_empty():
         logger.warning(f"Empty clause_forest for doc_id={doc_id}, skipping graph indexing")
         return

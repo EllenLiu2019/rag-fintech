@@ -17,3 +17,5 @@ CREATE TABLE IF NOT EXISTS rag_fintech.claim_evaluations (
 CREATE INDEX idx_claim_eval_doc_id ON rag_fintech.claim_evaluations(doc_id);
 CREATE INDEX idx_claim_eval_thread_id ON rag_fintech.claim_evaluations(thread_id);
 CREATE INDEX idx_claim_eval_status ON rag_fintech.claim_evaluations(status);
+
+ALTER TABLE rag_fintech.claim_evaluations ADD COLUMN IF NOT EXISTS decision_result JSONB;

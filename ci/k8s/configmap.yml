@@ -23,10 +23,9 @@ data:
       sslmode: disable
 
     redis:
-      host: redis-10680.c10.us-east-1-2.ec2.cloud.redislabs.com
-      port: 10680
+      host: 10.70.247.90
+      port: 6379
       decode_responses: False
-      username: default
       password: ${RAG_REDIS_PASSWORD}
       queue_name: ingestion
       enable: True

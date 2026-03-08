@@ -139,6 +139,17 @@ async def get_original_file(
     """
     logger.info(f"Received original file request: filename={filename}, doc_id={doc_id}, doc_type={doc_type}")
 
+    # If doc_type is "all" (from document list view), look up the real type from DB
+    if doc_type.lower() == "all":
+        doc = await PersistentService.aget_document(doc_id)
+        if doc is None:
+            raise NotFoundError(
+                message=f"文档 '{doc_id}' 未找到",
+                code=ErrorCodes.A_NOTFOUND_001,
+                details={"doc_id": doc_id},
+            )
+        doc_type = doc.doc_type
+
     # Validate and convert doc_type
     try:
         document_type = DocumentType(doc_type.lower())
@@ -185,6 +196,17 @@ async def get_parsed_file(
     Get parsed content of uploaded file
     """
     logger.info(f"Received parsed file request: filename={filename}, doc_id={doc_id}, doc_type={doc_type}")
+
+    # If doc_type is "all" (from document list view), look up the real type from DB
+    if doc_type.lower() == "all":
+        doc = await PersistentService.aget_document(doc_id)
+        if doc is None:
+            raise NotFoundError(
+                message=f"文档 '{doc_id}' 未找到",
+                code=ErrorCodes.A_NOTFOUND_001,
+                details={"doc_id": doc_id},
+            )
+        doc_type = doc.doc_type
 
     # Validate and convert doc_type
     try:

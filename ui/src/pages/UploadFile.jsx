@@ -16,7 +16,8 @@ import DocumentList from '../components/DocumentList'
 export const UploadFile = ({ onUploadSuccess }) => {
   const [file, setFile] = useState(null)
   const [isDragActive, setIsDragActive] = useState(false)
-  const [docType, setDocType] = useState('policy') // 'policy' | 'claim'
+  const [docType, setDocType] = useState('policy')       // upload: 'policy' | 'claim'
+  const [listDocType, setListDocType] = useState('all')   // list filter: 'all' | 'policy' | 'claim'
   const [viewMode, setViewMode] = useState('upload') // 'upload' | 'list'
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const fileInputRef = useRef(null)
@@ -204,8 +205,8 @@ export const UploadFile = ({ onUploadSuccess }) => {
           {viewMode === 'list' && (
             <div className="doc-type-selector-wrapper">
               <DocumentTypeSelector
-                value={docType}
-                onChange={setDocType}
+                value={listDocType}
+                onChange={setListDocType}
                 options={['all', 'policy', 'claim']}
               />
             </div>
@@ -239,7 +240,7 @@ export const UploadFile = ({ onUploadSuccess }) => {
 
           {viewMode === 'list' && (
             <DocumentList
-              docTypeFilter={docType}
+              docTypeFilter={listDocType}
               onSelectDocument={handleSelectDocument}
               refreshTrigger={refreshTrigger}
             />

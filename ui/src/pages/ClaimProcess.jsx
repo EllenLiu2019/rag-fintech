@@ -1316,7 +1316,7 @@ function ClaimProcess({ fileInfo, onBack }) {
                         <h3>符合理赔条件</h3>
                         <ul className="item-list eligible-list">
                           {claimResult.eligible_items.map((item, index) => (
-                            <li key={index}>{item}</li>
+                            <li key={index}>{typeof item === 'string' ? item : (item.description || item.name || JSON.stringify(item))}</li>
                           ))}
                         </ul>
                       </div>
@@ -1327,17 +1327,25 @@ function ClaimProcess({ fileInfo, onBack }) {
                         <h3>不符合理赔条件</h3>
                         <ul className="item-list excluded-list">
                           {claimResult.excluded_items.map((item, index) => (
-                            <li key={index}>{item}</li>
+                            <li key={index}>{typeof item === 'string' ? item : (item.description || item.name || JSON.stringify(item))}</li>
                           ))}
                         </ul>
                       </div>
                     )}
 
-                    {claimResult.matched_clauses && typeof claimResult.matched_clauses === 'string' && claimResult.matched_clauses.trim() !== '' && (
+                    {claimResult.matched_clauses && (
                       <div className="result-section">
                         <h3>匹配的条款</h3>
                         <div className="markdown-content">
-                          <ReactMarkdown>{claimResult.matched_clauses}</ReactMarkdown>
+                          {typeof claimResult.matched_clauses === 'string' ? (
+                            <ReactMarkdown>{claimResult.matched_clauses}</ReactMarkdown>
+                          ) : Array.isArray(claimResult.matched_clauses) && claimResult.matched_clauses.length > 0 ? (
+                            <ul className="item-list">
+                              {claimResult.matched_clauses.map((clause, index) => (
+                                <li key={index}>{clause.description || clause.name || JSON.stringify(clause)}</li>
+                              ))}
+                            </ul>
+                          ) : null}
                         </div>
                       </div>
                     )}

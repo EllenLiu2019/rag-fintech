@@ -1,4 +1,5 @@
 import os
+import socket
 
 from redis import Redis
 from rq.worker import SimpleWorker, Worker
@@ -19,6 +20,12 @@ def main():
         username=redis_config.get("username"),
         password=redis_config.get("password"),
         decode_responses=False,
+        socket_keepalive=True,
+        socket_keepalive_options={
+            socket.TCP_KEEPIDLE: 60,
+            socket.TCP_KEEPINTVL: 10,
+            socket.TCP_KEEPCNT: 3,
+        },
     )
     queue_name = redis_config.get("queue_name")
 

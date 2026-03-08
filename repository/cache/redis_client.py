@@ -43,7 +43,6 @@ class RedisClient:
                     socket.TCP_KEEPINTVL: 10,   # 每 10s 发一次探测
                     socket.TCP_KEEPCNT: 3,      # 连续 3 次无响应则断开
                 },
-                health_check_interval=60,
             )
             self.client.ping()
             queue_name = redis_config.get("queue_name", "default")

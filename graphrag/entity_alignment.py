@@ -238,6 +238,7 @@ class EntityAlignment(Extractor):
             for aligned_entity in aligned_entities:
                 # New entity added by alignment
                 if aligned_entity["id"] not in sim_entity_ids:
+                    aligned_entity["entity_name"] = aligned_entity["entity_name"][:180]
                     aligned_entity["entity_type"] = candidate_attrs[node_id]["entity_type"]
                     aligned_entity["doc_id"] = candidate_attrs[node_id]["doc_id"]
                     aligned_entity["root_id"] = candidate_attrs[node_id]["root_id"]
@@ -246,13 +247,14 @@ class EntityAlignment(Extractor):
 
                     # Transfer edges from all removed candidates to this new entity
                     # This assumes all removed candidates should be merged into the aligned entities
+                    aligned_name = aligned_entity["entity_name"]  # already truncated above
                     for candidate_id, (successor_edges, predecessor_edges) in edges_to_transfer.items():
                         # Add outgoing edges (this entity -> successors)
                         for successor_id, edge_data in successor_edges:
                             if self.merged_graph.has_node(successor_id):  # Check target still exists
                                 edge_info = dict(edge_data)
                                 edge_info["source_id"] = aligned_entity["id"]
-                                edge_info["source_entity"] = aligned_entity["entity_name"]
+                                edge_info["source_entity"] = aligned_name
                                 edge_info["id"] = generate_relationship_id(
                                     edge_info["source_entity"],
                                     edge_info["target_entity"],
@@ -267,7 +269,7 @@ class EntityAlignment(Extractor):
                             if self.merged_graph.has_node(predecessor_id):  # Check source still exists
                                 edge_info = dict(edge_data)
                                 edge_info["target_id"] = aligned_entity["id"]
-                                edge_info["target_entity"] = aligned_entity["entity_name"]
+                                edge_info["target_entity"] = aligned_name
                                 edge_info["id"] = generate_relationship_id(
                                     edge_info["source_entity"],
                                     edge_info["target_entity"],
@@ -279,7 +281,7 @@ class EntityAlignment(Extractor):
 
                 else:  # Existing entity - just update attributes
                     existing_node = self.merged_graph.nodes[aligned_entity["id"]]
-                    existing_node["entity_name"] = aligned_entity["entity_name"]
+                    existing_node["entity_name"] = aligned_entity["entity_name"][:180]
                     existing_node["description"] = aligned_entity["description"]
                     existing_node["clause_ids"] = sorted(set(aligned_entity.get("clause_ids", [])))
                     self.merged_graph.nodes[aligned_entity["id"]].update(existing_node)

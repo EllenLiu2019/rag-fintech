@@ -114,7 +114,7 @@ async def persist_vector(merged_graph: nx.DiGraph):
     chunks = []
 
     for entity in entities:
-        entity_name = entity["entity_name"][:200]
+        entity_name = entity["entity_name"][:180]
         chunk = {
             "id": entity["id"],
             "graph_type": "entity",
@@ -130,8 +130,8 @@ async def persist_vector(merged_graph: nx.DiGraph):
         chunks.append(chunk)
 
     for relationship in relationships:
-        source_entity = relationship["source_entity"][:200]
-        target_entity = relationship["target_entity"][:200]
+        source_entity = relationship["source_entity"][:180]
+        target_entity = relationship["target_entity"][:180]
         chunk = {
             "id": relationship["id"],
             "graph_type": "relationship",

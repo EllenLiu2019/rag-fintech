@@ -108,7 +108,7 @@ def handle_single_entity_extraction(record_attributes: list[str]):
     if len(record_attributes) < 5 or record_attributes[0] != '"entity"':
         return None
     # add this record as a node in the G
-    entity_name = clean_str(record_attributes[1])
+    entity_name = clean_str(record_attributes[1])[:180]
     if not entity_name.strip():
         return None
     entity_type = clean_str(record_attributes[2].upper())

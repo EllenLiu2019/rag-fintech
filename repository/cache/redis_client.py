@@ -38,11 +38,6 @@ class RedisClient:
                 password=redis_config.get("password"),
                 decode_responses=redis_config.get("decode_responses", False),  # Must be False for pickle serialization
                 socket_keepalive=True,
-                socket_keepalive_options={
-                    socket.TCP_KEEPIDLE: 60,    # 空闲 60s 后开始发探测（早于 NAT 超时）
-                    socket.TCP_KEEPINTVL: 10,   # 每 10s 发一次探测
-                    socket.TCP_KEEPCNT: 3,      # 连续 3 次无响应则断开
-                },
             )
             self.client.ping()
             queue_name = redis_config.get("queue_name", "default")

@@ -19,6 +19,7 @@ function ClaimProcess({ fileInfo, onBack }) {
 
   // ── Time Travel state ──
   const [historyMode, setHistoryMode] = useState(false)
+  const [historyViewTab, setHistoryViewTab] = useState('medical_agent')  // 'medical_agent' | 'claim_decision'
   const [evaluations, setEvaluations] = useState([])
   const [selectedEval, setSelectedEval] = useState(null)
   const [checkpoints, setCheckpoints] = useState([])
@@ -164,6 +165,7 @@ function ClaimProcess({ fileInfo, onBack }) {
     if (historyMode) {
       // Exit history mode
       setHistoryMode(false)
+      setHistoryViewTab('medical_agent')
       setEvaluations([])
       setSelectedEval(null)
       setCheckpoints([])
@@ -216,6 +218,7 @@ function ClaimProcess({ fileInfo, onBack }) {
 
   const handleSelectEval = async (evalRecord) => {
     setSelectedEval(evalRecord)
+    setHistoryViewTab('medical_agent')
     setCheckpoints([])
     setSelectedCheckpoint(null)
     setCheckpointState(null)
@@ -684,6 +687,16 @@ function ClaimProcess({ fileInfo, onBack }) {
                             <span>TNM: {ev.human_decision.tnm_stage}</span>
                           </div>
                         )}
+                        {ev.decision_result?.status && (
+                          <div className="eval-card-claim-result">
+                            <span
+                              className="eval-claim-status-badge"
+                              style={{ backgroundColor: getStatusColor(ev.decision_result.status) }}
+                            >
+                              {getStatusText(ev.decision_result.status)}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -698,6 +711,7 @@ function ClaimProcess({ fileInfo, onBack }) {
                   <div className="checkpoint-section">
                     <button className="back-to-evals-btn" onClick={() => {
                       setSelectedEval(null)
+                      setHistoryViewTab('medical_agent')
                       setCheckpoints([])
                       setSelectedCheckpoint(null)
                       setCheckpointState(null)
@@ -721,6 +735,23 @@ function ClaimProcess({ fileInfo, onBack }) {
                       </span>
                     </div>
 
+                    <div className="eval-view-tabs">
+                      <button
+                        className={`eval-view-tab ${historyViewTab === 'medical_agent' ? 'active' : ''}`}
+                        onClick={() => setHistoryViewTab('medical_agent')}
+                      >
+                        Medical Agent 过程
+                      </button>
+                      <button
+                        className={`eval-view-tab ${historyViewTab === 'claim_decision' ? 'active' : ''}`}
+                        onClick={() => setHistoryViewTab('claim_decision')}
+                      >
+                        理赔决策
+                      </button>
+                    </div>
+
+                    {historyViewTab === 'medical_agent' && (
+                    <>
                     <div className="checkpoint-content-row">
                       {/* Timeline column */}
                       <div className="checkpoint-timeline">
@@ -1145,6 +1176,92 @@ function ClaimProcess({ fileInfo, onBack }) {
                             )}
                           </div>
                         </div>
+                      </div>
+                    )}
+                    </>
+                    )}
+
+                    {historyViewTab === 'claim_decision' && (
+                      <div className="result-content claim-decision-result">
+                        {selectedEval.decision_result ? (
+                          <>
+                            <h2>理赔结果</h2>
+                            <div className="result-section">
+                              <h3>决策结果</h3>
+                              <div className="status-row">
+                                <div className="status-badge" style={{ backgroundColor: getStatusColor(selectedEval.decision_result.status) }}>
+                                  {getStatusText(selectedEval.decision_result.status)}
+                                </div>
+                              </div>
+                            </div>
+                            {selectedEval.decision_result.explanation && selectedEval.decision_result.explanation.trim() !== '' && (
+                              <div className="result-section">
+                                <h3>决策说明</h3>
+                                <div className="explanation-content">
+                                  <p>{selectedEval.decision_result.explanation}</p>
+                                </div>
+                              </div>
+                            )}
+                            {selectedEval.decision_result.recommendations && selectedEval.decision_result.recommendations.length > 0 && (
+                              <div className="result-section">
+                                <h3>建议</h3>
+                                <ul className="recommendations-list">
+                                  {selectedEval.decision_result.recommendations.map((rec, index) => (
+                                    <li key={index}>{rec}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {selectedEval.decision_result.eligible_items && selectedEval.decision_result.eligible_items.length > 0 && (
+                              <div className="result-section">
+                                <h3>符合理赔条件</h3>
+                                <ul className="item-list eligible-list">
+                                  {selectedEval.decision_result.eligible_items.map((item, index) => (
+                                    <li key={index}>{typeof item === 'string' ? item : (item.description || item.name || JSON.stringify(item))}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {selectedEval.decision_result.excluded_items && selectedEval.decision_result.excluded_items.length > 0 && (
+                              <div className="result-section">
+                                <h3>不符合理赔条件</h3>
+                                <ul className="item-list excluded-list">
+                                  {selectedEval.decision_result.excluded_items.map((item, index) => (
+                                    <li key={index}>{typeof item === 'string' ? item : (item.description || item.name || JSON.stringify(item))}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {selectedEval.decision_result.matched_clauses && (
+                              <div className="result-section">
+                                <h3>匹配的条款</h3>
+                                <div className="markdown-content">
+                                  {typeof selectedEval.decision_result.matched_clauses === 'string' ? (
+                                    <ReactMarkdown>{selectedEval.decision_result.matched_clauses}</ReactMarkdown>
+                                  ) : Array.isArray(selectedEval.decision_result.matched_clauses) && selectedEval.decision_result.matched_clauses.length > 0 ? (
+                                    <ul className="item-list">
+                                      {selectedEval.decision_result.matched_clauses.map((clause, index) => (
+                                        <li key={index}>{clause.description || clause.name || JSON.stringify(clause)}</li>
+                                      ))}
+                                    </ul>
+                                  ) : null}
+                                </div>
+                              </div>
+                            )}
+                            {selectedEval.decision_result.reasoning && selectedEval.decision_result.reasoning.trim() !== '' && (
+                              <div className="result-section">
+                                <h3>推理过程</h3>
+                                <div className="reasoning-content">
+                                  <pre>{selectedEval.decision_result.reasoning}</pre>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="empty-state">
+                            <p>该评估尚未完成 Step 2–4，无理赔决策结果</p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

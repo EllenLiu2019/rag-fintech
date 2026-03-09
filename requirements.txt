@@ -55,3 +55,6 @@ black>=24.0.0
 
 # progress bar
 tqdm>=4.66.0
+
+# object storage (S3-compatible: AWS S3 / Alibaba Cloud OSS)
+boto3>=1.34.0

@@ -59,12 +59,6 @@ spec:
               subPath: service_conf.yaml
             - name: hf-cache
               mountPath: /app/.cache/huggingface
-            - name: s3-storage
-              mountPath: /app/repository/s3/original
-              subPath: original
-            - name: s3-storage
-              mountPath: /app/repository/s3/parsed
-              subPath: parsed
           resources:
             requests:
               cpu: "500m"
@@ -85,7 +79,7 @@ spec:
               path: /health
               port: 8001
             initialDelaySeconds: 60
-            periodSeconds: 30
+            periodSeconds: 60
             timeoutSeconds: 5
       volumes:
         - name: config-volume
@@ -94,9 +88,6 @@ spec:
         - name: hf-cache
           persistentVolumeClaim:
             claimName: hf-model-cache
-        - name: s3-storage
-          persistentVolumeClaim:
-            claimName: s3-file-storage
 
 ---
 apiVersion: v1

@@ -26,6 +26,14 @@ neo4j:
   password: ${NEO4J_PASSWORD}
   database: neo4j
 
+storage:
+  provider: oss
+  bucket: rag-fintech
+  endpoint: https://oss-cn-hangzhou.aliyuncs.com
+  access_key_id: ${OSS_ACCESS_KEY_ID}
+  access_key_secret: ${OSS_ACCESS_KEY_SECRET}
+  prefix: rag-fintech
+
 schema_path: rag/ingestion/extractor/schema/insurance.json
 
 ingestion:

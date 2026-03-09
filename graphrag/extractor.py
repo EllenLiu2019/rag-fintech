@@ -32,6 +32,8 @@ class Extractor:
         )
 
     async def chat(self, system, history):
+        logger.info(f"Chatting with system prompt: {system[:20]}..., len(history): {len(history)}")
+
         hist = deepcopy(history)
 
         # Build messages from system and history

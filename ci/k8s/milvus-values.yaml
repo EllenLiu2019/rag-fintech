@@ -2,7 +2,7 @@
 # Chart: https://zilliztech.github.io/milvus-helm/ (chart 5.x / Milvus 2.6)
 #
 # Verify chart's default values:
-#   helm show values zilliz/milvus > /tmp/milvus-default-values.yaml
+#   helm show values zilliz/milvus > tools/milvus-default-values.yaml
 #
 
 nodeSelector:

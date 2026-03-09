@@ -41,6 +41,8 @@ async def index(
 
 
 async def generate_subgraph(doc_id: str, foc: dict[int, str], callback: Callable | None = None) -> nx.DiGraph:
+    logger.info(f"Generating subgraph for doc_id={doc_id}")
+
     extractor = GraphExtractor()
     entities, relationships = await extractor(doc_id, foc)
 
@@ -79,6 +81,8 @@ async def generate_subgraph(doc_id: str, foc: dict[int, str], callback: Callable
 
 async def merge_graph(subgraph: nx.DiGraph) -> nx.DiGraph:
     # merge graph with existing graph in vector store
+    logger.info(f"Merging graph for doc_id={subgraph.graph['doc_id']}")
+
     doc_id = subgraph.graph["doc_id"]
     existing_graph = None
     vector_chunks = vector_store.query(
@@ -104,6 +108,8 @@ async def merge_graph(subgraph: nx.DiGraph) -> nx.DiGraph:
 
 
 async def persist_vector(merged_graph: nx.DiGraph):
+    logger.info(f"Persisting vector for doc_id={merged_graph.graph['doc_id']}")
+
     doc_id = merged_graph.graph["doc_id"]
     entities = []
     for _, attrs in merged_graph.nodes(data=True):
@@ -162,6 +168,8 @@ async def persist_vector(merged_graph: nx.DiGraph):
 
 
 async def align_graph(merged_graph: nx.DiGraph, root_ids: list[int]):
+    logger.info(f"Aligning graph for doc_id={merged_graph.graph['doc_id']}")
+
     # align graph with existing graph in neo4j and vector store
     graph_lock = asyncio.Lock()
     entity_alignment = EntityAlignment(merged_graph, graph_lock)
@@ -172,6 +180,8 @@ async def align_graph(merged_graph: nx.DiGraph, root_ids: list[int]):
 
 
 async def persist_graph(merged_graph: nx.DiGraph):
+    logger.info(f"Persisting graph for doc_id={merged_graph.graph['doc_id']}")
+
     entities = []
     doc_id = merged_graph.graph["doc_id"]
     for _, attrs in merged_graph.nodes(data=True):

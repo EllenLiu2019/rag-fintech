@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Callable
 import asyncio
+import threading
 from rq import get_current_job
 
 from common import get_logger
@@ -94,6 +95,10 @@ class BasePipeline(ABC):
                     )
 
             logger.info(f"Completed {self.doc_type.value} ingestion: {rag_document.document_id}")
+
+            # Debug: log active threads before asyncio.run() cleanup (non-daemon threads block executor shutdown)
+            for t in threading.enumerate():
+                logger.info(f"[Thread] {t.name} daemon={t.daemon}")
 
         except Exception as e:
             logger.error(f"Ingestion failed: {str(e)}", exc_info=True)

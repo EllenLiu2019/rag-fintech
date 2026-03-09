@@ -6,7 +6,7 @@ import asyncio
 import re
 
 from graphrag.extractor import Extractor
-from common import get_logger
+from common import get_logger, prompt_manager
 from common.constants import VECTOR_GRAPH_KB, VECTOR_GRAPH_SIMILAR_FIELDS
 from repository.vector import vector_store
 from rag.embedding import dense_embedder, sparse_embedder
@@ -53,7 +53,7 @@ class EntityAlignment(Extractor):
             return
 
         variables = {"candidates": sim_entities_prompt}
-        prompt = self.prompt_manager.get("entity_alignment", **variables)
+        prompt = prompt_manager.get("entity_alignment", **variables)
 
         async with chat_limiter:
             logger.debug(f"Acquired chat limiter, {chat_limiter._value} slots remaining")

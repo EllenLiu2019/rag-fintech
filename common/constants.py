@@ -39,5 +39,5 @@ TUPLE_DELIMITER = "<|>"
 RECORD_DELIMITER = "##"
 COMPLETION_DELIMITER = "<|COMPLETE|>"
 GRAPH_FIELD_SEP = "<SEP>"
-ENTITY_EXTRACTION_MAX = 1
+ENTITY_EXTRACTION_MAX = 0
 DEFAULT_ENTITY_TYPES = ["clause", "coverage_scope", "exclusion_category", "medical_entity"]

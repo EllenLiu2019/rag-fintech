@@ -25,7 +25,10 @@ class ClauseMatcher:
     """
 
     async def match(self, entities: List[MedicalEntity], decisions: List[HumanDecision], doc_id: str) -> Dict[str, Any]:
+        logger.info(f"Matching clauses for document: {doc_id}")
+
         clause_forest = await PersistentService.aget_clause_forest(doc_id)
+        logger.info(f"Clause forest for document: {doc_id} retrieved, size: {len(clause_forest.trees)}")
 
         tasks = [
             foc_retrieval(entities, decisions, clause_forest),
@@ -48,6 +51,8 @@ class ClauseMatcher:
         clause_forest: ClauseForest,
         vector_result: Dict[str, Any],
     ) -> Dict[str, Any]:
+        logger.info("Merging results")
+
         coverage_evidence = []
         exclusion_evidence = []
         for result in graph_result:
@@ -100,6 +105,9 @@ class ClauseMatcher:
         clause_paths = set[int]()
         for clause_id in clause_ids:
             node = clause_forest.root.reverse_find_node(clause_id)
+            if node is None:
+                logger.warning(f"Clause node not found for id={clause_id}, skipping")
+                continue
             for clause_path in node.build_clause_path().split("."):
                 clause_paths.add(int(clause_path))
 

@@ -65,7 +65,7 @@ class BasePipeline(ABC):
             if job_id and callback:
                 callback(job_id, 5, "Post-processing")
 
-            await self.post_process(rag_document)
+            await self.post_process(rag_document, **kwargs)
 
             if job_id and callback:
                 callback(job_id, 6, "Persisting")
@@ -186,7 +186,7 @@ class BasePipeline(ABC):
         pass
 
     @abstractmethod
-    async def post_process(self, rag_document: RagDocument) -> None:
+    async def post_process(self, rag_document: RagDocument, **kwargs) -> None:
         """
         - 保单：分块、向量化
         - 理赔：实体标准化

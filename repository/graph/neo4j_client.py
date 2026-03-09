@@ -216,7 +216,7 @@ class Neo4jClient:
     ):
         graph = nx.DiGraph()
 
-        with self.driver.session(database=self.database, default_access_mode=neo4j.READ_ACCESS) as session:
+        with self.driver.session(database=self.database) as session:
             rel_pattern = "|".join(rel_types)
             where_clause = "ALL(n IN nodes(path) WHERE n.doc_id = $doc_id AND n.root_id = $root_id)"
 

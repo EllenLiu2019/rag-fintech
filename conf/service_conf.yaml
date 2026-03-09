@@ -1,9 +1,9 @@
 milvus:
-  host: https://in03-f663856b627ed8e.serverless.aws-eu-central-1.cloud.zilliz.com
-  token: ${RAG_MILVUS_TOKEN}
+  host: http://localhost:19530
+  token: root:Milvus
 
 postgresql:
-  host: localhost
+  host: 101.37.237.208 #localhost
   port: 5432
   username: rag
   password: ${RAG_RDB_PASSWORD}

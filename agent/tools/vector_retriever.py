@@ -24,6 +24,8 @@ async def vector_retrieval(
     Returns:
         Dict with clause_paths and chunks
     """
+    logger.info(f"Performing vector retrieval for document: {doc_id}")
+
     # Build query from entities
     entity_names = [e.term_cn for e in entities]
     icd10cn_names = []
@@ -32,6 +34,10 @@ async def vector_retrieval(
     for decision in decisions:
         tnm_stages.append(decision.tnm_stage)
         icd10cn_names.append(decision.icd_concept_name)
+
+    logger.info(
+        f"Vector retrieval entities: {entity_names}, icd10cn_names: {icd10cn_names}, snomed_names: {snomed_names}, tnm_stages: {tnm_stages}"
+    )
 
     query_parts = []
     if entity_names:

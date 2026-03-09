@@ -19,12 +19,16 @@ EVIDENCE_TYPE_MAP = {
 TOP_K = 3
 
 
-def _achieved_threshold(score: float, k: int = 60) -> bool:
+def _achieved_threshold(score: float, k: int = 60, eps: float = 1e-6) -> bool:
     threshold = 2 / (k + TOP_K - 1)
-    return score >= threshold
+    return score >= threshold - eps
 
 
 async def _search_graph_entities(decision: HumanDecision, doc_id: str) -> List[Dict[str, Any]]:
+
+    logger.info(
+        f"Searching graph entities for document: {doc_id} with icd_concept_name: {decision.icd_concept_name} and tnm_stage: {decision.tnm_stage}"
+    )
 
     diagnosis = f"{decision.icd_concept_name}（{decision.tnm_stage}）"
 
@@ -54,10 +58,13 @@ async def _search_graph_entities(decision: HumanDecision, doc_id: str) -> List[D
             }
             search_results.append(r)
 
+    logger.info(f"Graph retrieval results length: {len(search_results)}")
     return search_results
 
 
 def _extract_evidence_from_subgraph(subgraph, entity_name: str, root_id: int) -> Dict[str, Any]:
+    logger.info(f"Extracting evidence from subgraph for entity: {entity_name} with root_id: {root_id}")
+
     evidence = {"coverage": [], "exclusion": []}
     clause_ids = set[int]()
     start_id = None
@@ -121,6 +128,8 @@ async def graph_retrieval(decisions: List[HumanDecision], doc_id: str) -> list[D
     Returns:
         List of evidence dictionaries containing coverage, exclusion, and clause_ids
     """
+    logger.info(f"Performing graph retrieval for document: {doc_id}")
+
     # Step 1: Search graph entities for all decisions in parallel
     search_tasks = [_search_graph_entities(decision, doc_id) for decision in decisions]
     all_entity_matches = await asyncio.gather(*search_tasks)
@@ -159,4 +168,5 @@ async def graph_retrieval(decisions: List[HumanDecision], doc_id: str) -> list[D
             evidence = _extract_evidence_from_subgraph(subgraph, entity_name, root_id)
             graph_evidence.append(evidence)
 
+    logger.info(f"Graph retrieval evidence length: {len(graph_evidence)}")
     return graph_evidence

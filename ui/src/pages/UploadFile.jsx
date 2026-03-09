@@ -19,6 +19,7 @@ export const UploadFile = ({ onUploadSuccess }) => {
   const [docType, setDocType] = useState('policy')       // upload: 'policy' | 'claim'
   const [listDocType, setListDocType] = useState('all')   // list filter: 'all' | 'policy' | 'claim'
   const [viewMode, setViewMode] = useState('upload') // 'upload' | 'list'
+  const [policyDocId, setPolicyDocId] = useState('')  // claim upload: linked policy doc id
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const fileInputRef = useRef(null)
 
@@ -32,6 +33,7 @@ export const UploadFile = ({ onUploadSuccess }) => {
     isUploading,
   } = useFileUpload({
     docType: docType,
+    policyDocId: policyDocId,
     onSuccess: (uploadedFile, successMessage, responseData) => {
       const fileInfo = responseData
         ? {
@@ -208,6 +210,19 @@ export const UploadFile = ({ onUploadSuccess }) => {
                 value={listDocType}
                 onChange={setListDocType}
                 options={['all', 'policy', 'claim']}
+              />
+            </div>
+          )}
+
+          {viewMode === 'upload' && docType === 'claim' && (
+            <div className="policy-doc-id-wrapper">
+              <label className="policy-doc-id-label">关联保单文档ID</label>
+              <input
+                type="text"
+                className="policy-doc-id-input"
+                value={policyDocId}
+                onChange={(e) => setPolicyDocId(e.target.value)}
+                placeholder="请输入保单文档ID，例如 policy_0308125419_88c9d1"
               />
             </div>
           )}

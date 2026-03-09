@@ -58,11 +58,12 @@ class SubgraphResumeRequest(BaseModel):
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
+    policy_doc_id: str = Query(..., description="关联的保单文档ID"),
 ):
-    logger.info(f"Received claim material upload: {file.filename}")
+    logger.info(f"Received claim material upload: {file.filename}, policy_doc_id={policy_doc_id}")
 
     try:
-        ingestion_job = await pipeline_runner(file, doc_type=DocumentType.CLAIM)
+        ingestion_job = await pipeline_runner(file, doc_type=DocumentType.CLAIM, policy_doc_id=policy_doc_id)
 
         response = UploadClaim(
             task_id=ingestion_job.job_id,

@@ -125,13 +125,16 @@ class ClaimPipeline(BasePipeline):
         missing_fields = [field for field in MANDATORY_FIELDS if not content.get(field)]
         return missing_fields
 
-    async def post_process(self, rag_document: RagDocument) -> None:
+    async def post_process(self, rag_document: RagDocument, **kwargs) -> None:
         """
         post-process: normalize medical entities with SNOMED
         """
         logger.info("Normalizing medical entities with SNOMED")
 
-        # normalize medical entities with SNOMED
+        policy_doc_id = kwargs.get("policy_doc_id", "")
+        if not policy_doc_id:
+            logger.error("policy_doc_id not provided, claim_request will have empty policy reference")
+
         claim_data = rag_document.business_data
         medical_entity = MedicalEntity(
             entity_type="diagnosis",
@@ -144,7 +147,7 @@ class ClaimPipeline(BasePipeline):
         claim_request = ClaimRequest(
             patient_id=claim_data["name"],
             patient_age=claim_data["age"],
-            policy_doc_id="policy_0119223547_a02169",
+            policy_doc_id=policy_doc_id,
             medical_entities=[medical_entity],
             claim_type="medical",
             claim_date=datetime.now(tz=timezone.utc).isoformat(),

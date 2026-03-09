@@ -12,6 +12,7 @@ import { apiBaseUrl } from '../../config/config';
 export const useFileUpload = ({
   uploadUrl = '/api/process',
   docType = 'policy', // 'policy' | 'claim'
+  policyDocId = '',   // required when docType === 'claim'
   onSuccess,
   onError,
 } = {}) => {
@@ -48,7 +49,7 @@ export const useFileUpload = ({
       // 根据 docType 选择正确的上传 URL
       let actualUrl = uploadUrl
       if (docType === 'claim') {
-        actualUrl = '/api/claim/upload'
+        actualUrl = `/api/claim/upload?policy_doc_id=${encodeURIComponent(policyDocId)}`
       } else {
         actualUrl = '/api/process'
       }
@@ -155,7 +156,7 @@ export const useFileUpload = ({
       console.groupEnd()
       uploadControllerRef.current = null
     }
-  }, [status, apiBaseUrl, uploadUrl, docType, onSuccess, onError])
+  }, [status, apiBaseUrl, uploadUrl, docType, policyDocId, onSuccess, onError])
 
   /**
    * 取消上传

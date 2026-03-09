@@ -175,6 +175,8 @@ class ClaimsOrchestrator:
         rdb_client.save(record)
 
     def _generate_decision(self, evidence: Dict[str, Any], reasoning: Dict[str, Any]) -> ClaimDecision:
+        logger.info("Generating claim decision")
+
         from agent.entity import ClaimStatus, ClaimDecision
 
         status = reasoning.get("status", ClaimStatus.UNDER_REVIEW)

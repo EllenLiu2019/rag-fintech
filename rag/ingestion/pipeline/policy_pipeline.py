@@ -85,7 +85,7 @@ class PolicyPipeline(BasePipeline):
 
         return rag_document
 
-    async def post_process(self, rag_document: RagDocument) -> None:
+    async def post_process(self, rag_document: RagDocument, **kwargs) -> None:
         logger.info("Post-processing policy: chunking and embedding")
 
         try:

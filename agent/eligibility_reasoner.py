@@ -1,6 +1,7 @@
 import json
 from typing import Dict, Any, List
 import asyncio
+import time
 
 from common import get_logger
 from common.prompt_manager import get_prompt_manager
@@ -37,16 +38,20 @@ class EligibilityReasoner:
         decisions: List[HumanDecision],
         evidence: Dict[str, Any],
     ) -> Dict[str, Any]:
+        logger.info("LLM Reasoning Start")
 
         context = self._build_reasoning_context(entities, decisions, evidence)
 
         prompt = self.prompt_manager.get("claim_reasoning", **context)
 
         try:
+            start = time.time()
             reasoning, content, tokens = await asyncio.to_thread(
                 self.llm.generate,
                 messages=[{"role": "system", "content": prompt}],
             )
+
+            logger.info(f"LLM Reasoning completed, tokens used: {tokens}, time taken: {time.time() - start} seconds")
 
             result = extract_content(content)
 

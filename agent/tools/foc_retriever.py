@@ -22,7 +22,7 @@ class FocRetriever:
     def __init__(self, model: Optional[Dict[str, Any]] = None):
         if model is None:
             registry = get_model_registry()
-            model_config = registry.get_chat_model("qa_lite")
+            model_config = registry.get_chat_model("qa_reasoner")
             model = model_config.to_dict()
 
         self.llm = chat_model[model["provider"]](
@@ -129,6 +129,7 @@ async def foc_retrieval(
     Returns:
         Dictionary containing clause_ids, reasoning, and tokens
     """
+    logger.info(f"Performing FoC retrieval with {len(clause_forest.trees)} trees")
     entity_names = set()
     icd10cn_names = set()
     tnm_stages = set()
@@ -144,7 +145,9 @@ async def foc_retrieval(
         TNM分期：{', '.join(tnm_stages)}
     """
 
-    return await asyncio.to_thread(foc_retriever.retrieve_candidate_chunks, query, clause_forest)
+    result = await asyncio.to_thread(foc_retriever.retrieve_candidate_chunks, query, clause_forest)
+    logger.info(f"FoC retrieval result: {result['clause_ids']}")
+    return result
 
 
 def _create_foc_retriever() -> FocRetriever:

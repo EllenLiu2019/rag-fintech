@@ -226,6 +226,40 @@ body {
   font-size: 0.9rem;
 }
 
+.policy-doc-id-wrapper {
+  margin-top: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.policy-doc-id-label {
+  display: block;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin-bottom: 0.35rem;
+}
+
+.policy-doc-id-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(91, 233, 255, 0.2);
+  border-radius: 0.5rem;
+  background: rgba(15, 23, 42, 0.5);
+  color: #e2e8f0;
+  font-size: 0.9rem;
+  font-family: monospace;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.policy-doc-id-input:focus {
+  border-color: rgba(91, 233, 255, 0.5);
+}
+
+.policy-doc-id-input::placeholder {
+  color: #475569;
+}
+
 .upload-card {
   border: 1px dashed rgba(148, 163, 184, 0.4);
   border-radius: 1.25rem;

@@ -3,15 +3,13 @@ import json
 from typing import Any
 from datetime import datetime, timezone
 
-from common import get_logger
+from common import get_logger, prompt_manager, model_registry
 from rag.ingestion.pipeline.base_pipeline import BasePipeline
 from rag.ingestion.parser import ParseResult
 from rag.entity import RagDocument, DocumentType
 from rag.marshaller import serialize_batch
 from rag.persistence import PersistentService
 from rag.llm.chat_model import chat_model
-from common.prompt_manager import get_prompt_manager
-from common.model_registry import get_model_registry
 from agent.entity import MedicalEntity, ClaimRequest
 
 logger = get_logger(__name__)
@@ -40,14 +38,12 @@ class ClaimPipeline(BasePipeline):
 
     def __init__(self, doc_type: DocumentType = DocumentType.CLAIM):
         super().__init__(doc_type)
-        registry = get_model_registry()
-        model_config = registry.get_chat_model("qa_reasoner")
+        model_config = model_registry.get_chat_model("qa_reasoner")
         model = model_config.to_dict()
         self.llm = chat_model[model["provider"]](
             model_name=model["model_name"],
             base_url=model["base_url"],
         )
-        self.prompt_manager = get_prompt_manager()
 
     def validate_input(self, filename: str, content_type: str):
         super().validate_input(filename, content_type)
@@ -93,7 +89,7 @@ class ClaimPipeline(BasePipeline):
         extract medical entities
         """
         text = "\n".join([page["text"] for page in pages])
-        prompt = self.prompt_manager.get("claim_extraction", text=text)
+        prompt = prompt_manager.get("claim_extraction", text=text)
         reasoning, content, tokens = await asyncio.to_thread(
             self.llm.generate,
             messages=[{"role": "system", "content": prompt}],
@@ -102,9 +98,7 @@ class ClaimPipeline(BasePipeline):
         missing_data = self._validate_content(content)
         if missing_data:
             logger.info(f"Extracting missing data: {missing_data}")
-            missing_prompt = self.prompt_manager.get(
-                "missing_data", content=content, missing_data=json.dumps(missing_data)
-            )
+            missing_prompt = prompt_manager.get("missing_data", content=content, missing_data=json.dumps(missing_data))
             history = [{"role": "system", "content": prompt}, {"role": "assistant", "content": content}]
             history.append({"role": "user", "content": missing_prompt})
             reasoning, content, tokens = await asyncio.to_thread(

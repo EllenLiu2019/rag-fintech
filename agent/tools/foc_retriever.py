@@ -3,8 +3,7 @@ import time
 from typing import Dict, Any, Optional, List
 
 from rag.llm.chat_model import chat_model
-from common import get_logger, get_model_registry
-from common.prompt_manager import get_prompt_manager
+from common import get_logger, model_registry, prompt_manager
 from rag.entity.clause_tree import ClauseForest, ClauseNode
 from repository.cache import cached
 from agent.graph_state import HumanDecision
@@ -21,15 +20,13 @@ class FocRetriever:
 
     def __init__(self, model: Optional[Dict[str, Any]] = None):
         if model is None:
-            registry = get_model_registry()
-            model_config = registry.get_chat_model("qa_reasoner")
+            model_config = model_registry.get_chat_model("qa_reasoner")
             model = model_config.to_dict()
 
         self.llm = chat_model[model["provider"]](
             model_name=model["model_name"],
             base_url=model["base_url"],
         )
-        self.prompt_manager = get_prompt_manager()
 
     def _build_foc(self, clause_forest: ClauseForest) -> str:
         def build_tree(node: ClauseNode) -> str:
@@ -48,7 +45,7 @@ class FocRetriever:
         return "\n".join(lines)
 
     def _analyze_query_with_llm(self, query: str, forest_markdown: str) -> Dict[str, Any]:
-        prompt = self.prompt_manager.get(
+        prompt = prompt_manager.get(
             "clause_selection_opt",
             clause_structure=forest_markdown,
         )

@@ -6,8 +6,7 @@ from llama_parse import LlamaParse
 
 from rag.ingestion.parser.base import BaseParser
 from rag.ingestion.parser.parser import ParseResult
-from common import get_logger
-from common.prompt_manager import get_prompt_manager
+from common import get_logger, prompt_manager
 
 logger = get_logger(__name__)
 
@@ -17,7 +16,6 @@ class PDFParser(BaseParser):
 
     supported_extensions = [".pdf"]
     supported_mime_types = ["application/pdf"]
-    prompt_manager = get_prompt_manager()
 
     def can_parse(self, filename: str, content_type: Optional[str]) -> bool:
         return filename.lower().endswith(".pdf") or (content_type and "pdf" in content_type.lower())
@@ -41,7 +39,7 @@ class PDFParser(BaseParser):
             strict_mode_reconstruction=True,
             strict_mode_buggy_font=True,
             user_prompt=None,
-            system_prompt_append=self.prompt_manager.get("parse_prompt"),
+            system_prompt_append=prompt_manager.get("parse_prompt"),
             hide_footers=True,
             preserve_very_small_text=True,
             invalidate_cache=True,

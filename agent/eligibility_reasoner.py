@@ -3,10 +3,8 @@ from typing import Dict, Any, List
 import asyncio
 import time
 
-from common import get_logger
-from common.prompt_manager import get_prompt_manager
+from common import get_logger, model_registry, prompt_manager
 from rag.llm.chat_model import chat_model
-from common import get_model_registry
 from agent.entity import MedicalEntity
 from agent.graph_state import HumanDecision
 from agent.tools.utils import extract_content
@@ -22,15 +20,13 @@ class EligibilityReasoner:
     """
 
     def __init__(self):
-        registry = get_model_registry()
-        model_config = registry.get_chat_model("qa_reasoner")
+        model_config = model_registry.get_chat_model("qa_reasoner")
         model = model_config.to_dict()
 
         self.llm = chat_model[model["provider"]](
             model_name=model["model_name"],
             base_url=model["base_url"],
         )
-        self.prompt_manager = get_prompt_manager()
 
     async def reason(
         self,
@@ -42,7 +38,7 @@ class EligibilityReasoner:
 
         context = self._build_reasoning_context(entities, decisions, evidence)
 
-        prompt = self.prompt_manager.get("claim_reasoning", **context)
+        prompt = prompt_manager.get("claim_reasoning", **context)
 
         try:
             start = time.time()

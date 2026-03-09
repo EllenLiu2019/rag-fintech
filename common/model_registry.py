@@ -3,7 +3,6 @@ from typing import Dict, Any, Optional, Literal
 from dataclasses import dataclass
 from common import file_utils, get_logger
 from common.constants import LLM_FACTORIES_CONF
-from common.decorator import singleton
 
 logger = get_logger(__name__)
 
@@ -36,7 +35,6 @@ class ModelConfig:
         return result
 
 
-@singleton
 class ModelRegistry:
     def __init__(self):
         self._chat_models: Dict[str, ModelConfig] = {}
@@ -111,3 +109,6 @@ class ModelRegistry:
 
 def get_model_registry() -> ModelRegistry:
     return ModelRegistry()
+
+
+model_registry = get_model_registry()

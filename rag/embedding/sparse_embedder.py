@@ -1,10 +1,9 @@
 from typing import Any
 import os
 
-from common import get_logger, constants
+from common import get_logger, constants, model_registry
 from common.exceptions import EmbeddingError
 from common.error_codes import ErrorCodes
-from common.model_registry import get_model_registry
 from rag.llm.embedding_model import embedding_model
 from repository.cache import cached
 
@@ -56,8 +55,7 @@ class SparseEmbedder:
 
 
 def _create_sparse_embedder(provider: str) -> SparseEmbedder:
-    registry = get_model_registry()
-    model = registry.get_embedding_model(provider)
+    model = model_registry.get_embedding_model(provider)
     return SparseEmbedder(model=model.to_dict())
 
 

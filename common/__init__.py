@@ -15,9 +15,9 @@ from .log_utils import (
 )
 from .log_middleware import setup_request_logging_middleware, request_logging_middleware
 from . import file_utils, constants
-from .model_registry import get_model_registry
+from .model_registry import model_registry
 from .converter import field_converter
-from .prompt_manager import get_prompt_manager
+from .prompt_manager import prompt_manager
 
 
 __all__ = [
@@ -36,7 +36,7 @@ __all__ = [
     # config
     "constants",
     "file_utils",
-    "get_model_registry",
+    "model_registry",
     "field_converter",
-    "get_prompt_manager",
+    "prompt_manager",
 ]

@@ -9,7 +9,6 @@ from common.decorator import singleton
 logger = get_logger(__name__)
 
 
-@singleton
 class PromptManager:
     """
     Centralized prompt management with:
@@ -92,3 +91,6 @@ class PromptManager:
 
 def get_prompt_manager() -> PromptManager:
     return PromptManager()
+
+
+prompt_manager = get_prompt_manager()

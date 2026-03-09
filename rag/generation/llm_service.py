@@ -2,8 +2,7 @@ from rag.llm.chat_model import chat_model
 from typing import List, Optional, Dict, Any, AsyncIterator
 import json
 from common.log_utils import get_logger
-from common import get_model_registry
-from common.prompt_manager import get_prompt_manager
+from common import model_registry, prompt_manager
 
 logger = get_logger(__name__)
 
@@ -15,7 +14,6 @@ class LLMService:
             model_name=model["model_name"],
             base_url=model["base_url"],
         )
-        self.prompt_manager = get_prompt_manager()
 
     def _prepare_messages(
         self,
@@ -63,7 +61,7 @@ class LLMService:
             history_text = "\n\n".join(history_parts)
 
         # user message with context and current question
-        user_content = self.prompt_manager.get(
+        user_content = prompt_manager.get(
             user_prompt_name,
             history_text=history_text,
             context_str=context_str,
@@ -71,7 +69,7 @@ class LLMService:
         )
 
         messages = [
-            {"role": "system", "content": self.prompt_manager.get(system_prompt_name)},
+            {"role": "system", "content": prompt_manager.get(system_prompt_name)},
             {"role": "user", "content": user_content},
         ]
         return messages
@@ -152,8 +150,7 @@ def _create_llm_service() -> LLMService:
     """
     Create LLMService instance at module load time.
     """
-    registry = get_model_registry()
-    model_config = registry.get_chat_model("qa_reasoner")
+    model_config = model_registry.get_chat_model("qa_reasoner")
     llm_service = LLMService(model=model_config.to_dict())
 
     logger.info("Initialized LLMService singleton")

@@ -1,7 +1,7 @@
 import json
 from typing import Any
 from rag.llm.chat_model import chat_model
-from common.prompt_manager import get_prompt_manager
+from common import prompt_manager
 
 
 class LLMExtractor:
@@ -11,11 +11,10 @@ class LLMExtractor:
             model_name=model["model_name"],
             base_url=model["base_url"],
         )
-        self.prompt_manager = get_prompt_manager()
 
     def _build_prompt(self, content: str, hints: dict = None, missing_fields: dict = None) -> str:
         fields = missing_fields or {}
-        return self.prompt_manager.get(
+        return prompt_manager.get(
             "insurance_extraction",
             hints=json.dumps(hints or {}, ensure_ascii=False),
             content=content,

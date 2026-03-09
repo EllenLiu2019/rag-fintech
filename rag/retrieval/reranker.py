@@ -2,7 +2,7 @@ import os
 from typing import Any, List, Union
 import numpy as np
 from rag.llm.rerank_model import rerank_model
-from common import constants, get_model_registry
+from common import constants, model_registry
 from common.log_utils import get_logger
 from common.exceptions import RerankError, ModelNotFoundError
 from common.error_codes import ErrorCodes
@@ -102,8 +102,7 @@ class Reranker:
 # Initialized at import time to catch configuration errors early
 def _create_reranker() -> Reranker:
     """Create reranker instance at module load time."""
-    registry = get_model_registry()
-    model_config = registry.get_reranker_model(purpose="cohere")
+    model_config = model_registry.get_reranker_model(purpose="cohere")
     return Reranker(model=model_config.to_dict())
 
 

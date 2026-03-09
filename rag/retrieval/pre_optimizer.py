@@ -3,8 +3,7 @@ import re
 from typing import Dict, Any, List, Literal, Optional
 
 from rag.llm.chat_model import chat_model
-from common import get_logger, get_model_registry
-from common.prompt_manager import get_prompt_manager
+from common import get_logger, model_registry, prompt_manager
 from repository.cache import cached
 
 logger = get_logger(__name__)
@@ -17,7 +16,6 @@ class BaseRewriter:
             base_url=model["base_url"],
         )
         self.temperature = temperature
-        self.prompt_manager = get_prompt_manager()
 
     def _build_prompt(self) -> str:
         pass
@@ -72,7 +70,7 @@ class UnifiedRewriter(BaseRewriter):
         else:
             required_section = ""
 
-        return self.prompt_manager.get("unified_rewrite", histories=history_str, required_entities=required_section)
+        return prompt_manager.get("unified_rewrite", histories=history_str, required_entities=required_section)
 
     def rewrite(self, query: str, medical_entities: Optional[List[str]] = None) -> Dict[str, Any]:
         try:
@@ -124,7 +122,7 @@ class HyDERewriter(BaseRewriter):
         super().__init__(model=model, temperature=temperature)
 
     def _build_prompt(self) -> str:
-        return self.prompt_manager.get("hyde_rewrite")
+        return prompt_manager.get("hyde_rewrite")
 
     def rewrite(self, query: str) -> Dict[str, Any]:
         try:
@@ -157,7 +155,7 @@ class MiltiQueryOptimizer(BaseRewriter):
         super().__init__(model=model)
 
     def _build_prompt(self) -> str:
-        return self.prompt_manager.get("multi_query_rewrite")
+        return prompt_manager.get("multi_query_rewrite")
 
     def rewrite(self, query: str) -> Dict[str, Any]:
         try:
@@ -394,8 +392,7 @@ class QueryOptimizer:
 
 
 def _create_query_optimizer() -> QueryOptimizer:
-    registry = get_model_registry()
-    model_config = registry.get_chat_model("query_lite")
+    model_config = model_registry.get_chat_model("query_lite")
     query_optimizer = QueryOptimizer(model=model_config.to_dict())
 
     logger.info("Initialized QueryOptimizer singleton")

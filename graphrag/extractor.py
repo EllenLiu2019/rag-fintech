@@ -4,8 +4,7 @@ from collections import Counter, defaultdict
 from copy import deepcopy
 from typing import Any, Callable
 import time
-from common import get_logger, get_model_registry
-from common.prompt_manager import get_prompt_manager
+from common import get_logger, model_registry, prompt_manager
 from common.constants import GRAPH_FIELD_SEP, DEFAULT_ENTITY_TYPES
 from graphrag.utils import (
     chat_limiter,
@@ -24,15 +23,13 @@ logger = get_logger(__name__)
 class Extractor:
 
     def __init__(self):
-        registry = get_model_registry()
-        model_config = registry.get_chat_model("qa_reasoner")
+        model_config = model_registry.get_chat_model("qa_reasoner")
         model = model_config.to_dict()
 
         self.llm = chat_model[model["provider"]](
             model_name=model["model_name"],
             base_url=model["base_url"],
         )
-        self.prompt_manager = get_prompt_manager()
 
     async def chat(self, system, history):
         hist = deepcopy(history)
@@ -258,7 +255,7 @@ class Extractor:
             entity_name=entity_or_relation_name,
             description_list=description_list,
         )
-        use_prompt = self.prompt_manager.get("summarize_descriptions", **context_base)
+        use_prompt = prompt_manager.get("summarize_descriptions", **context_base)
         logger.info(f"Trigger summary: {entity_or_relation_name}")
 
         async with chat_limiter:

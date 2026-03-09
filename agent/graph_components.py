@@ -19,7 +19,7 @@ from langgraph.store.postgres.aio import AsyncPostgresStore
 
 from agent.entity import MedicalEntity
 from agent.graph_state import MedicalState, Step, AgentOutput
-from common import get_model_registry
+from common import model_registry
 from common.config_utils import get_base_config
 
 
@@ -45,7 +45,7 @@ class GraphComponents:
         self.async_checkpointer: AsyncPostgresSaver | None = None
         self.async_store: AsyncPostgresStore | None = None
 
-        model_config = get_model_registry().get_chat_model("qa_lite").to_dict()
+        model_config = model_registry.get_chat_model("qa_lite").to_dict()
         self.configurable_model = init_chat_model(
             model=model_config["model_name"],
             model_provider=model_config["provider"],

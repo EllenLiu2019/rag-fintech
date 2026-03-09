@@ -4,7 +4,7 @@ import time
 from typing import List, Any, Optional
 
 from rag.llm.embedding_model import embedding_model
-from common import constants, get_logger, get_model_registry
+from common import constants, get_logger, model_registry
 from common.exceptions import EmbeddingError
 from common.error_codes import ErrorCodes
 from repository.cache import redis_client, cached
@@ -139,8 +139,7 @@ class DenseEmbedder:
 
 
 def _create_dense_embedder() -> DenseEmbedder:
-    registry = get_model_registry()
-    model_config = registry.get_embedding_model("dense")
+    model_config = model_registry.get_embedding_model("dense")
     dense_embedder = DenseEmbedder(model=model_config.to_dict())
     logger.info("Initialized dense embedder singleton")
     return dense_embedder

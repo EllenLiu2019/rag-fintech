@@ -10,7 +10,7 @@ from typing import Any
 import networkx as nx
 from dataclasses import dataclass
 
-from common import get_logger
+from common import get_logger, prompt_manager
 from graphrag.extractor import Extractor
 from graphrag.utils import chat_limiter, split_string_by_multi_markers
 from common.constants import (
@@ -61,7 +61,7 @@ class GraphExtractor(Extractor):
             **self.prompt_variables,
             "input_text": clause_text,
         }
-        hint_prompt = self.prompt_manager.get("graph_extraction", **variables)
+        hint_prompt = prompt_manager.get("graph_extraction", **variables)
         async with chat_limiter:
             logger.debug(f"Acquired chat limiter, {chat_limiter._value} slots remaining")
             response, tokens = await self.chat(hint_prompt, [{"role": "user", "content": "Output:"}])
@@ -72,7 +72,7 @@ class GraphExtractor(Extractor):
         total_tokens = tokens
         # Repeat to ensure we maximize entity count
         # for i in range(self.max_extraction):
-        #     history.append({"role": "user", "content": self.prompt_manager.get("continue_prompt")})
+        #     history.append({"role": "user", "content": prompt_manager.get("continue_prompt")})
         #     async with chat_limiter:
         #         logger.debug(f"Acquired chat limiter, {chat_limiter._value} slots remaining")
         #         response, tokens = await self.chat("", history)
@@ -83,7 +83,7 @@ class GraphExtractor(Extractor):
         #     if i >= self.max_extraction - 1:
         #         break
         #     history.append({"role": "assistant", "content": response})
-        #     history.append({"role": "user", "content": self.prompt_manager.get("loop_prompt")})
+        #     history.append({"role": "user", "content": prompt_manager.get("loop_prompt")})
         #     async with chat_limiter:
         #         logger.debug(f"Acquired chat limiter, {chat_limiter._value} slots remaining")
         #         continuation, tokens = await self.chat("", history)

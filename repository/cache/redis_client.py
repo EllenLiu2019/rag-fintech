@@ -1,6 +1,5 @@
 import hashlib
 import pickle
-import socket
 from typing import Any, Optional, Callable
 from functools import wraps
 import inspect
@@ -37,7 +36,6 @@ class RedisClient:
                 username=redis_config.get("username"),
                 password=redis_config.get("password"),
                 decode_responses=redis_config.get("decode_responses", False),  # Must be False for pickle serialization
-                socket_keepalive=True,
             )
             self.client.ping()
             queue_name = redis_config.get("queue_name", "default")

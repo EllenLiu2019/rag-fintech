@@ -43,7 +43,7 @@ spec:
             - name: PYTHONDONTWRITEBYTECODE
               value: "1"
             - name: RQ_WORKER_CLASS
-              value: "fork"
+              value: "simple"
             - name: LANGSMITH_TRACING
               value: "true"
             - name: LANGSMITH_ENDPOINT

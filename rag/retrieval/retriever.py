@@ -1,3 +1,4 @@
+import time
 from typing import Optional, Dict, Any, List, Literal, Tuple
 import asyncio
 
@@ -98,12 +99,13 @@ class Retriever:
 
         dense_vectors, sparse_vectors = await self._embed_queries(optimized_queries)
 
+        start = time.time()
         if mode == "hybrid":
             results = await self._hybrid_search(dense_vectors, sparse_vectors, top_k, kb_id, filters)
         elif mode == "dense":
             results = await self._dense_search(dense_vectors, top_k, kb_id, filters)
 
-        logger.info(f"Found {len(results) if results else 0} results.")
+        logger.info(f"Found {len(results[0]) if results else 0} results in {time.time() - start} seconds")
 
         return results
 

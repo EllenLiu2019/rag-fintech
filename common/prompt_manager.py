@@ -4,7 +4,6 @@ from pathlib import Path
 from jinja2 import Template
 
 from common import file_utils, get_logger
-from common.decorator import singleton
 
 logger = get_logger(__name__)
 

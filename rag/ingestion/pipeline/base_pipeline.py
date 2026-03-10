@@ -90,9 +90,7 @@ class BasePipeline(ABC):
                     )
                     logger.info(f"Enqueued graph build job: {graph_job_id}")
                 elif kwargs.get("graph_enabled", False):
-                    logger.warning(
-                        f"Skipping graph build: clause_forest is empty for {rag_document.document_id}"
-                    )
+                    logger.warning(f"Skipping graph build: clause_forest is empty for {rag_document.document_id}")
 
             logger.info(f"Completed {self.doc_type.value} ingestion: {rag_document.document_id}")
 

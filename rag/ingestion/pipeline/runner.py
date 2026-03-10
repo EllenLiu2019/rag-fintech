@@ -82,6 +82,7 @@ class PipelineRunner:
 def _failed_job(filename: str, error: str):
     """Create a failed IngestionJob for batch error reporting."""
     from rag.ingestion.tasks import IngestionJob
+
     return IngestionJob(status="failed", error=f"[{filename}] {error}")
 
 

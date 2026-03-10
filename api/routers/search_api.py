@@ -49,7 +49,9 @@ async def search_docs(request: SearchRequest):
         logger.warning("Empty query provided, returning empty results")
         return {}
 
-    logger.info(f"Received search request: query='{request.query}', kb_id='{request.kb_id}', top_k={request.top_k}")
+    logger.info(
+        f"Received search request: query='{request.query}', kb_id='{request.kb_id}', top_k={request.top_k}, mode={request.mode}, foc_enhance={request.foc_enhance}"
+    )
 
     # Let RetrievalError propagate to global handler
     results = await retriever.search(
@@ -58,7 +60,7 @@ async def search_docs(request: SearchRequest):
         top_k=request.top_k,
         filters=request.filters,
         mode=request.mode,
-        foc_enhance=request.foc_enhance,
+        foc_enhance=False,  # request.foc_enhance,
     )
 
     formatted_results = results or {

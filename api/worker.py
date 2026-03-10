@@ -1,8 +1,5 @@
-import os
-import socket
-
 from redis import Redis
-from rq.worker import SimpleWorker, Worker
+from rq.worker import SimpleWorker
 
 from common.config_utils import get_base_config
 from common import get_logger, init_root_logger
@@ -20,18 +17,12 @@ def main():
         username=redis_config.get("username"),
         password=redis_config.get("password"),
         decode_responses=False,
-        socket_keepalive=True,
     )
+
     queue_name = redis_config.get("queue_name")
+    logger.info(f"Starting RQ worker on queue: {queue_name}")
 
-    worker_mode = os.getenv("RQ_WORKER_CLASS", "simple")
-    if worker_mode == "fork":
-        worker_class = Worker
-    else:
-        worker_class = SimpleWorker
-
-    logger.info(f"Starting RQ worker: class={worker_class.__name__}, queue={queue_name}")
-    worker = worker_class([queue_name], connection=redis_conn)
+    worker = SimpleWorker([queue_name], connection=redis_conn)
     worker.work(with_scheduler=True)
 
 

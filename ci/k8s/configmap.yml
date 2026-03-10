@@ -48,3 +48,6 @@ data:
 
     ingestion:
       extractor_model: qa_lite
+
+    search:
+      query_optimizer: qa_lite

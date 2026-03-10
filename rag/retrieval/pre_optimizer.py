@@ -4,6 +4,7 @@ from typing import Dict, Any, List, Literal, Optional
 
 from rag.llm.chat_model import chat_model
 from common import get_logger, model_registry, prompt_manager
+from common.config_utils import get_base_config
 from repository.cache import cached
 
 logger = get_logger(__name__)
@@ -392,7 +393,9 @@ class QueryOptimizer:
 
 
 def _create_query_optimizer() -> QueryOptimizer:
-    model_config = model_registry.get_chat_model("query_lite")
+    search_config = get_base_config("search", {})
+    model_name = search_config.get("query_optimizer", "query_lite")
+    model_config = model_registry.get_chat_model(model_name)
     query_optimizer = QueryOptimizer(model=model_config.to_dict())
 
     logger.info("Initialized QueryOptimizer singleton")

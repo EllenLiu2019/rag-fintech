@@ -11,4 +11,4 @@ spec:
   storageClassName: alibabacloud-cnfs-nas
   resources:
     requests:
-      storage: 10Gi
+      storage: 30Gi

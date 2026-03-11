@@ -76,6 +76,7 @@ jobs:
           for f in ci/k8s/api-deployment.yml \
                    ci/k8s/worker-deployment.yml \
                    ci/k8s/ui.yml \
+                   ci/k8s/vllm-deployment.yml \
                    ci/k8s/ingress.yml; do
             envsubst '${IMAGE_REGISTRY} ${IMAGE_TAG}' < "${f}" | kubectl apply -f -
           done
@@ -83,5 +84,6 @@ jobs:
       # ── 8. Wait for rollout ───────────────────────────────────────────────────
       - name: Wait for rollout
         run: |
+          kubectl rollout status deployment/vllm       -n production --timeout=600s
           kubectl rollout status deployment/rag-api    -n production --timeout=600s
           kubectl rollout status deployment/rag-worker -n production --timeout=600s

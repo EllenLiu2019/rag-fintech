@@ -50,4 +50,4 @@ data:
       extractor_model: qa_lite
 
     search:
-      query_optimizer: qa_lite
+      query_optimizer: qwen_8B

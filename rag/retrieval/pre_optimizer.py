@@ -1,6 +1,7 @@
 import json
 import re
 from typing import Dict, Any, List, Literal, Optional
+import time
 
 from rag.llm.chat_model import chat_model
 from common import get_logger, model_registry, prompt_manager
@@ -76,6 +77,7 @@ class UnifiedRewriter(BaseRewriter):
     def rewrite(self, query: str, medical_entities: Optional[List[str]] = None) -> Dict[str, Any]:
         try:
 
+            start = time.time()
             reasoning, content, tokens = self.llm.generate(
                 messages=[
                     {"role": "system", "content": self._build_prompt(medical_entities)},
@@ -83,6 +85,7 @@ class UnifiedRewriter(BaseRewriter):
                 ],
                 temperature=self.temperature,
             )
+            logger.info(f"Unified rewrite time taken: {time.time() - start} seconds, tokens: {tokens}")
 
             rewritten = self._clean_response(content)
 
@@ -323,7 +326,7 @@ class QueryOptimizer:
         self.hyde_rewriter = HyDERewriter(model=model)
         self.multi_query_rewriter = MiltiQueryOptimizer(model=model)
 
-    @cached(prefix="optimize", ttl=3600)
+    # @cached(prefix="optimize", ttl=3600)
     def optimize(
         self, query: str, mode: Literal["unified", "hyde", "multi"] = "unified", use_snomed_enhancement: bool = True
     ) -> Dict[str, Any]:

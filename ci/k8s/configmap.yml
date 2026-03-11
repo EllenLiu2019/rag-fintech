@@ -47,7 +47,7 @@ data:
     schema_path: rag/ingestion/extractor/schema/insurance.json
 
     ingestion:
-      extractor_model: qa_lite
+      extractor_model: qwen_8B
 
     search:
       query_optimizer: qwen_8B

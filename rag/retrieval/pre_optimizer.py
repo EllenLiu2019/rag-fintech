@@ -26,7 +26,7 @@ class BaseRewriter:
         if not content:
             return ""
 
-        result = content.strip()
+        result = re.sub(r"<think>[\s\S]*?</think>", "", content).strip()
 
         # Remove quotes if present
         if (result.startswith('"') and result.endswith('"')) or (result.startswith("'") and result.endswith("'")):
@@ -46,7 +46,7 @@ class BaseRewriter:
         if not content:
             return []
 
-        result = content.strip()
+        result = re.sub(r"<think>[\s\S]*?</think>", "", content).strip()
         results = result.split("\n")
         return [self._clean_response(result) for result in results]
 
@@ -88,14 +88,6 @@ class UnifiedRewriter(BaseRewriter):
             logger.info(f"Unified rewrite time taken: {time.time() - start} seconds, tokens: {tokens}")
 
             rewritten = self._clean_response(content)
-
-            # if medical_entities:
-            #     missing = [ent for ent in medical_entities if ent not in rewritten]
-            #     if missing:
-            #         logger.warning(f"Missing entities in rewritten query: {missing}")
-            #         # Append missing entities to the rewritten query
-            #         rewritten = rewritten + " " + " ".join(missing)
-            #         logger.info(f"Appended missing entities: '{rewritten}'")
 
             self.histories.append(query)
 

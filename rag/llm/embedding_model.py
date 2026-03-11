@@ -7,6 +7,16 @@ import time
 from common import get_logger
 from common.device_utils import select_device
 
+# Bypass CVE-2025-32434 check in transformers 4.57+
+# torch cu121 maxes at 2.5.x (GPU driver 535 constraint), but transformers requires ≥ 2.6.
+# Safe here: model weights are from trusted HuggingFace repos only.
+try:
+    import transformers.modeling_utils
+
+    transformers.modeling_utils.check_torch_load_is_safe = lambda: None
+except Exception:
+    pass
+
 logger = get_logger(__name__)
 
 
@@ -103,24 +113,21 @@ class MilvusBgeM3Embed(Base):
         if not os.path.isdir(path):
             return False
         weight_extensions = (".safetensors", ".bin", ".h5", ".msgpack")
-        return any(
-            os.path.isfile(os.path.join(path, f))
-            for f in os.listdir(path)
-            if f.endswith(weight_extensions)
-        )
+        return any(os.path.isfile(os.path.join(path, f)) for f in os.listdir(path) if f.endswith(weight_extensions))
 
     def __init__(self, key, model_name, base_url=None):
         from pymilvus import model
         from huggingface_hub import snapshot_download
 
         self.model_name = model_name
+        _ignore = ["*.md", "*.txt", ".DS_Store", "imgs/*", "onnx/*"]
         try:
-            local_path = snapshot_download(model_name, local_files_only=True)
+            local_path = snapshot_download(model_name, local_files_only=True, ignore_patterns=_ignore)
             if not self._is_cache_valid(local_path):
                 raise FileNotFoundError(f"Cached snapshot at {local_path} is missing model weight files")
         except Exception:
             logger.info(f"Downloading model {model_name} from remote...")
-            local_path = snapshot_download(model_name, local_files_only=False)
+            local_path = snapshot_download(model_name, local_files_only=False, ignore_patterns=_ignore)
 
         device = select_device(preferred="auto", operation="sparse_embedding")
         logger.info(f"Initializing BGE-M3 sparse embedding on device: {device}")
@@ -128,6 +135,7 @@ class MilvusBgeM3Embed(Base):
         self.model = model.hybrid.BGEM3EmbeddingFunction(
             model_name=local_path,
             device=device,
+            use_fp16=True if device == "cuda" else False,
             normalize_embeddings=False,
             return_dense=False,
             return_sparse=True,

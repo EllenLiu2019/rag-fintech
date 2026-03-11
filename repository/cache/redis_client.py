@@ -239,11 +239,11 @@ def cached(
             # Try to get from cache
             cached_value = redis_client.get(cache_key)
             if cached_value is not None:
-                logger.info(f"Cache hit: {cache_key}")
+                logger.debug(f"Cache hit: {cache_key}")
                 return cached_value
 
             # Cache miss - call function
-            logger.info(f"Cache miss: {cache_key}")
+            logger.debug(f"Cache miss: {cache_key}")
             result = func(*args, **kwargs)
 
             # Store in cache

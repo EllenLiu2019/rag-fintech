@@ -9,10 +9,7 @@ metadata:
 spec:
   replicas: 1
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 25%
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/component: api
@@ -64,13 +61,13 @@ spec:
           resources:
             requests:
               cpu: "500m"
-              memory: "1Gi"
+              memory: "2Gi"
               nvidia.com/gpu: "1"
               nvidia.com/gpumem: 3072
               nvidia.com/gpucores: 15
             limits:
               cpu: "1000m"
-              memory: "3Gi"
+              memory: "6Gi"
               nvidia.com/gpu: "1"
               nvidia.com/gpumem: 3072
               nvidia.com/gpucores: 15

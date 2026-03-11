@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/component: vllm
     spec:
       terminationGracePeriodSeconds: 60
+      imagePullSecrets:
+        - name: acr-secret
       nodeSelector:
         aliyun.accelerator/xpu_type: nvidia
       containers:
@@ -54,13 +56,13 @@ spec:
               cpu: "2"
               memory: "8Gi"
               nvidia.com/gpu: "1"
-              nvidia.com/gpumem: 40960
+              nvidia.com/gpumem: 38912
               nvidia.com/gpucores: 70  
             limits:
               cpu: "5"
               memory: "24Gi"
               nvidia.com/gpu: "1"
-              nvidia.com/gpumem: 40960
+              nvidia.com/gpumem: 38912
               nvidia.com/gpucores: 70  
           startupProbe:
             httpGet:

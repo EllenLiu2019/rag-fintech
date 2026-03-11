@@ -13,7 +13,7 @@ COPY pyproject.toml ./
 RUN mkdir -p api agent benchmark common graphrag rag repository && \
     touch api/__init__.py agent/__init__.py benchmark/__init__.py \
           common/__init__.py graphrag/__init__.py rag/__init__.py repository/__init__.py
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu121 && \
     pip install --no-cache-dir .
 
 # ---------- Stage 2: Runtime ----------

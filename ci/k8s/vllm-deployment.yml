@@ -24,7 +24,7 @@ spec:
         aliyun.accelerator/xpu_type: nvidia
       containers:
         - name: vllm
-          image: docker.m.daocloud.io/vllm/vllm-openai:v0.8.4
+          image: ${IMAGE_REGISTRY}/vllm:v0.8.4
           ports:
             - containerPort: 8000
               protocol: TCP

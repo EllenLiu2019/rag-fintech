@@ -25,6 +25,8 @@ spec:
       terminationGracePeriodSeconds: 30
       imagePullSecrets:
         - name: acr-secret
+      nodeSelector:
+        aliyun.accelerator/xpu_type: nvidia
       containers:
         - name: api
           image: ${IMAGE_REGISTRY}/rag-fintech:${IMAGE_TAG}
@@ -63,9 +65,15 @@ spec:
             requests:
               cpu: "500m"
               memory: "1Gi"
+              nvidia.com/gpu: "1"
+              nvidia.com/gpumem: 3072
+              nvidia.com/gpucores: 15
             limits:
               cpu: "1000m"
               memory: "3Gi"
+              nvidia.com/gpu: "1"
+              nvidia.com/gpumem: 3072
+              nvidia.com/gpucores: 15
           readinessProbe:
             httpGet:
               path: /health

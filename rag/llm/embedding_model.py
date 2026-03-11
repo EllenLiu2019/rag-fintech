@@ -5,6 +5,7 @@ import numpy as np
 import time
 
 from common import get_logger
+from common.device_utils import select_device
 
 logger = get_logger(__name__)
 
@@ -120,9 +121,13 @@ class MilvusBgeM3Embed(Base):
         except Exception:
             logger.info(f"Downloading model {model_name} from remote...")
             local_path = snapshot_download(model_name, local_files_only=False)
+
+        device = select_device(preferred="auto", operation="sparse_embedding")
+        logger.info(f"Initializing BGE-M3 sparse embedding on device: {device}")
+
         self.model = model.hybrid.BGEM3EmbeddingFunction(
             model_name=local_path,
-            device="cpu",
+            device=device,
             normalize_embeddings=False,
             return_dense=False,
             return_sparse=True,

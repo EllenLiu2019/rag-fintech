@@ -36,11 +36,14 @@ spec:
             - --port
             - "8000"
             - --max-model-len
-            - "8192"
+            - "4096"
             - --gpu-memory-utilization
             - "0.95"
             - --dtype
             - auto
+            - --max-num-seqs
+            - "16"
+            - --disable-log-stats
           env:
             - name: HF_HOME
               value: "/models"

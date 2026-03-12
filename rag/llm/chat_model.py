@@ -318,6 +318,47 @@ class VLLm(LLM):
             base_url=base_url,
         )
 
+    def generate(
+        self,
+        messages: Optional[List[Dict[str, str]]] = None,
+        prompt: Optional[str] = None,
+        temperature: float = 0,
+        max_tokens: Optional[int] = None,
+        enable_thinking: bool = False,
+    ) -> tuple[str, str, int]:
+        if messages is None and prompt is None:
+            raise ValueError("Either 'messages' or 'prompt' must be provided")
+
+        if messages is not None:
+            final_messages = messages
+        else:
+            final_messages = [{"role": "user", "content": prompt}]
+
+        params = {
+            "model": self.model_name,
+            "messages": final_messages,
+            "temperature": temperature,
+            "stream": False,
+            "extra_body": {
+                "chat_template_kwargs": {"enable_thinking": enable_thinking},
+            },
+        }
+        if max_tokens is not None:
+            params["max_tokens"] = max_tokens
+
+        try:
+            response = self.client.chat.completions.create(**params)
+            message = response.choices[0].message
+            reasoning_content = getattr(message, "reasoning_content", None)
+            return (
+                reasoning_content,
+                message.content,
+                response.usage.total_tokens,
+            )
+        except Exception as e:
+            logger.error(f"VLLm.generate error: {type(e).__name__}: {e}", exc_info=True)
+            raise
+
 
 # Provider -> Class mapping
 chat_model = {

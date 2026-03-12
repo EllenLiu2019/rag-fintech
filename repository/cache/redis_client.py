@@ -55,7 +55,7 @@ class RedisClient:
         key_parts.extend(f"{k}={v}" for k, v in sorted(kwargs.items()))
         key_str = "|".join(key_parts)
 
-        logger.info(f"Key string: {key_str[:100]}")
+        logger.debug(f"Key string: {key_str[:100]}")
 
         # Hash to create fixed-length key
         key_hash = hashlib.md5(key_str.encode()).hexdigest()

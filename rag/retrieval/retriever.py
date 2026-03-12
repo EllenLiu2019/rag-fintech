@@ -118,7 +118,7 @@ class Retriever:
         filters: Optional[Dict] = None,
     ) -> List[Dict[str, Any]]:
         """Dense vector search."""
-        logger.info(f"Dense vector search: {dense_vectors} in {kb_id} with filters: {filters}")
+        logger.info(f"Dense vector search with filters: {filters}")
 
         try:
             return await asyncio.to_thread(
@@ -148,7 +148,7 @@ class Retriever:
         filters: Optional[Dict] = None,
     ) -> List[Dict[str, Any]]:
         """Hybrid search (dense + sparse)."""
-        logger.info(f"Hybrid vector search: {dense_vectors} in {kb_id} with filters: {filters}")
+        logger.info(f"Hybrid vector search with filters: {filters}")
 
         try:
             return await asyncio.to_thread(

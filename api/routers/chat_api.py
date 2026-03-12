@@ -25,7 +25,7 @@ class ChatRequest(BaseModel):
     stream: bool = True
     generation_config: Optional[dict] = {}
     mode: Literal["dense", "hybrid"] = "dense"
-    foc_enhance: bool = True
+    foc_enhance: Optional[bool] = None
 
 
 class ChatResponse(BaseModel):
@@ -35,6 +35,7 @@ class ChatResponse(BaseModel):
     reasoning: Optional[str] = None
     sources: List[dict] = []
     tokens: Optional[int] = None
+    intent: Optional[str] = None
     foc_data: Optional[dict] = None
 
 
@@ -96,6 +97,7 @@ async def chat_qa(
         reasoning=reasoning,
         sources=retrieved_res["results"],
         tokens=tokens,
+        intent=retrieved_res.get("intent"),
         foc_data=retrieved_res.get("foc_data"),
     )
 
@@ -130,7 +132,9 @@ async def chat_qa_stream(
                 foc_enhance=request.foc_enhance,
             )
 
-            # 2. Send chunks and foc_data
+            # 2. Send intent, chunks and foc_data
+            if retrival_res.get("intent"):
+                yield f"data: {json.dumps({'type': 'intent', 'data': retrival_res['intent']}, ensure_ascii=False)}\n\n"
             if retrival_res["results"]:
                 yield f"data: {json.dumps({'type': 'chunks', 'data': retrival_res['results']}, ensure_ascii=False)}\n\n"
                 if retrival_res.get("foc_data"):

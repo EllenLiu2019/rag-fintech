@@ -289,6 +289,24 @@ class RAGEvaluator:
                     finally:
                         pbar.update(1)
 
+        # Compute intent accuracy
+        intent_total = 0
+        intent_correct = 0
+        for sample in samples:
+            expected = sample.get("type")
+            predicted = sample.get("predicted_intent")
+            if expected and predicted:
+                intent_total += 1
+                if expected == predicted:
+                    intent_correct += 1
+        if intent_total > 0:
+            stats["intent_accuracy"] = round(intent_correct / intent_total, 4)
+            stats["intent_total"] = intent_total
+            stats["intent_correct"] = intent_correct
+            logger.info(
+                f"Intent accuracy: {intent_correct}/{intent_total} = {stats['intent_accuracy']:.2%}"
+            )
+
         logger.info(f"Saving results to: {eval_file}")
         try:
             with open(eval_file, "w", encoding="utf-8") as f:
@@ -323,7 +341,6 @@ class RAGEvaluator:
             logger.info(f"[{index}/{total}] Processing: {question[:50]}...")
 
         try:
-            # Retrieve documents (retriever.search is now async)
             search_result = asyncio.run(
                 retriever.search(
                     query=question,
@@ -331,11 +348,12 @@ class RAGEvaluator:
                     top_k=5,
                     filters=filters,
                     mode="hybrid",
-                    foc_enhance=True if sample.get("type") == "logic" else False,
                 )
             )
 
-            # Update retrieved_docs
+            predicted_intent = search_result.get("intent", "fact")
+            sample["predicted_intent"] = predicted_intent
+
             retrieved = search_result.get("results", [])
             filtered_retrieved = [chunk for chunk in retrieved if chunk.get("score", 0.1) > 0.0]
             retrieved_docs = []
@@ -345,9 +363,13 @@ class RAGEvaluator:
             sample["retrieved_docs"] = retrieved_docs
 
             if index is not None:
-                logger.info(f"  [{index}/{total}] Retrieved {len(filtered_retrieved)} validate documents")
+                expected_type = sample.get("type", "unknown")
+                match = "OK" if predicted_intent == expected_type else "MISMATCH"
+                logger.info(
+                    f"  [{index}/{total}] Retrieved {len(filtered_retrieved)} documents, "
+                    f"intent: {predicted_intent} vs expected: {expected_type} [{match}]"
+                )
 
-            # Generate answer
             query_to_use = search_result.get("query_to_use", question)
             generation_result = llm_service.answer_question(
                 question=query_to_use,

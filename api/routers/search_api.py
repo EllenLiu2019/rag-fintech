@@ -21,7 +21,7 @@ class SearchRequest(BaseModel):
     top_k: int = 5
     filters: dict
     mode: Literal["dense", "hybrid"] = "dense"
-    foc_enhance: bool = True
+    foc_enhance: Optional[bool] = None
 
 
 class SearchResponse(BaseModel):
@@ -60,7 +60,7 @@ async def search_docs(request: SearchRequest):
         top_k=request.top_k,
         filters=request.filters,
         mode=request.mode,
-        foc_enhance=False,  # request.foc_enhance,
+        foc_enhance=request.foc_enhance,
     )
 
     formatted_results = results or {

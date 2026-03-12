@@ -55,11 +55,26 @@ class Retriever:
                 details={"query": query, "error": str(e)},
             ) from e
 
-        foc_enhance = params.pop("foc_enhance", False)
-        if foc_enhance:
-            doc_id = filters.get("doc_id")
-            clause_forest = await PersistentService.aget_clause_forest(doc_id)
+        foc_override = params.pop("foc_enhance", None)
+        intent = opt_query.get("intent", "fact")
 
+        use_foc = False
+        relevant_foc = None
+        foc_data = None
+
+        if foc_override is False:
+            use_foc = False
+        elif foc_override is True or intent == "logic":
+            doc_id = filters.get("doc_id") if filters else None
+            if doc_id:
+                clause_forest = await PersistentService.aget_clause_forest(doc_id)
+                use_foc = clause_forest is not None and bool(clause_forest.root.children)
+            if not use_foc and intent == "logic":
+                logger.info("Intent is 'logic' but no clause forest available, falling back to vector search")
+
+        logger.info(f"Routing: intent={intent}, foc_override={foc_override}, use_foc={use_foc}")
+
+        if use_foc:
             foc_task = asyncio.to_thread(self._retrieve_foc_result, query, kb_id, clause_forest)
             vector_task = self._retrieve_vector_results(opt_query["optimized_queries"], kb_id, top_k, filters, mode)
             foc_results, vector_results = await asyncio.gather(foc_task, vector_task)
@@ -76,8 +91,9 @@ class Retriever:
             "results": results,
             "query_to_use": opt_query["query_to_use"],
             "snomed_entities": opt_query.get("snomed_entities", {}),
-            "relevant_foc": relevant_foc if foc_enhance else None,
-            "foc_data": foc_data if foc_enhance else None,
+            "intent": intent,
+            "relevant_foc": relevant_foc,
+            "foc_data": foc_data,
         }
 
     def _retrieve_foc_result(self, query: str, kb_id: str, clause_forest: ClauseForest) -> Dict[str, Any]:

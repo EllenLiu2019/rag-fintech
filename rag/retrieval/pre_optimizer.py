@@ -74,9 +74,25 @@ class UnifiedRewriter(BaseRewriter):
 
         return prompt_manager.get("unified_rewrite", histories=history_str, required_entities=required_section)
 
+    def _parse_rewrite_response(self, content: str) -> Dict[str, str]:
+        cleaned = re.sub(r"<think>[\s\S]*?</think>", "", content).strip()
+        cleaned = cleaned.replace("```json", "").replace("```", "").strip()
+        try:
+            parsed = json.loads(cleaned)
+            intent = parsed.get("intent", "fact")
+            query = parsed.get("query", "")
+            if intent not in ("fact", "logic"):
+                intent = "fact"
+            if not query:
+                raise ValueError("empty query in JSON response")
+            return {"intent": intent, "query": query}
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"Failed to parse rewrite JSON ({e}), falling back to plain text")
+            fallback = self._clean_response(cleaned)
+            return {"intent": "fact", "query": fallback or content.strip()}
+
     def rewrite(self, query: str, medical_entities: Optional[List[str]] = None) -> Dict[str, Any]:
         try:
-
             start = time.time()
             reasoning, content, tokens = self.llm.generate(
                 messages=[
@@ -87,13 +103,13 @@ class UnifiedRewriter(BaseRewriter):
             )
             logger.info(f"Unified rewrite time taken: {time.time() - start} seconds, tokens: {tokens}")
 
-            rewritten = self._clean_response(content)
-
+            parsed = self._parse_rewrite_response(content)
             self.histories.append(query)
 
-            logger.info(f"Query rewritten: '{query}' -> '{rewritten}'")
+            logger.info(f"Query rewritten: '{query}' -> '{parsed['query']}' (intent: {parsed['intent']})")
             return {
-                "rewritten_query": rewritten,
+                "rewritten_query": parsed["query"],
+                "intent": parsed["intent"],
                 "medical_entities": medical_entities,
                 "tokens": tokens,
             }
@@ -102,6 +118,7 @@ class UnifiedRewriter(BaseRewriter):
             logger.error(f"Query rewrite failed: {e}", exc_info=True)
             return {
                 "rewritten_query": query,
+                "intent": "fact",
                 "medical_entities": [],
                 "tokens": 0,
             }
@@ -340,26 +357,14 @@ class QueryOptimizer:
         optimized_queries = []
         tokens = 0
         snomed_entities = {}
+        intent = "fact"
 
         if mode == "unified":
-            # Extract and standardize entities using SNOMED
-            # snomed_entities = self.glossary_injector.ner(query)
-            # if use_snomed_enhancement and snomed_entities:
-            #     query_to_use = self.glossary_injector.inject(query, snomed_entities)
-
-            # # Rewrite query with entity constraints
-            # if snomed_entities:
-            #     entities = snomed_entities.keys()
-            # else:
-            #     entities = []
             entities = []
             rewritten_query = self.unified_rewriter.rewrite(query, entities)
             optimized_queries.append(rewritten_query["rewritten_query"])
             tokens += rewritten_query["tokens"]
-
-            # Log recognized entities
-            if snomed_entities:
-                logger.info(f"Recognized {len(snomed_entities)} entities: {list(snomed_entities.keys())}")
+            intent = rewritten_query.get("intent", "fact")
 
         elif mode == "hyde":
             rewritten_query = self.hyde_rewriter.rewrite(query)
@@ -377,6 +382,7 @@ class QueryOptimizer:
             "query_to_use": query_to_use,
             "snomed_entities": snomed_entities,
             "optimized_queries": optimized_queries,
+            "intent": intent,
             "tokens": tokens,
         }
 

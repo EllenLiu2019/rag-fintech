@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any
 from rag.llm.chat_model import chat_model
 from common import prompt_manager
@@ -23,7 +24,9 @@ class LLMExtractor:
 
     @staticmethod
     def _parse_response(content: str) -> dict:
-        return json.loads(content.replace("```json", "").replace("```", ""))
+        cleaned = re.sub(r"<think>[\s\S]*?</think>", "", content).strip()
+        cleaned = cleaned.replace("```json", "").replace("```", "").strip()
+        return json.loads(cleaned)
 
     def extract(self, content: str, hints: dict = None, missing_fields: dict = None) -> dict:
         prompt = self._build_prompt(content, hints, missing_fields)

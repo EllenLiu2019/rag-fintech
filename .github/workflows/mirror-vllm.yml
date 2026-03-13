@@ -1,0 +1,55 @@
+name: Mirror vLLM image to ACR
+
+on:
+  workflow_dispatch:
+    inputs:
+      vllm_tag:
+        description: "vLLM image tag to mirror (e.g. latest, v0.8.5)"
+        required: true
+        default: "latest"
+
+env:
+  ACR_REGISTRY: crpi-jie2r6qhrtiyvvnq.cn-hangzhou.personal.cr.aliyuncs.com
+  ACR_NAMESPACE: ali-private
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+          sudo docker image prune -af
+          df -h /
+
+      - name: Log in to ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Pull, tag and push
+        run: |
+          SRC="vllm/vllm-openai:${{ inputs.vllm_tag }}"
+          DST="${ACR_REGISTRY}/${ACR_NAMESPACE}/vllm"
+
+          echo "Pulling ${SRC} ..."
+          docker pull "${SRC}"
+
+          VLLM_VER=$(docker run --rm "${SRC}" python -c "import vllm; print(vllm.__version__)" 2>&1 | grep -E '^[0-9]+\.[0-9]+' | head -1 || echo "unknown")
+          echo "Detected vLLM version: ${VLLM_VER}"
+
+          docker tag "${SRC}" "${DST}:${{ inputs.vllm_tag }}"
+          if [ "${VLLM_VER}" != "unknown" ]; then
+            docker tag "${SRC}" "${DST}:v${VLLM_VER}"
+          fi
+
+          echo "Pushing to ACR ..."
+          docker push "${DST}:${{ inputs.vllm_tag }}"
+          if [ "${VLLM_VER}" != "unknown" ]; then
+            docker push "${DST}:v${VLLM_VER}"
+            echo "✅ Pushed ${DST}:${{ inputs.vllm_tag }} and ${DST}:v${VLLM_VER}"
+          else
+            echo "✅ Pushed ${DST}:${{ inputs.vllm_tag }}"
+          fi

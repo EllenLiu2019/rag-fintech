@@ -40,14 +40,13 @@ spec:
             - --port
             - "8000"
             - --max-model-len
-            - "4096"
+            - "8192"
             - --gpu-memory-utilization
             - "0.95"
             - --dtype
             - auto
             - --max-num-seqs
             - "16"
-            - --disable-log-stats
           env:
             - name: HF_HOME
               value: "/models"
@@ -63,13 +62,13 @@ spec:
               cpu: "2"
               memory: "8Gi"
               nvidia.com/gpu: "1"
-              nvidia.com/gpumem: 38912
+              nvidia.com/gpumem: 22528
               nvidia.com/gpucores: 70  
             limits:
               cpu: "5"
               memory: "24Gi"
               nvidia.com/gpu: "1"
-              nvidia.com/gpumem: 38912
+              nvidia.com/gpumem: 22528
               nvidia.com/gpucores: 70  
           startupProbe:
             httpGet:
@@ -112,6 +111,7 @@ spec:
   selector:
     app.kubernetes.io/component: vllm
   ports:
-    - port: 8000
+    - name: http
+      port: 8000
       targetPort: 8000
       protocol: TCP

@@ -3,7 +3,7 @@ import json
 from typing import Any
 from datetime import datetime, timezone
 
-from common import get_logger, prompt_manager, model_registry
+from common import get_base_config, get_logger, prompt_manager, model_registry
 from rag.ingestion.pipeline.base_pipeline import BasePipeline
 from rag.ingestion.parser import ParseResult
 from rag.entity import RagDocument, DocumentType
@@ -38,7 +38,9 @@ class ClaimPipeline(BasePipeline):
 
     def __init__(self, doc_type: DocumentType = DocumentType.CLAIM):
         super().__init__(doc_type)
-        model_config = model_registry.get_chat_model("qa_reasoner")
+        claim_config = get_base_config("claim", {})
+        model_name = claim_config.get("claim_extraction", "qa_reasoner")
+        model_config = model_registry.get_chat_model(model_name)
         model = model_config.to_dict()
         self.llm = chat_model[model["provider"]](
             model_name=model["model_name"],
@@ -147,7 +149,6 @@ class ClaimPipeline(BasePipeline):
             claim_date=datetime.now(tz=timezone.utc).isoformat(),
         )
         rag_document.business_data = claim_request.to_dict()
-        # claim_decision = await self.claims_orchestrator.evaluate_claim(claim_request)
 
     async def persist(self, rag_document: RagDocument, **kwargs) -> None:
         """

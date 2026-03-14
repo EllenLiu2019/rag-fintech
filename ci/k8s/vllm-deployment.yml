@@ -36,7 +36,7 @@ spec:
               protocol: TCP
           args:
             - --model
-            - Qwen/Qwen3-8B
+            - Qwen/Qwen3.5-9B
             - --port
             - "8000"
             - --max-model-len
@@ -62,13 +62,13 @@ spec:
               cpu: "2"
               memory: "8Gi"
               nvidia.com/gpu: "1"
-              nvidia.com/gpumem: 22528
+              nvidia.com/gpumem: 38912
               nvidia.com/gpucores: 70  
             limits:
               cpu: "5"
               memory: "24Gi"
               nvidia.com/gpu: "1"
-              nvidia.com/gpumem: 22528
+              nvidia.com/gpumem: 38912
               nvidia.com/gpucores: 70  
           startupProbe:
             httpGet:

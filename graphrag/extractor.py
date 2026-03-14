@@ -4,7 +4,7 @@ from collections import Counter, defaultdict
 from copy import deepcopy
 from typing import Any, Callable
 import time
-from common import get_logger, model_registry, prompt_manager
+from common import get_base_config, get_logger, model_registry, prompt_manager
 from common.constants import GRAPH_FIELD_SEP, DEFAULT_ENTITY_TYPES
 from graphrag.utils import (
     chat_limiter,
@@ -23,7 +23,9 @@ logger = get_logger(__name__)
 class Extractor:
 
     def __init__(self):
-        model_config = model_registry.get_chat_model("qa_reasoner")
+        graph_config = get_base_config("graph", {})
+        model_name = graph_config.get("extractor", "qa_reasoner")
+        model_config = model_registry.get_chat_model(model_name)
         model = model_config.to_dict()
 
         self.llm = chat_model[model["provider"]](

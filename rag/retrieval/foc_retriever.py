@@ -3,7 +3,7 @@ import time
 from typing import Dict, Any, List, Optional, Set
 
 from rag.llm.chat_model import chat_model
-from common import get_logger, model_registry, prompt_manager
+from common import get_base_config, get_logger, model_registry, prompt_manager
 from rag.entity.clause_tree import ClauseForest, ClauseNode
 from repository.cache import cached
 
@@ -17,7 +17,9 @@ class FocRetriever:
 
     def __init__(self, model: Optional[Dict[str, Any]] = None):
         if model is None:
-            model_config = model_registry.get_chat_model("qa_reasoner")
+            search_config = get_base_config("search", {})
+            model_name = search_config.get("foc_retriever", "qa_lite")
+            model_config = model_registry.get_chat_model(model_name)
             model = model_config.to_dict()
 
         self.llm = chat_model[model["provider"]](

@@ -47,7 +47,16 @@ data:
     schema_path: rag/ingestion/extractor/schema/insurance.json
 
     ingestion:
-      extractor_model: qwen_8B
-
+      extractor_model: qwen_9B
+      claim_extraction: qa_reasoner
+    graph:
+      extractor: qa_reasoner
     search:
-      query_optimizer: qwen_8B
+      query_optimizer: qwen_9B
+      foc_retriever: qwen_35B
+    chat:
+      llm_service: qwen_35B
+    claim:
+      medical_agent: qwen_122B
+      foc_retriever: qwen_122B
+      eligibility_reasoner: qa_reasoner

@@ -46,19 +46,33 @@
             "max_tokens": 200000,
             "description": "Claude Opus 4.5 model"
         },
-        "qwen_8B": {
+        "qwen_9B": {
             "provider": "OpenAI",
-            "model_name": "Qwen/Qwen3-8B",
+            "model_name": "Qwen/Qwen3.5-9B",
             "max_tokens": 8192,
             "base_url": "http://vllm-svc.production.svc.cluster.local:8000/v1",
-            "description": "Qwen model for Qwen3-8B (vLLM on A10)"
+            "description": "Qwen model for Qwen3.5-9B (vLLM on A10)"
         },
-        "qwen_32B": {
+        "qwen_35B": {
             "provider": "OpenAI",
-            "model_name": "Qwen/Qwen3-32B-AWQ",
+            "model_name": "Qwen/Qwen3.5-35B-A3B-FP8",
             "max_tokens": 128000,
             "base_url": "http://127.0.0.1:8000/v1",
-            "description": "Qwen model for Qwen3-32B-AWQ"
+            "description": "Qwen model for Qwen3.5-35B-A3B-FP8"
+        },
+        "qwen_122B": {
+            "provider": "OpenAI",
+            "model_name": "Qwen/Qwen3.5-122B-A10B-FP8",
+            "max_tokens": 128000,
+            "base_url": "http://127.0.0.1:8000/v1",
+            "description": "Qwen model for Qwen3.5-122B-A10B-FP8"
+        },
+        "qwen_397B": {
+            "provider": "OpenAI",
+            "model_name": "Qwen/Qwen3.5-397B-A17B-GPTQ-Int4",
+            "max_tokens": 128000,
+            "base_url": "http://127.0.0.1:8000/v1",
+            "description": "Qwen model for Qwen3.5-397B-A17B-GPTQ-Int4"
         }
     },
     "embedding_models": {

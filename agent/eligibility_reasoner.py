@@ -3,7 +3,7 @@ from typing import Dict, Any, List
 import asyncio
 import time
 
-from common import get_logger, model_registry, prompt_manager
+from common import get_base_config, get_logger, model_registry, prompt_manager
 from rag.llm.chat_model import chat_model
 from agent.entity import MedicalEntity
 from agent.graph_state import HumanDecision
@@ -20,7 +20,9 @@ class EligibilityReasoner:
     """
 
     def __init__(self):
-        model_config = model_registry.get_chat_model("qa_reasoner")
+        claim_config = get_base_config("claim", {})
+        model_name = claim_config.get("eligibility_reasoner", "qa_reasoner")
+        model_config = model_registry.get_chat_model(model_name)
         model = model_config.to_dict()
 
         self.llm = chat_model[model["provider"]](

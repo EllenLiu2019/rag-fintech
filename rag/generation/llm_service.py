@@ -2,7 +2,7 @@ from rag.llm.chat_model import chat_model
 from typing import List, Optional, Dict, Any, AsyncIterator
 import json
 from common.log_utils import get_logger
-from common import model_registry, prompt_manager
+from common import get_base_config, model_registry, prompt_manager
 
 logger = get_logger(__name__)
 
@@ -150,7 +150,9 @@ def _create_llm_service() -> LLMService:
     """
     Create LLMService instance at module load time.
     """
-    model_config = model_registry.get_chat_model("qa_reasoner")
+    chat_config = get_base_config("chat", {})
+    model_name = chat_config.get("llm_service", "qa_reasoner")
+    model_config = model_registry.get_chat_model(model_name)
     llm_service = LLMService(model=model_config.to_dict())
 
     logger.info("Initialized LLMService singleton")

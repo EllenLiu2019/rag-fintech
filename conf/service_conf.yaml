@@ -38,6 +38,15 @@ schema_path: rag/ingestion/extractor/schema/insurance.json
 
 ingestion:
   extractor_model: qa_lite
-
+  claim_extraction: qa_reasoner
+graph:
+  extractor: qa_reasoner
 search:
   query_optimizer: query_lite
+  foc_retriever: qa_lite
+chat:
+  llm_service: qa_reasoner
+claim:
+  medical_agent: qa_reasoner
+  foc_retriever: qa_reasoner
+  eligibility_reasoner: qa_reasoner

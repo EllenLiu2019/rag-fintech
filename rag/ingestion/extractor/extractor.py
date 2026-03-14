@@ -62,7 +62,7 @@ class Extractor:
             if missing_fields:
                 llm_results = self._fallback_to_llm_extraction(documents[:2], extracted_results, missing_fields)
                 if llm_results:
-                    extracted_results = llm_results["content"]
+                    _merge_llm_results(extracted_results, llm_results["content"])
                     llm_tokens = llm_results.get("tokens", 0)
 
             logger.info("Calculating confidence scores")
@@ -124,7 +124,7 @@ class Extractor:
             if missing_fields:
                 llm_results = await self._afallback_to_llm_extraction(documents[:2], extracted_results, missing_fields)
                 if llm_results:
-                    extracted_results = llm_results["content"]
+                    _merge_llm_results(extracted_results, llm_results["content"])
                     llm_tokens = llm_results.get("tokens", 0)
 
             logger.info("Calculating confidence scores")
@@ -202,6 +202,27 @@ class Extractor:
         except Exception as e:
             logger.error(f"LLM extraction failed: {e}", exc_info=True)
             return None
+
+
+def _merge_llm_results(base: dict[str, Any], llm_output: dict[str, Any]) -> None:
+    """Merge LLM-extracted fields into base results without overwriting existing data."""
+    for key, value in llm_output.items():
+        if key not in base:
+            base[key] = value
+        elif isinstance(base[key], dict) and isinstance(value, dict):
+            for k, v in value.items():
+                if not base[key].get(k):
+                    base[key][k] = v
+        elif isinstance(base[key], list) and isinstance(value, list):
+            for i, item in enumerate(value):
+                if i < len(base[key]) and isinstance(base[key][i], dict) and isinstance(item, dict):
+                    for k, v in item.items():
+                        if not base[key][i].get(k):
+                            base[key][i][k] = v
+                elif i >= len(base[key]):
+                    base[key].append(item)
+        elif not base[key]:
+            base[key] = value
 
 
 def _create_extractor() -> Extractor:

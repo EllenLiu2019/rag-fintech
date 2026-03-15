@@ -37,7 +37,8 @@ jobs:
           echo "Pulling ${SRC} ..."
           docker pull "${SRC}"
 
-          VLLM_VER=$(docker run --rm "${SRC}" python -c "import vllm; print(vllm.__version__)" 2>&1 | grep -E '^[0-9]+\.[0-9]+' | head -1 || echo "unknown")
+          VLLM_VER=$(docker run --rm --entrypoint pip "${SRC}" show vllm 2>/dev/null | grep -i '^Version:' | awk '{print $2}' | tr -d '[:space:]')
+          [ -z "${VLLM_VER}" ] && VLLM_VER="unknown"
           echo "Detected vLLM version: ${VLLM_VER}"
 
           docker tag "${SRC}" "${DST}:${{ inputs.vllm_tag }}"

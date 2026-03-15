@@ -1,1 +1,0 @@
-run_id,group,backend,quantization,concurrency,sample_id,input_tokens,output_tokens,ttft_ms,latency_ms,decode_tps,e2e_tps,gpu_mem_peak_mb,field_total,field_correct,field_acc,success,error_type,timestamp

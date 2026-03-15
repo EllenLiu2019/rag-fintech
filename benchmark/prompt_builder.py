@@ -67,26 +67,6 @@ class Qwen3PromptBuilder:
         """Equivalent to vLLM's prompt_tokens: content tokens + chat template overhead."""
         return self._content_tokens(content) + self._template_overhead
 
-    def _measure_template_overhead(self) -> int:
-        """Measure how many tokens the chat template adds around user content."""
-        probe = "x"
-        probe_content_tokens = len(self.tok.encode(probe, add_special_tokens=False))
-        full_tokens = len(
-            self.tok.apply_chat_template(
-                [{"role": "user", "content": probe}],
-                add_generation_prompt=True,
-                tokenize=True,
-            )
-        )
-        return full_tokens - probe_content_tokens
-
-    def _content_tokens(self, content: str) -> int:
-        return len(self.tok.encode(content, add_special_tokens=False))
-
-    def _full_prompt_tokens(self, content: str) -> int:
-        """Equivalent to vLLM's prompt_tokens: content tokens + chat template overhead."""
-        return self._content_tokens(content) + self._template_overhead
-
     def build(self, target_tokens: int, seed: int = 0) -> str:
         """
         Build a prompt whose vLLM prompt_tokens equals EXACTLY target_tokens.

@@ -40,11 +40,13 @@ spec:
             - --port
             - "8000"
             - --max-model-len
-            - "8192"
+            - "4096"
             - --gpu-memory-utilization
             - "0.95"
             - --dtype
             - auto
+            - --kv-cache-dtype 
+            - fp8
             - --max-num-seqs
             - "16"
           env:
@@ -62,14 +64,10 @@ spec:
               cpu: "2"
               memory: "8Gi"
               nvidia.com/gpu: "1"
-              nvidia.com/gpumem: 23552
-              nvidia.com/gpucores: 95  
             limits:
               cpu: "5"
               memory: "24Gi"
               nvidia.com/gpu: "1"
-              nvidia.com/gpumem: 23552
-              nvidia.com/gpucores: 95  
           startupProbe:
             httpGet:
               path: /health

@@ -57,7 +57,7 @@
             "provider": "OpenAI",
             "model_name": "Qwen/Qwen3.5-35B-A3B-FP8",
             "max_tokens": 128000,
-            "base_url": "http://127.0.0.1:8000/v1",
+            "base_url": "http://vllm-35-svc.production.svc.cluster.local:8000/v1",
             "description": "Qwen model for Qwen3.5-35B-A3B-FP8"
         },
         "qwen_122B": {

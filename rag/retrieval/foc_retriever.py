@@ -1,9 +1,11 @@
 import json
+import re
 import time
 from typing import Dict, Any, List, Optional, Set
 
 from rag.llm.chat_model import chat_model
 from common import get_base_config, get_logger, model_registry, prompt_manager
+from common.utils import extract_content
 from rag.entity.clause_tree import ClauseForest, ClauseNode
 from repository.cache import cached
 
@@ -26,7 +28,7 @@ class FocRetriever:
             model_name=model["model_name"],
             base_url=model["base_url"],
         )
-        self.temperature = 1.0
+        self.temperature = 0
 
     def _build_foc(self, clause_forest: ClauseForest) -> str:
         def build_tree(node: ClauseNode) -> str:
@@ -68,9 +70,15 @@ class FocRetriever:
                 ],
                 temperature=self.temperature,
             )
-            logger.info(f"Time taken to generate: {time.time() - start} seconds")
-            result = json.loads(content.replace("```json", "").replace("```", ""))
+            logger.info(f"Time taken to generate: {time.time() - start} seconds, tokens: {tokens}")
+            result = extract_content(content)
             clause_ids = result.get("relevant_clause_ids", [])
+
+            if not clause_ids:
+                match = re.search(r"relevant_clause_ids[\"']?\s*:\s*\[([^\]]+)\]", content)
+                if match:
+                    clause_ids = [int(x) for x in re.findall(r"\d+", match.group(1))]
+                    logger.info(f"Extracted clause_ids via regex fallback: {clause_ids}")
 
             logger.debug(f"Reasoning: {reasoning}")
 
@@ -116,7 +124,7 @@ class FocRetriever:
 
         return chunk_ids
 
-    @cached(prefix="foc_llm_analysis", ttl=60 * 60 * 24)
+    # @cached(prefix="foc_llm_analysis", ttl=60 * 60 * 24)
     def retrieve_candidate_chunks(
         self,
         query: str,

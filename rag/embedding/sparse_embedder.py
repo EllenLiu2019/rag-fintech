@@ -42,7 +42,7 @@ class SparseEmbedder:
                 details={"text_count": len(texts), "provider": self.provider, "error": str(e)},
             ) from e
 
-    @cached(prefix="sparse_embedding", ttl=3600)
+    # @cached(prefix="sparse_embedding", ttl=3600)
     def embed_queries(self, queries: list[str]) -> list[dict[str, float]]:
         try:
             return self.model.encode(queries)

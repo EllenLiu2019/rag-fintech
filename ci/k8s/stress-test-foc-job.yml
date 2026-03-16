@@ -1,11 +1,11 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: stress-test-retrieval
+  name: stress-test-foc
   namespace: production
   labels:
     app.kubernetes.io/name: rag-fintech
-    app.kubernetes.io/component: stress-test
+    app.kubernetes.io/component: stress-test-foc
 spec:
   schedule: "0 0 31 2 *"
   suspend: true
@@ -16,7 +16,7 @@ spec:
       template:
         metadata:
           labels:
-            app.kubernetes.io/component: stress-test
+            app.kubernetes.io/component: stress-test-foc
         spec:
           restartPolicy: Never
           imagePullSecrets:
@@ -33,16 +33,17 @@ spec:
                 - http://rag-api.production.svc.cluster.local:8001
                 - --levels
                 - "1"
+                - "2"
+                - "3"
                 - "4"
-                - "8"
-                - "16"
-                - "32"
                 - --rounds
                 - "3"
                 - --question-type
-                - fact
+                - logic
+                - --doc-id
+                - policy_0308125419_88c9d1
                 - --output
-                - /results/stress_retrieval.csv
+                - /results/stress_foc.csv
               volumeMounts:
                 - name: results
                   mountPath: /results

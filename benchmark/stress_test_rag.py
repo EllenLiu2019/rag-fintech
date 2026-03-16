@@ -1,16 +1,22 @@
 """
 RAG retrieval E2E stress test.
 
-Hits POST /api/search with fact-type questions from golden_dataset.json
-at increasing concurrency. foc_enhance=False to keep all requests short-context
-(intent classification + query rewrite + Milvus hybrid search).
-
-Measures retrieval latency, throughput, and success rate only.
+Hits POST /api/search at increasing concurrency levels.
+Supports two modes:
+  - fact (default): foc_enhance=False, short-context (rewrite + Milvus hybrid search)
+  - logic: foc_enhance=True, long-context (ClauseForest + LLM analysis, requires --doc-id)
 
 Usage:
     python -m benchmark.stress_test_rag \
-        --base-url http://localhost:8000 \
-        --levels 1 2 4 8 16 20 \
+        --base-url http://localhost:8001 \
+        --levels 1 2 4 8 16 \
+        --rounds 3
+
+    python -m benchmark.stress_test_rag \
+        --base-url http://localhost:8001 \
+        --question-type logic \
+        --doc-id policy_0308125419_88c9d1 \
+        --levels 1 2 3 \
         --rounds 3
 """
 
@@ -81,7 +87,8 @@ async def send_request(
     question: str,
     kb_id: str = "default_kb",
     doc_id: str | None = None,
-    timeout: float = 60.0,
+    foc_enhance: bool = False,
+    timeout: float = 120.0,
 ) -> RequestResult:
     result = RequestResult(
         question=question[:80],
@@ -98,7 +105,7 @@ async def send_request(
         "top_k": 5,
         "filters": filters,
         "mode": "hybrid",
-        "foc_enhance": False,
+        "foc_enhance": foc_enhance,
     }
 
     t_start = time.perf_counter()
@@ -159,12 +166,13 @@ async def run_level(
     round_num: int,
     kb_id: str,
     doc_id: str | None,
+    foc_enhance: bool = False,
 ) -> list[RequestResult]:
     q_iter = cycle(questions)
     batch = [next(q_iter) for _ in range(concurrency)]
 
     async with httpx.AsyncClient() as client:
-        tasks = [send_request(client, base_url, q["question"], kb_id, doc_id) for q in batch]
+        tasks = [send_request(client, base_url, q["question"], kb_id, doc_id, foc_enhance) for q in batch]
         results = await asyncio.gather(*tasks)
 
     for i, (r, q) in enumerate(zip(results, batch)):
@@ -225,19 +233,32 @@ async def main():
         help="Question type filter (default: fact for short-context only)",
     )
     parser.add_argument("--output", default=None)
+    parser.add_argument(
+        "--cooldown",
+        type=int,
+        default=60,
+        help="Seconds to sleep between concurrency levels (default: 60)",
+    )
     args = parser.parse_args()
 
     qtype = None if args.question_type == "all" else args.question_type
     questions = load_questions(qtype)
+    foc_enhance = args.question_type == "logic"
+
     print(f"Loaded {len(questions)} questions (type={args.question_type})")
     print(f"Target: {args.base_url}/api/search")
-    print("Config: foc_enhance=False, mode=hybrid, top_k=5")
+    print(f"Config: foc_enhance={foc_enhance}, mode=hybrid, top_k=5")
+    if args.doc_id:
+        print(f"Doc ID: {args.doc_id}")
     print(f"Levels: {args.levels}  Rounds: {args.rounds}")
+
+    if foc_enhance and not args.doc_id:
+        print("WARNING: logic questions require --doc-id for FoC retrieval")
 
     # Warmup
     print("\n--- Warmup ---")
     async with httpx.AsyncClient() as client:
-        w = await send_request(client, args.base_url, questions[0]["question"], args.kb_id, args.doc_id)
+        w = await send_request(client, args.base_url, questions[0]["question"], args.kb_id, args.doc_id, foc_enhance)
         print(f"  {w.latency_ms:.0f}ms  chunks={w.retrieval_chunks}  {'OK' if w.success else w.error}")
 
     if not w.success:
@@ -247,9 +268,16 @@ async def main():
     # Scaling
     all_results: list[RequestResult] = []
 
-    for level in args.levels:
+    for idx, level in enumerate(args.levels):
+        if idx > 0 and args.cooldown > 0:
+            print(f"\n⏸  Cooldown {args.cooldown}s before c={level} "
+                  f"({datetime.now().strftime('%H:%M:%S')})")
+            await asyncio.sleep(args.cooldown)
+
+        start_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"\n{'='*50}")
         print(f"Concurrency = {level}  ({args.rounds} rounds)")
+        print(f"START: {start_ts}")
         print(f"{'='*50}")
 
         level_results: list[RequestResult] = []
@@ -261,6 +289,7 @@ async def main():
                 r,
                 args.kb_id,
                 args.doc_id,
+                foc_enhance,
             )
             level_results.extend(results)
 
@@ -269,12 +298,15 @@ async def main():
                 avg = sum(x.latency_ms for x in ok) / len(ok)
                 print(f"  round {r}: avg={avg:.0f}ms  ok={len(ok)}/{len(results)}")
 
+        end_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         all_results.extend(level_results)
         print_summary(level_results, level)
+        print(f"  END: {end_ts}")
 
     # Summary table
+    foc_label = f"foc_enhance={foc_enhance}"
     print(f"\n{'='*75}")
-    print("Retrieval Concurrency Scaling (POST /api/search, foc_enhance=False)")
+    print(f"Retrieval Concurrency Scaling (POST /api/search, {foc_label})")
     print(f"{'='*75}")
     print(f"  {'Conc':>5} | {'OK':>7} | {'p50':>8} | {'p95':>8} | {'max':>8} | {'QPS':>8} | {'Chunks':>6}")
     print(f"  {'-'*62}")

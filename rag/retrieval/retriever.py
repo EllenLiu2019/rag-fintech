@@ -125,7 +125,7 @@ class Retriever:
 
         return results
 
-    @async_cached(prefix="dense_search", ttl=1800)
+    # @async_cached(prefix="dense_search", ttl=1800)
     async def _dense_search(
         self,
         dense_vectors: List[List[float]],
@@ -154,7 +154,7 @@ class Retriever:
                 details={"kb_id": kb_id, "top_k": top_k, "error": str(e)},
             ) from e
 
-    @async_cached(prefix="hybrid_search", ttl=1800)
+    # @async_cached(prefix="hybrid_search", ttl=1800)
     async def _hybrid_search(
         self,
         dense_vectors: List[List[float]],

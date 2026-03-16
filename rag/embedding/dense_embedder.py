@@ -52,7 +52,7 @@ class DenseEmbedder:
                 details={"chunk_count": len(chunks), "model": self.model.model_name, "error": str(e)},
             ) from e
 
-    @cached(prefix="dense_embedding", ttl=3600, key_func=lambda self, text: self._cache_key(text))
+    # @cached(prefix="dense_embedding", ttl=3600, key_func=lambda self, text: self._cache_key(text))
     def embed_query(self, text: str) -> list[float]:
         """
         Embed query with caching (TTL: 1 hour).

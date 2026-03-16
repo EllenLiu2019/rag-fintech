@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: stress-test-retrieval
+  namespace: production
+  labels:
+    app.kubernetes.io/name: rag-fintech
+    app.kubernetes.io/component: stress-test
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: stress-test
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: acr-secret
+      containers:
+        - name: stress
+          image: ${IMAGE_REGISTRY}/rag-fintech:${IMAGE_TAG}
+          imagePullPolicy: Always
+          command:
+            - python
+            - -m
+            - benchmark.stress_test_rag
+            - --base-url
+            - http://rag-api.production.svc.cluster.local:8001
+            - --levels
+            - "1"
+            - "2"
+            - "4"
+            - "8"
+            - "16"
+            - "20"
+            - --rounds
+            - "3"
+            - --question-type
+            - fact
+            - --output
+            - /results/stress_retrieval.csv
+          volumeMounts:
+            - name: results
+              mountPath: /results
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "1Gi"
+      volumes:
+        - name: results
+          emptyDir: {}

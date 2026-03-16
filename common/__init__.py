@@ -18,6 +18,7 @@ from . import file_utils, constants
 from .model_registry import model_registry
 from .converter import field_converter
 from .prompt_manager import prompt_manager
+from .config_utils import get_base_config
 
 
 __all__ = [
@@ -36,6 +37,7 @@ __all__ = [
     # config
     "constants",
     "file_utils",
+    "get_base_config",
     "model_registry",
     "field_converter",
     "prompt_manager",

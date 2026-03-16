@@ -53,10 +53,10 @@ data:
       extractor: qa_reasoner
     search:
       query_optimizer: qwen_9B
-      foc_retriever: qwen_35B
+      foc_retriever: qa_lite
     chat:
-      llm_service: qwen_35B
+      llm_service: qa_reasoner
     claim:
-      medical_agent: qwen_122B
-      foc_retriever: qwen_122B
+      medical_agent: qa_reasoner
+      foc_retriever: qa_reasoner
       eligibility_reasoner: qa_reasoner

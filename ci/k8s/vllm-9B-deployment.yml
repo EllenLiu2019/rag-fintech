@@ -39,14 +39,15 @@ spec:
             - Qwen/Qwen3.5-9B
             - --port
             - "8000"
+            - --enable-chunked-prefill
+            - --max-num-batched-tokens
+            - "2048"
             - --max-model-len
-            - "4096"
+            - "1536"
             - --gpu-memory-utilization
             - "0.95"
             - --dtype
             - auto
-            - --kv-cache-dtype 
-            - fp8
             - --max-num-seqs
             - "16"
           env:
@@ -54,6 +55,8 @@ spec:
               value: "/models"
             - name: HF_ENDPOINT
               value: "https://hf-mirror.com"
+            - name: HF_HUB_ENABLE_HF_TRANSFER
+              value: "0"
             - name: VLLM_LOGGING_LEVEL
               value: "INFO"
           volumeMounts:
@@ -64,10 +67,14 @@ spec:
               cpu: "2"
               memory: "8Gi"
               nvidia.com/gpu: "1"
+              nvidia.com/gpumem: 30000
+              nvidia.com/gpucores: 70 
             limits:
               cpu: "5"
               memory: "24Gi"
               nvidia.com/gpu: "1"
+              nvidia.com/gpumem: 30000
+              nvidia.com/gpucores: 70 
           startupProbe:
             httpGet:
               path: /health

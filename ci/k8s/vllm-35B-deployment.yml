@@ -5,14 +5,14 @@ metadata:
   namespace: production
   labels:
     app.kubernetes.io/name: rag-fintech
-    app.kubernetes.io/component: vllm
+    app.kubernetes.io/component: vllm-35b
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/component: vllm
+      app.kubernetes.io/component: vllm-35b
   template:
     metadata:
       annotations:
@@ -21,7 +21,7 @@ spec:
         prometheus.io/scrape: "true"
       labels:
         app.kubernetes.io/name: rag-fintech
-        app.kubernetes.io/component: vllm
+        app.kubernetes.io/component: vllm-35b
     spec:
       terminationGracePeriodSeconds: 60
       imagePullSecrets:
@@ -39,14 +39,14 @@ spec:
             - Qwen/Qwen3.5-35B-A3B-FP8
             - --port
             - "8000"
+            - --max-num-batched-tokens
+            - "8192"
             - --max-model-len
             - "15000"
             - --gpu-memory-utilization
             - "0.95"
             - --dtype
             - auto
-            - --kv-cache-dtype
-            - fp8
             - --max-num-seqs
             - "20"
           env:
@@ -54,6 +54,8 @@ spec:
               value: "/models"
             - name: HF_ENDPOINT
               value: "https://hf-mirror.com"
+            - name: HF_HUB_ENABLE_HF_TRANSFER
+              value: "0"
             - name: VLLM_LOGGING_LEVEL
               value: "INFO"
           volumeMounts:
@@ -64,14 +66,10 @@ spec:
               cpu: "3"
               memory: "30Gi"
               nvidia.com/gpu: "1"
-              nvidia.com/gpumem: 47104
-              nvidia.com/gpucores: 95  
             limits:
               cpu: "6"
               memory: "60Gi"
               nvidia.com/gpu: "1"
-              nvidia.com/gpumem: 47104
-              nvidia.com/gpucores: 95  
           startupProbe:
             httpGet:
               path: /health
@@ -107,11 +105,11 @@ metadata:
   namespace: production
   labels:
     app.kubernetes.io/name: rag-fintech
-    app.kubernetes.io/component: vllm
+    app.kubernetes.io/component: vllm-35b
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/component: vllm
+    app.kubernetes.io/component: vllm-35b
   ports:
     - name: http
       port: 8000

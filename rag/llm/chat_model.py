@@ -325,6 +325,7 @@ class VLLm(LLM):
         temperature: float = 0,
         max_tokens: Optional[int] = None,
         enable_thinking: bool = False,
+        guided_json: Optional[Dict[str, Any]] = None,
     ) -> tuple[str, str, int]:
         if messages is None and prompt is None:
             raise ValueError("Either 'messages' or 'prompt' must be provided")
@@ -334,14 +335,18 @@ class VLLm(LLM):
         else:
             final_messages = [{"role": "user", "content": prompt}]
 
+        extra_body: Dict[str, Any] = {
+            "chat_template_kwargs": {"enable_thinking": enable_thinking},
+        }
+        if guided_json is not None:
+            extra_body["guided_json"] = guided_json
+
         params = {
             "model": self.model_name,
             "messages": final_messages,
             "temperature": temperature,
             "stream": False,
-            "extra_body": {
-                "chat_template_kwargs": {"enable_thinking": enable_thinking},
-            },
+            "extra_body": extra_body,
         }
         if max_tokens is not None:
             params["max_tokens"] = max_tokens
@@ -366,6 +371,7 @@ class VLLm(LLM):
         temperature: float = 0,
         max_tokens: Optional[int] = None,
         enable_thinking: bool = False,
+        guided_json: Optional[Dict[str, Any]] = None,
     ) -> tuple[str, str, int]:
         if messages is None and prompt is None:
             raise ValueError("Either 'messages' or 'prompt' must be provided")
@@ -375,14 +381,18 @@ class VLLm(LLM):
         else:
             final_messages = [{"role": "user", "content": prompt}]
 
+        extra_body: Dict[str, Any] = {
+            "chat_template_kwargs": {"enable_thinking": enable_thinking},
+        }
+        if guided_json is not None:
+            extra_body["guided_json"] = guided_json
+
         params = {
             "model": self.model_name,
             "messages": final_messages,
             "temperature": temperature,
             "stream": False,
-            "extra_body": {
-                "chat_template_kwargs": {"enable_thinking": enable_thinking},
-            },
+            "extra_body": extra_body,
         }
         if max_tokens is not None:
             params["max_tokens"] = max_tokens

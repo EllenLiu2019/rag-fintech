@@ -3,11 +3,27 @@ import re
 import time
 from typing import Dict, Any, List, Optional, Set
 
-from rag.llm.chat_model import chat_model
+from rag.llm.chat_model import chat_model, VLLm
 from common import get_base_config, get_logger, model_registry, prompt_manager
 from common.utils import extract_content
 from rag.entity.clause_tree import ClauseForest, ClauseNode
 from repository.cache import cached
+
+CLAUSE_SELECTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "relevant_clause_ids": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "List of relevant clause IDs",
+        },
+        "reasoning": {
+            "type": "string",
+            "description": "Brief reasoning for the selection",
+        },
+    },
+    "required": ["relevant_clause_ids", "reasoning"],
+}
 
 logger = get_logger(__name__)
 
@@ -60,16 +76,19 @@ class FocRetriever:
 
         try:
             start = time.time()
-            reasoning, content, tokens = self.llm.generate(
-                messages=[
+            generate_kwargs = {
+                "messages": [
                     {"role": "system", "content": prompt},
                     {
                         "role": "user",
                         "content": f"用户问题：{query}\n\n请分析这个问题，并返回最相关的条款ID列表及分析理由。",
                     },
                 ],
-                temperature=self.temperature,
-            )
+                "temperature": self.temperature,
+            }
+            if isinstance(self.llm, VLLm):
+                generate_kwargs["guided_json"] = CLAUSE_SELECTION_SCHEMA
+            reasoning, content, tokens = self.llm.generate(**generate_kwargs)
             logger.info(f"Time taken to generate: {time.time() - start} seconds, tokens: {tokens}")
             result = extract_content(content)
             clause_ids = result.get("relevant_clause_ids", [])

@@ -62,16 +62,16 @@
         },
         "qwen_122B": {
             "provider": "OpenAI",
-            "model_name": "Qwen/Qwen3.5-122B-A10B-FP8",
+            "model_name": "Qwen/Qwen3.5-122B-A10B",
             "max_tokens": 128000,
-            "base_url": "http://127.0.0.1:8000/v1",
-            "description": "Qwen model for Qwen3.5-122B-A10B-FP8"
+            "base_url": "https://u875872-c53r-42ef4f8b.bjb1.seetacloud.com:8443/v1",
+            "description": "Qwen model for Qwen3.5-122B-A10B"
         },
         "qwen_397B": {
             "provider": "OpenAI",
             "model_name": "Qwen/Qwen3.5-397B-A17B-GPTQ-Int4",
             "max_tokens": 128000,
-            "base_url": "http://127.0.0.1:8000/v1",
+            "base_url": "https://u875872-jq40-b504707f.bjb1.seetacloud.com:8443/v1",
             "description": "Qwen model for Qwen3.5-397B-A17B-GPTQ-Int4"
         }
     },

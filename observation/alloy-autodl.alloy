@@ -1,0 +1,39 @@
+// Grafana Alloy config for AutoDL → Alibaba Cloud ARMS
+// Scrapes local vLLM /metrics and pushes to ARMS Prometheus via Remote Write
+//
+// Usage (no root required):
+//   ./alloy-linux-amd64 run alloy-autodl.alloy
+//
+// Download Alloy:
+//   curl -LO https://github.com/grafana/alloy/releases/latest/download/alloy-linux-amd64.zip
+//   unzip alloy-linux-amd64.zip && chmod +x alloy-linux-amd64
+
+prometheus.scrape "vllm" {
+  targets = [{
+    __address__ = "127.0.0.1:8000",
+  }]
+  metrics_path = "/metrics"
+  scrape_interval = "15s"
+  forward_to = [prometheus.remote_write.arms.receiver]
+
+  // Add external labels to distinguish AutoDL instances from ACK instances
+  // These labels will appear in Grafana filters
+}
+
+prometheus.remote_write "arms" {
+  external_labels = {
+    cluster  = "AutoDL",
+    gpu_type = "RTX-6000",
+  }
+
+  endpoint {
+    url = "https://workspace-default-cms-1135069749214343-cn-hangzhou.cn-hangzhou.log.aliyuncs.com/prometheus/workspace-default-cms-1135069749214343-cn-hangzhou/aliyun-prom-c0abba00b3fcf44fd84165e832519a237/api/v1/write"
+
+    basic_auth {
+      // Alibaba Cloud AccessKey (RAM user with ARMS write permission)
+      // Replace with your actual AK/SK
+      username = "${ALIBABA_CLOUD_ACCESS_KEY_ID}"
+      password = "${ALIBABA_CLOUD_ACCESS_KEY_SECRET}"
+    }
+  }
+}

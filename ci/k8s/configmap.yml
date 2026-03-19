@@ -53,7 +53,7 @@ data:
       extractor: qa_reasoner
     search:
       query_optimizer: qwen_9B
-      foc_retriever: qa_lite
+      foc_retriever: qwen_35B
     chat:
       llm_service: qa_reasoner
     claim:

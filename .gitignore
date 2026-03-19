@@ -35,7 +35,7 @@ docs/*
 api/scripts/
 rag_fintech.egg-info/
 **/data/
-!beanchmark/data/
+benchmark/**/*.ipynb
 repository/s3/*
 !repository/s3/*.py
 repository/rdb/sql/ddl/*snomed.sql

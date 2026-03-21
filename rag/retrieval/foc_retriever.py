@@ -126,7 +126,7 @@ class FocRetriever:
         selected_nodes: set[ClauseNode] = set()
 
         for clause_id in clause_ids:
-            node = clause_forest.root.reverse_find_node(clause_id)
+            node = clause_forest.root.find_node_by_id(clause_id)
             if node:
                 selected_nodes.add(node)
 

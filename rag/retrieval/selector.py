@@ -69,7 +69,7 @@ def build_relevant_foc(
             foc_clause_ids.add(int(tree_id))
 
     for clause_id in sorted(foc_clause_ids):
-        tree_node = clause_forest.root.reverse_find_node(clause_id)
+        tree_node = clause_forest.root.find_node_by_id(clause_id)
         if tree_node:
             header = "#" * (tree_node.level + 2)
             lines.append(f"{header} {tree_node.title} [clause_id:{tree_node.id}]\n")

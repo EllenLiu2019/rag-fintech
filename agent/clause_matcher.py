@@ -104,7 +104,7 @@ class ClauseMatcher:
 
         clause_paths = set[int]()
         for clause_id in clause_ids:
-            node = clause_forest.root.reverse_find_node(clause_id)
+            node = clause_forest.root.find_node_by_id(clause_id)
             if node is None:
                 logger.warning(f"Clause node not found for id={clause_id}, skipping")
                 continue
@@ -112,7 +112,7 @@ class ClauseMatcher:
                 clause_paths.add(int(clause_path))
 
         for clause_path in sorted(clause_paths):
-            node = clause_forest.root.reverse_find_node(clause_path)
+            node = clause_forest.root.find_node_by_id(clause_path)
             if node:
                 header = "#" * (node.level + 2)
                 clause_evidence += f"{header} {node.title} \n"

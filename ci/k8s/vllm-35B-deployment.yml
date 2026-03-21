@@ -49,6 +49,7 @@ spec:
             - auto
             - --max-num-seqs
             - "20"
+            - --enable_prefix_caching
           env:
             - name: HF_HOME
               value: "/models"

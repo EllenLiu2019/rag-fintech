@@ -69,16 +69,25 @@ class ClauseNode:
             "chunk_count": len(self.chunk_ids),
         }
 
-    def reverse_find_node(self, id: int) -> Optional["ClauseNode"]:
+    def find_node_by_id(self, id: int) -> Optional["ClauseNode"]:
         if self.id == id:
             return self
 
-        for idx in reversed(range(len(self.children))):
-            child = self.children[idx]
-            if child.id > id:
-                continue
-            return child.reverse_find_node(id)
-        return None
+        lo, hi = 0, len(self.children) - 1
+        candidate = -1
+        while lo <= hi:
+            mid = (lo + hi + 1) // 2
+            if self.children[mid].id == id:
+                return self.children[mid]
+            if self.children[mid].id > id:
+                hi = mid - 1
+            else:
+                lo = mid + 1
+                candidate = mid
+
+        if candidate == -1:
+            return None
+        return self.children[candidate].find_node_by_id(id)
 
     def build_clause_path(self) -> str:
         """Build the full path from root to node (e.g., "1.8.9.12")."""
@@ -183,7 +192,7 @@ class ClauseForest:
         for node_id, (start_page, end_page) in data["trees"].items():
             if not isinstance(node_id, int):
                 node_id = int(node_id)
-            node = root.reverse_find_node(node_id)
+            node = root.find_node_by_id(node_id)
             if node:
                 trees[node] = (start_page, end_page)
 
